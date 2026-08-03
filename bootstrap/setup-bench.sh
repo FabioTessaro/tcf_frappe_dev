@@ -1,6 +1,19 @@
 #!/bin/bash
 set -e
 
+echo "Waiting for MariaDB to be ready..."
+MAX_WAIT=300
+WAITED=0
+until mysqladmin ping -h mariadb -u root -p"${MARIADB_ROOT_PASSWORD}" --silent 2>/dev/null; do
+  WAITED=$((WAITED + 2))
+  if [ "$WAITED" -ge "$MAX_WAIT" ]; then
+    echo "MariaDB did not become ready within ${MAX_WAIT}s — aborting."
+    exit 1
+  fi
+  sleep 2
+done
+echo "MariaDB is ready."
+
 cd frappe-bench 2>/dev/null || {
   bench init frappe-bench --frappe-branch version-16 --skip-redis-config-generation
   cd frappe-bench

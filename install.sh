@@ -3,6 +3,8 @@ set -e
 
 if ! command -v docker &> /dev/null; then
   curl -fsSL https://get.docker.com | sh
+  sudo usermod -aG docker $USER
+  echo "Added $USER to docker group — log out and back in (or run 'newgrp docker') before continuing."
 fi
 
 if [ ! -f .env ]; then

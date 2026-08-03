@@ -11,6 +11,8 @@ services:
       MARIADB_AUTO_UPGRADE: 1
     volumes:
       - mariadb-data:/var/lib/mysql
+    env_file:
+      - ../.env
     # ports:
     #   - "3306:3306"
 
@@ -23,6 +25,8 @@ services:
   frappe:
     image: docker.io/frappe/bench:latest
     command: sleep infinity
+    env_file:
+      - ../.env
     environment:
       - SHELL=/bin/bash
     volumes:

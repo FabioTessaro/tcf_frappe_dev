@@ -14,4 +14,5 @@ if [ ! -f .env ]; then
 fi
 
 docker compose -f .devcontainer/docker-compose.yml --env-file .env up -d
-echo "Containers up. Open this folder in VS Code and 'Reopen in Container' to finish setup."
+docker compose -f .devcontainer/docker-compose.yml --env-file .env down
+echo "Containers started and stopped. Open this folder in VS Code and 'Reopen in Container' to finish setup."

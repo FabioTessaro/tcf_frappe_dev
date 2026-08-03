@@ -13,8 +13,8 @@ services:
       - mariadb-data:/var/lib/mysql
     env_file:
       - ../.env
-    # ports:
-    #   - "3306:3306"
+    ports:
+      - "3306:3306"
 
   redis-cache:
     image: docker.io/redis:alpine

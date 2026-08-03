@@ -1,6 +1,5 @@
 {
   "name": "TCF-DEVELOPMENT",
-  "forwardPorts": [3306, 8000, 9000, 6787],
   "remoteUser": "frappe",
   "customizations": {
     "vscode": {

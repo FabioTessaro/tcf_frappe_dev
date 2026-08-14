@@ -1,5 +1,4 @@
 # TCF FRAPPE DEVELOPMENT
-## tcf_frappe_dev
 
 Container orchestration and bootstrap scripts for the TCF Frappe Development environment.
 

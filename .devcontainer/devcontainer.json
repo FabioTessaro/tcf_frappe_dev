@@ -47,6 +47,7 @@
   "shutdownAction": "none",
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "mounts": [
-    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/frappe/.ssh,type=bind,consistency=cached"
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/frappe/.ssh,type=bind,consistency=cached",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/home/frappe/.gitconfig,type=bind,consistency=cached"
   ]
 }

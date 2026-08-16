@@ -41,12 +41,6 @@ HAVE_VALID_KEY=false
 if [ -f "$KEY_PATH" ] && ssh-keygen -l -f "$KEY_PATH" &> /dev/null; then
   HAVE_VALID_KEY=true
   echo "Existing valid SSH key found at $KEY_PATH."
-  # Print it even though it already exists — lets the user manually
-  # confirm this exact key is still present in their GitHub settings,
-  # in case it was removed/revoked there without their local key changing.
-  echo "--------------------------------------------------------------"
-  cat "$KEY_PATH.pub"
-  echo "--------------------------------------------------------------"
 fi
 
 if [ "$HAVE_VALID_KEY" = false ]; then

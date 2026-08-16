@@ -6,7 +6,7 @@ Container orchestration and bootstrap scripts for the TCF Frappe Development env
 
 This assumes a valid ssh configuration is already set up for git.
 
-    git clone git@github.com:FabioTessaro/tcf_frappe_dev.git frappe-dev
+    git clone https://github.com/FabioTessaro/tcf_frappe_dev.git frappe-dev
     cd frappe-dev
     cp .env.example .env
     nano .env

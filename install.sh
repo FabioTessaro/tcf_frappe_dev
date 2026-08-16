@@ -3,7 +3,11 @@ set -e
 
 bash bootstrap/setup-git.sh
 
-bash bootstrap/setup-env.sh
+if [ ! -f .env ]; then
+  bash bootstrap/setup-env.sh
+fi
+
+touch bootstrap/.bootstrap.log
 
 if ! command -v docker &> /dev/null; then
   curl -fsSL https://get.docker.com | sh
@@ -12,5 +16,4 @@ if ! command -v docker &> /dev/null; then
 fi
 
 sudo docker compose -f .devcontainer/docker-compose.yml --env-file .env up -d
-echo "Containers started. Try them out before continuing."
-echo "Open this folder in VS Code and 'Reopen in Container' to finish setup. Remember to stop the containers first!"
+echo "Containers started. Open this folder in VS Code and 'Attach to running container' to finish setup."

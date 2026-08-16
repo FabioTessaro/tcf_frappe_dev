@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")"
 
 echo "Stopping containers..."
-docker compose -f .devcontainer/docker-compose.yml down
+docker compose -f .devcontainer/docker-compose.yml --env-file .env down
 
 echo "Removing dangling images, stopped containers, unused networks, build cache..."
 docker system prune -f

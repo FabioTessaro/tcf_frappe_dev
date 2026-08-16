@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
-set -x
+# set -x
+
+sudo chmod 700 ~/.ssh
+sudo chmod 600 ~/.ssh/id_* 2>/dev/null || true
+
+uv tool install pre-commit
 
 MAX_WAIT=300
 

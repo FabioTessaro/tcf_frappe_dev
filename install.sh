@@ -16,4 +16,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 sudo docker compose -f .devcontainer/docker-compose.yml --env-file .env up -d
+
+sudo docker compose -f .devcontainer/docker-compose.yml exec frappe ./bootstrap/setup-bench.sh
+
 echo "Containers started. Open this folder in VS Code and 'Attach to running container' to finish setup."

@@ -9,7 +9,6 @@ This assumes a valid ssh configuration is already set up for git.
     git clone https://github.com/FabioTessaro/tcf_frappe_dev.git frappe-dev
     cd frappe-dev
     ./install.sh
-    # Open this folder remotely via ssh in VS Code -> "Reopen in Container"
 
 First container creation runs bootstrap/setup-bench.sh automatically, which
 initializes bench, fetches erpnext/hrms and the apps listed in TCF_APPS,

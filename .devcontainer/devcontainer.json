@@ -45,7 +45,7 @@
   "service": "frappe",
   "workspaceFolder": "/workspace",
   "shutdownAction": "none",
-  "postCreateCommand": "bash bootstrap/post-create.sh 2>&1 | tee bootstrap/.bootstrap.log",
+  "postCreateCommand": "bash bootstrap/setup-bench.sh 2>&1 | tee bootstrap/.bootstrap.log",
   "mounts": [
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/frappe/.ssh,type=bind,consistency=cached",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.gitconfig,target=/home/frappe/.gitconfig,type=bind,consistency=cached"

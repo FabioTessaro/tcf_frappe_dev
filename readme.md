@@ -8,8 +8,6 @@ This assumes a valid ssh configuration is already set up for git.
 
     git clone https://github.com/FabioTessaro/tcf_frappe_dev.git frappe-dev
     cd frappe-dev
-    cp .env.example .env
-    nano .env
     ./install.sh
     # Open this folder remotely via ssh in VS Code -> "Reopen in Container"
 

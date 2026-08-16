@@ -86,7 +86,7 @@ s3 = boto3.client(
     aws_secret_access_key=os.environ["SEAWEEDFS_SECRET_KEY"],
 )
  
-for bucket in ["cad-vault", "tcf-attachments"]:
+for bucket in ["cad-vault", "attachments-vault"]:
     try:
         s3.head_bucket(Bucket=bucket)
         print(f"Bucket '{bucket}' already exists.")

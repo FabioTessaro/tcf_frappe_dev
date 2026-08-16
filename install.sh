@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+bash bootstrap/setup-git.sh
+
 if ! command -v docker &> /dev/null; then
   curl -fsSL https://get.docker.com | sh
   sudo usermod -aG docker $USER

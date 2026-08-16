@@ -1,10 +1,12 @@
 #!/bin/bash
 set -e
+set -x
+
+MAX_WAIT=300
 
 echo "Waiting for MariaDB to be ready..."
-MAX_WAIT=300
 WAITED=0
-until mysqladmin ping -h mariadb -u root -p"${MARIADB_ROOT_PASSWORD}" --silent 2>/dev/null; do
+until mysqladmin ping -h mariadb -u ${MARIADB_ROOT_USERNAME:-root} -p"${MARIADB_ROOT_PASSWORD}" --silent 2>/dev/null; do
   WAITED=$((WAITED + 2))
   if [ "$WAITED" -ge "$MAX_WAIT" ]; then
     echo "MariaDB did not become ready within ${MAX_WAIT}s — aborting."
@@ -14,10 +16,24 @@ until mysqladmin ping -h mariadb -u root -p"${MARIADB_ROOT_PASSWORD}" --silent 2
 done
 echo "MariaDB is ready."
 
-cd frappe-bench 2>/dev/null || {
+echo "Waiting for SeaweedFS to be ready..."
+WAITED=0
+until curl -sf "http://seaweedfs:8333" -o /dev/null 2>/dev/null; do
+  WAITED=$((WAITED + 2))
+  if [ "$WAITED" -ge "$MAX_WAIT" ]; then
+    echo "SeaweedFS did not become ready within ${MAX_WAIT}s — aborting."
+    exit 1
+  fi
+  sleep 2
+done
+echo "SeaweedFS is ready."
+
+if [ ! -f frappe-bench/sites/apps.txt ]; then
+  echo "No complete frappe-bench found — (re)initializing..."
+  rm -rf frappe-bench
   bench init frappe-bench --frappe-branch version-16 --skip-redis-config-generation
-  cd frappe-bench
-}
+fi
+cd frappe-bench
 
 bench set-config -g db_host mariadb
 bench set-config -g redis_cache redis://redis-cache:6379
@@ -50,5 +66,33 @@ if [ ! -d "sites/tcf.local" ]; then
     done
   fi
 fi
+
+bench --site tcf.local set-config seaweedfs_endpoint "${SEAWEEDFS_ENDPOINT}"
+bench --site tcf.local set-config seaweedfs_access_key "${SEAWEEDFS_ACCESS_KEY}"
+bench --site tcf.local set-config seaweedfs_secret_key "${SEAWEEDFS_SECRET_KEY}"
+
+pip install boto3 --break-system-packages --quiet
+
+
+python3 << 'PYEOF'
+import os
+import boto3
+from botocore.exceptions import ClientError
+ 
+s3 = boto3.client(
+    "s3",
+    endpoint_url=os.environ["SEAWEEDFS_ENDPOINT"],
+    aws_access_key_id=os.environ["SEAWEEDFS_ACCESS_KEY"],
+    aws_secret_access_key=os.environ["SEAWEEDFS_SECRET_KEY"],
+)
+ 
+for bucket in ["cad-vault", "tcf-attachments"]:
+    try:
+        s3.head_bucket(Bucket=bucket)
+        print(f"Bucket '{bucket}' already exists.")
+    except ClientError:
+        s3.create_bucket(Bucket=bucket)
+        print(f"Created bucket '{bucket}'.")
+PYEOF
 
 bench --site tcf.local clear-cache

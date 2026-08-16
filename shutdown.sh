@@ -14,5 +14,5 @@ if [ "$1" == "--deep" ]; then
   docker image prune -a -f
 fi
 
-echo "Done. Named volumes (mariadb-data) were preserved:"
+echo "Done. Named volumes (mariadb-data and seaweedfs-data) were preserved:"
 docker volume ls

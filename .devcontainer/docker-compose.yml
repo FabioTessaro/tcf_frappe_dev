@@ -21,6 +21,18 @@ services:
 
   redis-queue:
     image: docker.io/redis:alpine
+  
+  seaweedfs:
+    image: chrislusf/seaweedfs
+    command: 'server -s3 -dir=/data -ip.bind=0.0.0.0'
+    ports:
+      - "9333:9333"   # master — cluster coordination, weed shell/admin access
+      - "8888:8888"   # filer web UI — browse files at tcf.local:8888
+      - "8333:8333"   # S3 API — this is the one Frappe/boto3/NX launcher use
+    volumes:
+      - seaweedfs-data:/data
+    env_file:
+      - ../.env
 
   frappe:
     image: docker.io/frappe/bench:latest
@@ -35,5 +47,8 @@ services:
     ports:
       - "8000-8005:8000-8005"
       - "9000-9005:9000-9005"
+      - "6787:6787"
+      
 volumes:
   mariadb-data:
+  seaweedfs-data:

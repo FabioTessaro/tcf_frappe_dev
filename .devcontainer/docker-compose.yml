@@ -40,8 +40,8 @@ services:
       - SHELL=/bin/bash
     volumes:
       - ..:/workspace:cached
-      - ${HOME}/.ssh:/home/frappe/.ssh:cached,
-      - ${HOME}/.gitconfig:/home/frappe/.gitconfig
+      - ${HOME}/.ssh:/home/frappe/.ssh:cached
+      - ${HOME}/.gitconfig:/home/frappe/.gitconfig:ro
     working_dir: /workspace
     ports:
       - "8000-8005:8000-8005"

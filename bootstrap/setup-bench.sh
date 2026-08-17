@@ -44,12 +44,25 @@ bench set-config -g db_host mariadb
 bench set-config -g redis_cache redis://redis-cache:6379
 bench set-config -g redis_queue redis://redis-queue:6379
 
-bench get-app --branch version-16 erpnext
-bench get-app --branch version-16 hrms
+if [ ! -d "apps/erpnext" ]; then
+  bench get-app --branch version-16 erpnext
+else
+  echo "apps/erpnext already exists — skipping get-app."
+fi
+
+if [ ! -d "apps/hrms" ]; then
+  bench get-app --branch version-16 hrms
+else
+  echo "apps/hrms already exists — skipping get-app."
+fi
 
 if [ -n "$TCF_APPS" ]; then
   for app in $TCF_APPS; do
-    bench get-app "${TCF_APPS_GIT_PREFIX}/${app}.git"
+    if [ ! -d "apps/${app}" ]; then
+      bench get-app "${TCF_APPS_GIT_PREFIX}/${app}.git"
+    else
+      echo "apps/${app} already exists — skipping get-app."
+    fi
     (cd "apps/${app}" && pre-commit install 2>/dev/null || true)
   done
 fi

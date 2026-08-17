@@ -1,5 +1,6 @@
 # secrets
 .env
+.devcontainer/devcontainer.json
 
 # session logs
 bootstrap/.bootstrap.log

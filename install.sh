@@ -40,6 +40,10 @@ echo ""
 echo "Pulling images and starting containers (mariadb, redis-cache, redis-queue, seaweedfs, frappe)..."
 $DOCKER_COMPOSE up -d
 
+# Run the VS Code Server setup from scratch inside the container
+# echo "Setting up VS Code Server inside the container..."
+# $DOCKER_COMPOSE exec -u frappe frappe bash /workspace/bootstrap/setup-vscode.sh --install
+
 echo ""
 echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
 $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh

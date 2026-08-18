@@ -65,9 +65,5 @@ if ! $DOCKER_COMPOSE exec -T frappe test -f frappe-bench/sites/apps.txt 2>/dev/n
   fi
 fi
 
-# Check and update the VS Code Server to the latest stable commit
-# echo "Checking VS Code Server version..."
-# $DOCKER_COMPOSE exec -u frappe frappe bash /workspace/bootstrap/setup-vscode.sh
-
 echo ""
 echo "Containers are up. Open this folder in VS Code and 'Attach to Running Container' (frappe) to start coding."

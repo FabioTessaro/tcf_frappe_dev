@@ -1,3 +1,15 @@
+#!/bin/bash
+set -e
+
+cd "$(dirname "$0")/.."
+source .env
+
+: "${MARIADB_ROOT_USERNAME:?MARIADB_ROOT_USERNAME is not set}"
+: "${MARIADB_ROOT_PASSWORD:?MARIADB_ROOT_PASSWORD is not set}"
+
+mkdir -p .devcontainer
+
+cat > .devcontainer/devcontainer.json <<EOF
 {
   "name": "TCF-DEVELOPMENT",
   "remoteUser": "frappe",
@@ -34,8 +46,8 @@
             "port": 3306,
             "driver": "MariaDB",
             "name": "MariaDB",
-            "username": "root",
-            "password": "root",
+            "username": "${MARIADB_ROOT_USERNAME}",
+            "password": "${MARIADB_ROOT_PASSWORD}",
             "database": "mysql"
           }
         ]
@@ -43,3 +55,4 @@
     }
   }
 }
+EOF

@@ -28,16 +28,9 @@ case "$DOCKER_STATUS" in
     ;;
 esac
 
-# Idempotency check: if every service is already up, don't disturb anything.
-TOTAL_SERVICES=$($DOCKER_COMPOSE ps --services 2>/dev/null | wc -l)
-RUNNING_SERVICES=$($DOCKER_COMPOSE ps --services --status=running 2>/dev/null | wc -l)
-
-if [ "$TOTAL_SERVICES" -gt 0 ] && [ "$RUNNING_SERVICES" -eq "$TOTAL_SERVICES" ]; then
-  echo "All containers are already running — nothing to do."
-  $DOCKER_COMPOSE ps
-  exit 0
-fi
-
+# compose's own "up -d" is already idempotent (already-running containers are
+# left alone), so there's no need to pre-check state ourselves — that check
+# turned out to be unreliable across docker compose versions.
 echo "Starting containers..."
 $DOCKER_COMPOSE up -d
 

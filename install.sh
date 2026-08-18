@@ -11,15 +11,9 @@ if [ ! -f .env ]; then
   bash bootstrap/setup-env.sh
 fi
 
-touch bootstrap/.bootstrap.log
+# touch bootstrap/.bootstrap.log
 
-source .env
-
-if [ ! -f .devcontainer/devcontainer.json ]; then
-  cp .devcontainer/devcontainer.json.template .devcontainer/devcontainer.json
-  sed -i -n "s/__MARIADB_ROOT_PASSWORD__/${MARIADB_ROOT_PASSWORD}/" .devcontainer/devcontainer.json
-  sed -i -n "s/__MARIADB_ROOT_USERNAME__/${MARIADB_ROOT_USERNAME}/" .devcontainer/devcontainer.json
-fi
+bash bootstrap/setup-devcontainer.sh
 
 if ! command -v docker &> /dev/null; then
   echo "Docker not found — installing..."

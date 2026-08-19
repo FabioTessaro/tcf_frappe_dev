@@ -35,6 +35,9 @@ echo "Starting containers..."
 $DOCKER_COMPOSE up -d
 
 echo ""
+bash bootstrap/setup-vscode.sh
+
+echo ""
 echo "Waiting for MariaDB..."
 load_env
 WAITED=0

@@ -1,6 +1,7 @@
 services:
   mariadb:
     image: docker.io/mariadb:11.8
+    restart: unless-stopped
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -15,12 +16,15 @@ services:
 
   redis-cache:
     image: docker.io/redis:alpine
+    restart: unless-stopped
 
   redis-queue:
     image: docker.io/redis:alpine
+    restart: unless-stopped
   
   seaweedfs:
     image: chrislusf/seaweedfs
+    restart: unless-stopped
     command: 'server -s3 -dir=/data -ip.bind=0.0.0.0'
     ports:
       - "9333:9333"   # master — cluster coordination, weed shell/admin access
@@ -33,6 +37,7 @@ services:
 
   frappe:
     image: docker.io/frappe/bench:latest
+    restart: unless-stopped
     command: sleep infinity
     env_file:
       - ../.env
@@ -42,6 +47,7 @@ services:
       - ..:/workspace:cached
       - ${HOME}/.ssh:/home/frappe/.ssh:cached
       - ${HOME}/.gitconfig:/home/frappe/.gitconfig:ro
+      - vscode-server:/home/frappe/.vscode-server
     working_dir: /workspace
     ports:
       - "8000-8005:8000-8005"
@@ -51,3 +57,4 @@ services:
 volumes:
   mariadb-data:
   seaweedfs-data:
+  vscode-server:

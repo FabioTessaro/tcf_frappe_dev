@@ -41,6 +41,9 @@ echo "Pulling images and starting containers (mariadb, redis-cache, redis-queue,
 $DOCKER_COMPOSE up -d
 
 echo ""
+bash bootstrap/setup-vscode.sh
+
+echo ""
 echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
 $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh
 

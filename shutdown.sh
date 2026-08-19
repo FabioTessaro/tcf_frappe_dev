@@ -49,6 +49,9 @@ DOWN_FLAGS=""
 if [ "$TIER" == "--volumes" ] || [ "$TIER" == "--all" ]; then
   echo "This will permanently delete the mariadb-data and seaweedfs-data"
   echo "volumes — your dev database and any uploaded/CAD files in SeaweedFS."
+  echo "The vscode-server cache volume is also cleared, but that's harmless:"
+  echo "it just gets re-seeded automatically the next time you run"
+  echo "./startup.sh or ./install.sh."
   if [ "$TIER" == "--volumes" ]; then
     echo ""
     echo "Note: frappe-bench/ on disk will NOT be touched by --volumes alone,"

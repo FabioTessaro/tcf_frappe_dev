@@ -2,56 +2,34 @@
 set -e
 
 cd "$(dirname "$0")/.."
-source .env
-
-: "${MARIADB_ROOT_USERNAME:?MARIADB_ROOT_USERNAME is not set}"
-: "${MARIADB_ROOT_PASSWORD:?MARIADB_ROOT_PASSWORD is not set}"
 
 mkdir -p .devcontainer
 
 cat > .devcontainer/devcontainer.json <<EOF
 {
   "name": "TCF-DEVELOPMENT",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "frappe",
   "remoteUser": "frappe",
   "workspaceFolder": "/workspace",
+  "shutdownAction": "none",
+
+  // Runs on the VM, before the container exists. Good for anything the
+  // compose file itself depends on (e.g. generating a .env).
+  // "initializeCommand": "bash ${localWorkspaceFolder}/bootstrap/<INITIALIZE_SCRIPT_PLACEHOLDER>.sh",
+
+  // Runs inside the container, once, the first time it's created.
+  // "postCreateCommand": "bash ${containerWorkspaceFolder}/bootstrap/<POST_CREATE_SCRIPT_PLACEHOLDER>.sh",
+
+  // Runs inside the container every time it starts (not just on creation).
+  // "postStartCommand": "bash ${containerWorkspaceFolder}/bootstrap/<POST_START_SCRIPT_PLACEHOLDER>.sh",
+
+  // Runs inside the container every time VS Code attaches.
+  // "postAttachCommand": "bash ${containerWorkspaceFolder}/bootstrap/<POST_ATTACH_SCRIPT_PLACEHOLDER>.sh",
+
   "customizations": {
     "vscode": {
-      "extensions": [
-        "ms-python.python",
-        "ms-vscode.live-server",
-        "grapecity.gc-excelviewer",
-        "mtxr.sqltools",
-        "mtxr.sqltools-driver-mysql",
-        "vue.volar",
-        "esbenp.prettier-vscode",
-        "charliermarsh.ruff"
-      ],
-      "settings": {
-        "terminal.integrated.profiles.linux": {
-          "frappe bash": {
-            "path": "/bin/bash"
-          }
-        },
-        "terminal.integrated.defaultProfile.linux": "frappe bash",
-        "debug.node.autoAttach": "disabled",
-        "sqltools.connections": [
-          {
-            "mysqlOptions": {
-              "authProtocol": "default",
-              "enableSsl": "Disabled"
-            },
-            "ssh": "Disabled",
-            "previewLimit": 50,
-            "server": "mariadb",
-            "port": 3306,
-            "driver": "MariaDB",
-            "name": "MariaDB",
-            "username": "${MARIADB_ROOT_USERNAME}",
-            "password": "${MARIADB_ROOT_PASSWORD}",
-            "database": "mysql"
-          }
-        ]
-      }
+      "extensions": []
     }
   }
 }

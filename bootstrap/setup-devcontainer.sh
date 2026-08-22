@@ -19,7 +19,7 @@ cat > .devcontainer/devcontainer.json <<EOF
   // "initializeCommand": "bash ${localWorkspaceFolder}/bootstrap/<INITIALIZE_SCRIPT_PLACEHOLDER>.sh",
 
   // Runs inside the container, once, the first time it's created.
-  // "postCreateCommand": "bash ${containerWorkspaceFolder}/bootstrap/setup-bench.sh",
+  "postCreateCommand": "bash ${containerWorkspaceFolder}/bootstrap/setup-bench.sh",
 
   // Runs inside the container every time it starts (not just on creation).
   // "postStartCommand": "bash ${containerWorkspaceFolder}/bootstrap/<POST_START_SCRIPT_PLACEHOLDER>.sh",

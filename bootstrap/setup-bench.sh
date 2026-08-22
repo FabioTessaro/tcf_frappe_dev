@@ -40,6 +40,79 @@ if [ ! -f frappe-bench/sites/apps.txt ]; then
 fi
 cd frappe-bench
 
+# frappe-bench/ is gitignored and fully regenerated above, so seed the
+# agentic-coding config here rather than relying on it surviving a rebuild.
+mkdir -p .claude
+cat > .claude/settings.json << 'EOF'
+{
+  "model": "sonnet",
+  "effortLevel": "medium",
+  "permissions": {
+    "deny": [
+      "Edit(apps/frappe/**)",
+      "Write(apps/frappe/**)",
+      "Edit(apps/erpnext/**)",
+      "Write(apps/erpnext/**)",
+      "Edit(apps/hrms/**)",
+      "Write(apps/hrms/**)",
+
+      "Read(env/**)",
+      "Edit(env/**)",
+      "Write(env/**)",
+
+      "Read(logs/**)",
+      "Edit(logs/**)",
+      "Write(logs/**)",
+
+      "Read(sites/**)",
+      "Edit(sites/**)",
+      "Write(sites/**)",
+
+      "Read(**/node_modules/**)",
+      "Edit(**/node_modules/**)",
+      "Write(**/node_modules/**)",
+
+      "Read(**/.git/**)",
+      "Edit(**/.git/**)",
+      "Write(**/.git/**)",
+
+      "Bash(cat env/*)",
+      "Bash(cat logs/*)",
+      "Bash(cat sites/*)"
+    ]
+  }
+}
+EOF
+
+cat > CLAUDE.md << 'EOF'
+# frappe-bench
+
+Frappe/ERPNext bench, site `tcf.local`. Bench root: everything below is relative to this file's directory.
+
+## App layout
+
+- **Vendored (dependency) apps — read for reference only, never edit:**
+  `apps/frappe`, `apps/erpnext`, `apps/hrms` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here.
+- **Custom apps — this is the actual codebase:**
+  `apps/tcf_erp`, `apps/tcf_hr`, `apps/tcf_plm`, `apps/tcf_qms`, `apps/tcf_web` — FabioTessaro's own repos. Work happens here.
+
+## Never read or edit
+
+`env/` (Python venv), `logs/`, `sites/**` (site data/config/backups), any `node_modules/` or `.git/` under `apps/*`. These are also denied in `.claude/settings.json`, but that only binds the Read/Edit/Write tools — when using `grep`/`find`/`rg` via Bash, explicitly exclude these paths (e.g. `--exclude-dir={env,logs,node_modules,.git} apps/frappe apps/erpnext apps/hrms/sites`) since Bash isn't path-aware at the permission level.
+
+## Workflow — do not skip straight to code
+
+For any feature or non-trivial change, work in this order and stop for my review between steps:
+
+1. **Brainstorm** — discuss the feature/intent with me first; don't assume scope.
+2. **Scope** — enumerate exactly which doctypes/files/hooks/behaviors need to change.
+3. **Propose** — show the concrete plan/diff for review before touching files.
+4. **Review** — I approve or redirect.
+5. **Implement** — only after approval.
+
+Trivial one-line fixes (typo, obvious bug with an unambiguous fix) can skip straight to implementation — everything else goes through the steps above.
+EOF
+
 bench set-config -g db_host mariadb
 bench set-config -g redis_cache redis://redis-cache:6379
 bench set-config -g redis_queue redis://redis-queue:6379

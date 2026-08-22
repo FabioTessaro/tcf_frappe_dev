@@ -3,7 +3,7 @@
 .devcontainer/devcontainer.json
 
 # agentic settings
-# .claude
+.claude
 
 # cached answer from setup-vscode.sh's platform prompt (machine-specific)
 bootstrap/.vscode-platform

@@ -2,8 +2,8 @@
 .env
 .devcontainer/devcontainer.json
 
-# session logs
-bootstrap/.bootstrap.log
+# agentic settings
+# .claude
 
 # cached answer from setup-vscode.sh's platform prompt (machine-specific)
 bootstrap/.vscode-platform

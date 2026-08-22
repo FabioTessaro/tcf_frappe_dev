@@ -13,6 +13,9 @@ cat > .devcontainer/devcontainer.json <<EOF
   "remoteUser": "frappe",
   "workspaceFolder": "/workspace",
   "shutdownAction": "none",
+  features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
 
   // Runs on the VM, before the container exists. Good for anything the
   // compose file itself depends on (e.g. generating a .env).
@@ -29,7 +32,9 @@ cat > .devcontainer/devcontainer.json <<EOF
 
   "customizations": {
     "vscode": {
-      "extensions": []
+      "extensions": [
+        "anthropic.claude-code"
+      ]
     }
   }
 }

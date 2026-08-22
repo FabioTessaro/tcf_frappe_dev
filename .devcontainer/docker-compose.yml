@@ -44,11 +44,13 @@ services:
       - ../.env
     environment:
       - SHELL=/bin/bash
+      - CLAUDE_CONFIG_DIR=/home/frappe/.claude
     volumes:
       - ..:/workspace:cached
       - ${HOME}/.ssh:/home/frappe/.ssh:cached
       - ${HOME}/.gitconfig:/home/frappe/.gitconfig:ro
       - vscode-server:/home/frappe/.vscode-server
+      - claude-config:/home/frappe/.claude
     working_dir: /workspace
     ports:
       - "8000-8005:8000-8005"
@@ -59,3 +61,5 @@ volumes:
   mariadb-data:
   seaweedfs-data:
   vscode-server:
+  claude-config:
+  codex-config:

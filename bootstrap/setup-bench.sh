@@ -91,7 +91,6 @@ bench --site tcf.local set-config seaweedfs_secret_key "${SEAWEEDFS_SECRET_KEY}"
 
 pip install boto3 --break-system-packages --quiet
 
-
 python3 << 'PYEOF'
 import os
 import boto3

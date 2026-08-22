@@ -20,21 +20,33 @@ Modes:
              container, installing the VS Code Server inside it, and bench
              provisioning are then handled by VS Code itself — this mode
              does not start containers or touch the frappe container.
+
+Flags:
+  --with-agents   Also install the Claude Code and Codex CLIs inside the
+                  frappe container (bootstrap/setup-agents.sh). Off by
+                  default. Only takes effect in --attach mode — --reopen
+                  never touches the container, so run
+                  bootstrap/setup-agents.sh by hand after your first
+                  "Reopen in Container" if you want them there.
 EOF
 }
 
 MODE="attach"
-case "${1:-}" in
-  ""|--attach) MODE="attach" ;;
-  --reopen) MODE="reopen" ;;
-  -h|--help) usage; exit 0 ;;
-  *) echo "Unknown option: $1"; usage; exit 1 ;;
-esac
+WITH_AGENTS=false
+for arg in "$@"; do
+  case "$arg" in
+    --attach) MODE="attach" ;;
+    --reopen) MODE="reopen" ;;
+    --with-agents) WITH_AGENTS=true ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $arg"; usage; exit 1 ;;
+  esac
+done
 
 bash bootstrap/setup-git.sh
 
 if [ ! -f .env ]; then
-  bash bootstrap/setup-env.sh
+  bash bootstrap/setup-env.sh --with-agents="$WITH_AGENTS"
 fi
 
 # touch bootstrap/.bootstrap.log
@@ -106,6 +118,11 @@ $DOCKER_COMPOSE up -d
 echo ""
 bash bootstrap/setup-vscode.sh
 
+if [ "$WITH_AGENTS" = true ]; then
+  echo ""
+  bash bootstrap/setup-agents.sh
+fi
+
 echo ""
 echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
 $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh
@@ -137,3 +154,9 @@ Day to day:
   ./startup.sh    — bring them back up after a manual stop or reboot
 =====================================================================
 EOF
+
+if [ "$WITH_AGENTS" = false ]; then
+  echo ""
+  echo "Claude Code wasn't installed (pass --with-agents to include"
+  echo "them, or run bootstrap/setup-agents.sh directly anytime)."
+fi

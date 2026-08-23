@@ -2,6 +2,26 @@
 set -e
 # set -x
 
+usage() {
+  cat << EOF
+Usage: ./setup-bench.sh [mode]
+
+Flags:
+  --no-default-apps   Doesn't install the default erpnext and hrms apps in the
+                      frappe container (bootstrap/setup-bench.sh). Off by
+                      default.
+EOF
+}
+
+WITHOUT_DEFAULT_APPS=false
+for arg in "$@"; do
+  case "$arg" in
+    --no-default-apps) WITHOUT_DEFAULT_APPS=true ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $arg"; usage; exit 1 ;;
+  esac
+done
+
 sudo chmod 700 ~/.ssh
 sudo chmod 600 ~/.ssh/id_* 2>/dev/null || true
 
@@ -128,16 +148,18 @@ bench set-config -g db_host mariadb
 bench set-config -g redis_cache redis://redis-cache:6379
 bench set-config -g redis_queue redis://redis-queue:6379
 
-if [ ! -d "apps/erpnext" ]; then
-  bench get-app --branch version-16 erpnext
-else
-  echo "apps/erpnext already exists — skipping get-app."
-fi
+if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
+  if [ ! -d "apps/erpnext" ]; then
+    bench get-app --branch version-16 erpnext
+  else
+    echo "apps/erpnext already exists — skipping get-app."
+  fi
 
-if [ ! -d "apps/hrms" ]; then
-  bench get-app --branch version-16 hrms
-else
-  echo "apps/hrms already exists — skipping get-app."
+  if [ ! -d "apps/hrms" ]; then
+    bench get-app --branch version-16 hrms
+  else
+    echo "apps/hrms already exists — skipping get-app."
+  fi
 fi
 
 if [ -n "$TCF_APPS" ]; then
@@ -159,8 +181,10 @@ if [ ! -d "sites/tcf.local" ]; then
     --no-mariadb-socket
 
   bench --site tcf.local set-config developer_mode 1
-  bench --site tcf.local install-app erpnext
-  bench --site tcf.local install-app hrms
+  if [ -n "$TCF_APPS" ]; then
+    bench --site tcf.local install-app erpnext
+    bench --site tcf.local install-app hrms
+  fi
 
   if [ -n "$TCF_APPS" ]; then
     for app in $TCF_APPS; do

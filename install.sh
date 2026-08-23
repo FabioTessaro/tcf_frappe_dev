@@ -22,22 +22,30 @@ Modes:
              does not start containers or touch the frappe container.
 
 Flags:
-  --with-agents   Also install the Claude Code and Codex CLIs inside the
-                  frappe container (bootstrap/setup-agents.sh). Off by
-                  default. Only takes effect in --attach mode — --reopen
-                  never touches the container, so run
-                  bootstrap/setup-agents.sh by hand after your first
-                  "Reopen in Container" if you want them there.
+  --with-agents       Also install the Claude Code and Codex CLIs inside the
+                      frappe container (bootstrap/setup-agents.sh). Off by
+                      default. Only takes effect in --attach mode — --reopen
+                      never touches the container, so run
+                      bootstrap/setup-agents.sh by hand after your first
+                      "Reopen in Container" if you want them there.
+
+  --no-default-apps   Doesn't install the default erpnext and hrms apps in the
+                      frappe container (bootstrap/setup-bench.sh). Off by
+                      default. Only takes effect in --attach mode since --reopen
+                      handles the setup-bench.sh step itself and doesn't pass
+                      this flag through.
 EOF
 }
 
 MODE="attach"
 WITH_AGENTS=false
+WITHOUT_DEFAULT_APPS=false
 for arg in "$@"; do
   case "$arg" in
     --attach) MODE="attach" ;;
     --reopen) MODE="reopen" ;;
     --with-agents) WITH_AGENTS=true ;;
+    --no-default-apps) WITHOUT_DEFAULT_APPS=true ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg"; usage; exit 1 ;;
   esac
@@ -123,9 +131,15 @@ if [ "$WITH_AGENTS" = true ]; then
   bash bootstrap/setup-agents.sh
 fi
 
-echo ""
-echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
-$DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh
+if [ "$WITHOUT_DEFAULT_APPS" = true ]; then
+  echo ""
+  echo "Running first-time bench provisioning inside the frappe container without default apps (this can take a while on a fresh install)..."
+  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh --no-default-apps
+else
+  echo ""
+  echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
+  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh
+fi
 
 cat << EOF
 

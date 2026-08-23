@@ -102,6 +102,7 @@ Frappe/ERPNext bench, site `tcf.local`. Bench root: everything below is relative
 
 ## Workflow — do not skip straight to code
 
+Don't make use of worktrees. Edit the files directly for me to check myself and decide when to commit.
 For any feature or non-trivial change, work in this order and stop for my review between steps:
 
 1. **Brainstorm** — discuss the feature/intent with me first; don't assume scope.
@@ -111,6 +112,16 @@ For any feature or non-trivial change, work in this order and stop for my review
 5. **Implement** — only after approval.
 
 Trivial one-line fixes (typo, obvious bug with an unambiguous fix) can skip straight to implementation — everything else goes through the steps above.
+
+## Token optimization
+
+- Don't re-read a file already open in this conversation's context.
+- Prefer targeted reads of a specific path over broad directory
+  exploration.
+- State conclusions and file paths, not full file contents, unless asked
+  to show the content itself.
+- Don't restate the plan file's existing content before appending to it.
+- Don't produce a summary of the whole conversation before acting.
 EOF
 
 bench set-config -g db_host mariadb

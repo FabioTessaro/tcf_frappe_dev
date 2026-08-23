@@ -24,20 +24,6 @@ else
   fi
 fi
 
-echo ""
-echo "Creating claude settings.json to restrict destructive commands..."
-mkdir -p .claude
-cat > .claude/settings.json <<'EOF'
-{
-  "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "permissions": {
-    "allow": [],
-    "deny": []
-  }
-}
-EOF
-echo "Claude Code settings.json created."
-
 if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
   echo ""
   echo "NOTE: ~/.local/bin isn't on PATH in this shell. Open a new terminal"

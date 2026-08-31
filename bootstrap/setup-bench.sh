@@ -160,6 +160,13 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   else
     echo "apps/hrms already exists — skipping get-app."
   fi
+
+  if [ ! -d "apps/raven" ]; then
+    bench get-app --branch main https://github.com/frappe/raven
+  else
+    echo "apps/raven already exists — skipping get-app."
+  fi
+
 fi
 
 if [ -n "$TCF_APPS" ]; then
@@ -181,9 +188,11 @@ if [ ! -d "sites/tcf.local" ]; then
     --no-mariadb-socket
 
   bench --site tcf.local set-config developer_mode 1
-  if [ -n "$TCF_APPS" ]; then
-    bench --site tcf.local install-app erpnext
-    bench --site tcf.local install-app hrms
+  
+  if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
+      bench --site tcf.local install-app erpnext
+      bench --site tcf.local install-app hrms
+      bench --site tcf.local install-app raven
   fi
 
   if [ -n "$TCF_APPS" ]; then
@@ -211,7 +220,7 @@ s3 = boto3.client(
     aws_secret_access_key=os.environ["SEAWEEDFS_SECRET_KEY"],
 )
  
-for bucket in ["cad-vault", "attachments-vault"]:
+for bucket in ["cad-vault", "attachments-vault", "raven-vault"]:
     try:
         s3.head_bucket(Bucket=bucket)
         print(f"Bucket '{bucket}' already exists.")

@@ -35,6 +35,27 @@ services:
       - seaweedfs-data:/data
     env_file:
       - ../.env
+  
+  meet-sfu:
+    image: ghcr.io/frappe/meet/sfu-server:latest
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3000
+      - MEDIASOUP_LISTEN_IP=0.0.0.0
+      - WEBRTC_LISTEN_IP=0.0.0.0
+      # Upstream's own default range is 40000-49999 (10k ports); narrowed
+      # here to keep the published port list sane for a small/dev
+      # deployment. Widen both this and the matching `ports:` entry below
+      # if you need more concurrent participants than that comfortably
+      # supports.
+      - RTC_MIN_PORT=40000
+      - RTC_MAX_PORT=40099
+    ports:
+      - "3000:3000"
+      - "40000-40099:40000-40099/udp"
 
   frappe:
     image: docker.io/frappe/bench:latest
@@ -62,4 +83,3 @@ volumes:
   seaweedfs-data:
   vscode-server:
   claude-config:
-  codex-config:

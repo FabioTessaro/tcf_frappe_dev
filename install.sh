@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 usage() {
   cat << EOF
 Usage: ./install.sh [mode]
-
+ 
 Modes:
   --attach   (default) Set up for VS Code's "Attach to Running Container":
              installs Docker if missing, pulls and starts the 5 containers,
@@ -20,7 +20,7 @@ Modes:
              container, installing the VS Code Server inside it, and bench
              provisioning are then handled by VS Code itself — this mode
              does not start containers or touch the frappe container.
-
+ 
 Flags:
   --with-agents       Also install the Claude Code and Codex CLIs inside the
                       frappe container (bootstrap/setup-agents.sh). Off by
@@ -28,12 +28,13 @@ Flags:
                       never touches the container, so run
                       bootstrap/setup-agents.sh by hand after your first
                       "Reopen in Container" if you want them there.
-
-  --no-default-apps   Doesn't install the default erpnext and hrms apps in the
-                      frappe container (bootstrap/setup-bench.sh). Off by
-                      default. Only takes effect in --attach mode since --reopen
-                      handles the setup-bench.sh step itself and doesn't pass
-                      this flag through.
+ 
+  --no-default-apps   Doesn't install the default erpnext, hrms, raven, and
+                      meet apps in the frappe container
+                      (bootstrap/setup-bench.sh). Off by default. Only takes
+                      effect in --attach mode since --reopen handles the
+                      setup-bench.sh step itself and doesn't pass this flag
+                      through.
 EOF
 }
 
@@ -87,30 +88,33 @@ source bootstrap/lib.sh
 
 if [ "$MODE" == "reopen" ]; then
   cat << EOF
-
+ 
 =====================================================================
 Install complete for "Reopen in Container" mode. Nothing was started —
 .devcontainer/devcontainer.json is ready and VS Code builds/starts the
 container itself.
-
+ 
 Note: postCreateCommand and the extensions list in devcontainer.json
 are still placeholders (open item, not yet wired up), so bench
 provisioning won't run automatically after the first "Reopen in
 Container" yet. Until that's in place, run this once from a terminal
 inside the container afterward:
     ./bootstrap/setup-bench.sh
-
+ 
 Next steps:
   1. On whichever machine you'll browse FROM (this VM or your own laptop),
-     add this to its hosts file so tcf.local resolves:
-         <remote-host-ip>   tcf.local
+     add this to its hosts file so the ERP site and Meet site resolve:
+         <remote-host-ip>   <your TCF_SITE_NAME, default tcf.local>
+         <remote-host-ip>   <your MEET_SITE_NAME, default meet.tcf.local>
   2. Open this folder in VS Code (Remote-SSH into this VM), then run
      "Dev Containers: Reopen in Container".
-
-Site:      http://tcf.local:8000  (user: Administrator, password: see
+ 
+Site:      http://<TCF_SITE_NAME>:8000  (user: Administrator, password: see
            ADMIN_PASSWORD in .env)
+Meet:      http://<MEET_SITE_NAME>:8000  (same Administrator login; see
+           MEET_SITE_NAME and JWT_SECRET in .env)
 MariaDB:   <remote-host-ip>:3306 (e.g. for DBeaver — root / see .env)
-
+ 
 Day to day:
   ./shutdown.sh   — stop containers safely at the end of a session
   ./startup.sh    — bring them back up after a manual stop or reboot
@@ -142,27 +146,34 @@ else
 fi
 
 cat << EOF
-
+ 
 =====================================================================
 Install complete. Containers are running with a "restart: unless-stopped"
 policy, so they'll come back up automatically after a Docker/VM restart —
 no need to re-run this script unless you deliberately tear things down.
-
+ 
 Next steps:
   1. On whichever machine you'll browse FROM (this VM or your own laptop),
-     add this to its hosts file so tcf.local resolves:
-         <remote-host-ip>   tcf.local
+     add this to its hosts file so the ERP site and Meet site resolve:
+         <remote-host-ip>   <your TCF_SITE_NAME, default tcf.local>
+         <remote-host-ip>   <your MEET_SITE_NAME, default meet.tcf.local>
   2. Open this folder in VS Code (Remote-SSH into this VM), then run
      "Dev Containers: Attach to Running Container..." and pick "frappe".
   3. First attach only: run "Dev Containers: Open Container Configuration
      File" and copy in the extensions/settings from
      .devcontainer/devcontainer.json — VS Code remembers this per
      container name from then on, so you only do it once, ever.
-
-Site:      http://tcf.local:8000  (user: Administrator, password: see
+  4. If browsers/clients reach this machine through a firewall, open UDP
+     40000-40099 and TCP 3000 too (Meet's SFU media + signalling ports,
+     see docker-compose.yml's meet-sfu service) — without these, calls
+     will connect but no audio/video will get through.
+ 
+Site:      http://<TCF_SITE_NAME>:8000  (user: Administrator, password: see
            ADMIN_PASSWORD in .env)
+Meet:      http://<MEET_SITE_NAME>:8000  (same Administrator login; see
+           MEET_SITE_NAME and JWT_SECRET in .env)
 MariaDB:   <remote-host-ip>:3306 (e.g. for DBeaver — root / see .env)
-
+ 
 Day to day:
   ./shutdown.sh   — stop containers safely at the end of a session
   ./startup.sh    — bring them back up after a manual stop or reboot

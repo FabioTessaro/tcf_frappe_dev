@@ -118,7 +118,7 @@ Frappe/ERPNext bench, main site (`TCF_SITE_NAME` in `.env`, default `tcf.local`)
 - **Vendored (dependency) apps — read for reference only, never edit:**
   `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
 - **Custom apps — this is the actual codebase:**
-  `apps/tcf_erp`, `apps/tcf_hr`, `apps/tcf_plm`, `apps/tcf_qms`, `apps/tcf_web` — FabioTessaro's own repos. Work happens here.
+  `apps/tcf_core`, `apps/tcf_erp`, `apps/tcf_hr`, `apps/tcf_plm`, `apps/tcf_qms`, `apps/tcf_web` — FabioTessaro's own repos. Work happens here.
  
 ## Never read or edit
  
@@ -171,13 +171,6 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
     echo "apps/raven already exists — skipping get-app."
   fi
 
-  # frappe/meet was archived in favour of frappe/suite, but its repo still
-  # clones fine and its last-published sfu-server image is still pullable
-  # (see docker-compose.yml's meet-sfu service), so it stays a standalone
-  # app here rather than pulling in all of Suite (drive/writer/sheets/
-  # slides/mail/calendar) for just video calls. If Suite's actively
-  # maintained meet ever becomes the better trade-off, swap this line and
-  # the meet-sfu image for frappe/suite's equivalents.
   if [ ! -d "apps/meet" ]; then
     bench get-app --branch develop https://github.com/frappe/meet
   else
@@ -209,6 +202,7 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
       bench --site "${TCF_SITE_NAME}" install-app erpnext
       bench --site "${TCF_SITE_NAME}" install-app hrms
       bench --site "${TCF_SITE_NAME}" install-app raven
+      bench --site "${TCF_SITE_NAME}" install-app meet
   fi
  
   if [ -n "$TCF_APPS" ]; then
@@ -218,29 +212,14 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
   fi
 fi
 
-# frappe-meet lives on its own site rather than ${TCF_SITE_NAME}, so it can
-# be reached at its own hostname (MEET_SITE_NAME) both here on the local
-# network and, later, in production (e.g. meet.tcf-group.com alongside
-# www.tcf-group.com) — matching how frappe/meet's own docs always give it
-# a dedicated site (meet.localhost) rather than bundling it in.
-if [ "$WITHOUT_DEFAULT_APPS" = false ] && [ ! -d "sites/${MEET_SITE_NAME}" ]; then
-  bench new-site "${MEET_SITE_NAME}" \
-    --mariadb-root-username "${MARIADB_ROOT_USERNAME:-root}" \
-    --mariadb-root-password "${MARIADB_ROOT_PASSWORD}" \
-    --admin-password "${ADMIN_PASSWORD}" \
-    --no-mariadb-socket
- 
-  bench --site "${MEET_SITE_NAME}" install-app meet
- 
-  # Must match the sfu-server container's JWT_SECRET (docker-compose.yml)
-  # exactly — this is how a meeting link mints a token the SFU will trust.
-  bench --site "${MEET_SITE_NAME}" set-config sfu_secret "${JWT_SECRET}"
-fi
-
 
 bench --site "${TCF_SITE_NAME}" set-config seaweedfs_endpoint "${SEAWEEDFS_ENDPOINT}"
 bench --site "${TCF_SITE_NAME}" set-config seaweedfs_access_key "${SEAWEEDFS_ACCESS_KEY}"
 bench --site "${TCF_SITE_NAME}" set-config seaweedfs_secret_key "${SEAWEEDFS_SECRET_KEY}"
+bench --site "${TCF_SITE_NAME}" set-config sfu_secret "${JWT_SECRET}"
+bench --site "${TCF_SITE_NAME}" set-config sfu_server_url "http://${WEBRTC_ANNOUNCED_IP}"
+bench --site "${TCF_SITE_NAME}" set-config sfu_server_port 3000 -p
+
 
 pip install boto3 --break-system-packages --quiet
 

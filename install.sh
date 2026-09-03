@@ -111,8 +111,6 @@ Next steps:
  
 Site:      http://<TCF_SITE_NAME>:8000  (user: Administrator, password: see
            ADMIN_PASSWORD in .env)
-Meet:      http://<MEET_SITE_NAME>:8000  (same Administrator login; see
-           MEET_SITE_NAME and JWT_SECRET in .env)
 MariaDB:   <remote-host-ip>:3306 (e.g. for DBeaver — root / see .env)
  
 Day to day:
@@ -170,8 +168,6 @@ Next steps:
  
 Site:      http://<TCF_SITE_NAME>:8000  (user: Administrator, password: see
            ADMIN_PASSWORD in .env)
-Meet:      http://<MEET_SITE_NAME>:8000  (same Administrator login; see
-           MEET_SITE_NAME and JWT_SECRET in .env)
 MariaDB:   <remote-host-ip>:3306 (e.g. for DBeaver — root / see .env)
  
 Day to day:

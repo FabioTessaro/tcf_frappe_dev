@@ -33,6 +33,7 @@ detect_lan_ip() {
 [ -f .env ] && { echo ".env already exists — skipping."; exit 0; }
 
 TCF_SITE_NAME=$(prompt "TCF_SITE_NAME" "tcf.local")
+MEET_ANNOUNCED_IP=$(prompt "Meet SFU's public/LAN-facing address" "$(detect_lan_ip)")
 MARIADB_ROOT_USERNAME=$(prompt "MARIADB_ROOT_USERNAME" "root")
 MARIADB_ROOT_PASSWORD=$(prompt "MARIADB_ROOT_PASSWORD" "$(openssl rand -hex 16)")
 ADMIN_PASSWORD=$(prompt "ADMIN_PASSWORD" "$(openssl rand -hex 16)")
@@ -40,15 +41,7 @@ SEAWEEDFS_ENDPOINT=$(prompt "SEAWEEDFS_ENDPOINT" "http://seaweedfs:8333")
 SEAWEEDFS_ACCESS_KEY=$(prompt "SEAWEEDFS_ACCESS_KEY" "$(openssl rand -hex 16)")
 SEAWEEDFS_SECRET_KEY=$(prompt "SEAWEEDFS_SECRET_KEY" "$(openssl rand -base64 32)")
 
-# frappe-meet gets its own site (so it can live at its own hostname,
-# separate from ${TCF_SITE_NAME}) plus a standalone SFU container for the
-# actual call media — see the meet-sfu service in docker-compose.yml. On
-# the local network for now, WEBRTC_ANNOUNCED_IP defaults to this
-# machine's detected LAN IP; when this moves to production, set it to the
-# public IP or hostname behind meet.tcf-group.com instead.
-MEET_SITE_NAME=$(prompt "MEET_SITE_NAME" "meet.tcf.local")
 JWT_SECRET=$(prompt "JWT_SECRET (Meet SFU secret, shared with the meet site's sfu_secret config)" "$(openssl rand -base64 32)")
-MEET_ANNOUNCED_IP=$(prompt "Meet SFU's public/LAN-facing address" "$(detect_lan_ip)")
 
 
 if [ "$WITH_AGENTS" = true ]; then
@@ -80,11 +73,9 @@ SEAWEEDFS_ENDPOINT=$SEAWEEDFS_ENDPOINT
 SEAWEEDFS_ACCESS_KEY=$SEAWEEDFS_ACCESS_KEY
 SEAWEEDFS_SECRET_KEY=$SEAWEEDFS_SECRET_KEY
 
-MEET_SITE_NAME=$MEET_SITE_NAME
 JWT_SECRET=$JWT_SECRET
 WEBRTC_ANNOUNCED_IP=$MEET_ANNOUNCED_IP
 MEDIASOUP_ANNOUNCED_IP=$MEET_ANNOUNCED_IP
-
 
 TCF_APPS_GIT_PREFIX=$TCF_APPS_GIT_PREFIX
 TCF_APPS=$TCF_APPS

@@ -176,6 +176,12 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   else
     echo "apps/meet already exists — skipping get-app."
   fi
+
+  if [ ! -d "apps/drive" ]; then
+    bench get-app --branch main https://github.com/frappe/drive
+  else
+    echo "apps/drive already exists — skipping get-app."
+  fi
 fi
 
 if [ -n "$TCF_APPS" ]; then
@@ -203,6 +209,7 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
       bench --site "${TCF_SITE_NAME}" install-app hrms
       bench --site "${TCF_SITE_NAME}" install-app raven
       bench --site "${TCF_SITE_NAME}" install-app meet
+      bench --site "${TCF_SITE_NAME}" install-app drive
   fi
  
   if [ -n "$TCF_APPS" ]; then
@@ -235,7 +242,7 @@ s3 = boto3.client(
     aws_secret_access_key=os.environ["SEAWEEDFS_SECRET_KEY"],
 )
  
-for bucket in ["cad-vault", "attachments-vault", "raven-vault"]:
+for bucket in ["cad-vault", "attachments-vault", "drive-vault"]:
     try:
         s3.head_bucket(Bucket=bucket)
         print(f"Bucket '{bucket}' already exists.")

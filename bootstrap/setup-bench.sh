@@ -203,6 +203,12 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
     --no-mariadb-socket
  
   bench --site "${TCF_SITE_NAME}" set-config developer_mode 1
+  bench --site "${TCF_SITE_NAME}" set-config seaweedfs_endpoint "${SEAWEEDFS_ENDPOINT}"
+  bench --site "${TCF_SITE_NAME}" set-config seaweedfs_access_key "${SEAWEEDFS_ACCESS_KEY}"
+  bench --site "${TCF_SITE_NAME}" set-config seaweedfs_secret_key "${SEAWEEDFS_SECRET_KEY}"
+  bench --site "${TCF_SITE_NAME}" set-config sfu_secret "${JWT_SECRET}"
+  bench --site "${TCF_SITE_NAME}" set-config sfu_server_url "http://${WEBRTC_ANNOUNCED_IP}"
+  bench --site "${TCF_SITE_NAME}" set-config sfu_server_port 3000 -p
   
   if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
       bench --site "${TCF_SITE_NAME}" install-app erpnext
@@ -218,14 +224,6 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
     done
   fi
 fi
-
-
-bench --site "${TCF_SITE_NAME}" set-config seaweedfs_endpoint "${SEAWEEDFS_ENDPOINT}"
-bench --site "${TCF_SITE_NAME}" set-config seaweedfs_access_key "${SEAWEEDFS_ACCESS_KEY}"
-bench --site "${TCF_SITE_NAME}" set-config seaweedfs_secret_key "${SEAWEEDFS_SECRET_KEY}"
-bench --site "${TCF_SITE_NAME}" set-config sfu_secret "${JWT_SECRET}"
-bench --site "${TCF_SITE_NAME}" set-config sfu_server_url "http://${WEBRTC_ANNOUNCED_IP}"
-bench --site "${TCF_SITE_NAME}" set-config sfu_server_port 3000 -p
 
 
 pip install boto3 --break-system-packages --quiet

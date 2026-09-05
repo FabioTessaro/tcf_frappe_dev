@@ -249,4 +249,4 @@ for bucket in ["cad-vault", "attachments-vault", "drive-vault"]:
         print(f"Created bucket '{bucket}'.")
 PYEOF
 
-bench --site tcf.local clear-cache
+bench --site "${TCF_SITE_NAME}" clear-cache

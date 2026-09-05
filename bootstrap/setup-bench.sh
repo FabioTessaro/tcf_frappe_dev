@@ -178,7 +178,7 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   fi
 
   if [ ! -d "apps/drive" ]; then
-    bench get-app --branch main https://github.com/frappe/drive
+    bench get-app --branch develop https://github.com/frappe/drive
   else
     echo "apps/drive already exists — skipping get-app."
   fi

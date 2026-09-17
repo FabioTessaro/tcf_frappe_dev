@@ -16,4 +16,5 @@ frappe-bench/
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
+!.vscode/dev.code-workspace
 *.swp

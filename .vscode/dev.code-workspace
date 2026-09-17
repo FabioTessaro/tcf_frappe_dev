@@ -1,0 +1,42 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../frappe-bench/apps/tcf_core"
+		},
+		{
+			"path": "../frappe-bench/apps/tcf_hr"
+		},
+		{
+			"path": "../frappe-bench/apps/tcf_plm"
+		},
+		{
+			"path": "../frappe-bench/apps/tcf_qms"
+		},
+		{
+			"path": "../frappe-bench/apps/tcf_erp"
+		},
+		{
+			"path": "../frappe-bench/apps/tcf_web"
+		}
+	],
+	"settings": {
+		"files.associations": {
+    		"*.html": "jinja-html"
+		},
+		"liveSassCompile.settings.excludeList": [
+			"/**/node_modules/**",
+			"/**/.vscode/**",
+			"/**/frappe-bench/apps/frappe/**",
+			"/**/frappe-bench/apps/erpnext/**",
+			"/**/frappe-bench/apps/hrms/**",
+			"/**/frappe-bench/apps/meet/**",
+			"/**/frappe-bench/apps/drive/**",
+			"/**/frappe-bench/apps/raven/**",
+			"/**/frappe-bench/apps/**/node_modules/**"
+		],
+		"liveSassCompile.settings.generateMap": false
+	}
+}

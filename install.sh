@@ -35,17 +35,21 @@ Flags:
                       effect in --attach mode since --reopen handles the
                       setup-bench.sh step itself and doesn't pass this flag
                       through.
+  --with-ftp          Also set up and configure an FTP server (vsftpd)
+                      using bootstrap/setup-ftp.sh. Off by default.
 EOF
 }
 
 MODE="attach"
 WITH_AGENTS=false
+WITH_FTP=false
 WITHOUT_DEFAULT_APPS=false
 for arg in "$@"; do
   case "$arg" in
     --attach) MODE="attach" ;;
     --reopen) MODE="reopen" ;;
     --with-agents) WITH_AGENTS=true ;;
+    --with-ftp) WITH_FTP=true ;;
     --no-default-apps) WITHOUT_DEFAULT_APPS=true ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg"; usage; exit 1 ;;
@@ -56,6 +60,11 @@ bash bootstrap/setup-git.sh
 
 if [ ! -f .env ]; then
   bash bootstrap/setup-env.sh --with-agents="$WITH_AGENTS"
+fi
+
+if [ "$WITH_FTP" = true ]; then
+  echo ""
+  bash bootstrap/setup-ftp.sh
 fi
 
 # touch bootstrap/.bootstrap.log

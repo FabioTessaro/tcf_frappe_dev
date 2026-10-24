@@ -9,6 +9,15 @@ if ! command -v git &> /dev/null; then
   sudo apt update && sudo apt install -y git
 fi
 
+sudo apt update && sudo apt install -y locales
+sudo locale-gen en_US.UTF-8
+sudo update-locale LANG=en_US.UTF-8
+
+if ! command -v pre-commit &> /dev/null; then
+  echo "pre-commit not found — installing..."
+  sudo apt install -y pre-commit
+fi
+
 # --- git user.name / user.email ---
 CURRENT_NAME=$(git config --global user.name || true)
 CURRENT_EMAIL=$(git config --global user.email || true)

@@ -19,6 +19,6 @@
         "reportUntypedClassDecorator": "none",
         "reportUntypedFunctionDecorator": "none",
         "reportMissingParameterType": "none",
-        "reportMissingTypeArgument": "none",
+        "reportMissingTypeArgument": "none"
     }
 }

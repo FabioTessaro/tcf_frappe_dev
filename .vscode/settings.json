@@ -7,4 +7,18 @@
             "packageManager": "ms-python.python:pip"
         }
     ],
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingTypeStubs": "none",
+        "reportUnknownArgumentType": "none",
+        "reportUnknownLambdaType": "none",
+        "reportUnknownMemberType": "none",
+        "reportUnknownParameterType": "none",
+        "reportUnknownVariableType": "none",
+        "reportUntypedBaseClass": "none",
+        "reportUntypedClassDecorator": "none",
+        "reportUntypedFunctionDecorator": "none",
+        "reportMissingParameterType": "none",
+        "reportMissingTypeArgument": "none",
+    }
 }

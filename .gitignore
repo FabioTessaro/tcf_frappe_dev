@@ -17,4 +17,5 @@ frappe-bench/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/dev.code-workspace
+!.vscode/settings.json
 *.swp

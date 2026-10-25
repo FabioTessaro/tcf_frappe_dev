@@ -1,4 +1,5 @@
 {
+    "python.defaultInterpreterPath": "./frappe-bench/env/bin/python",
     "python-envs.pythonProjects": [
         {
             "path": ".",

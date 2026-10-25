@@ -37,6 +37,13 @@
 			"/**/frappe-bench/apps/raven/**",
 			"/**/frappe-bench/apps/**/node_modules/**"
 		],
-		"liveSassCompile.settings.generateMap": false
+		"liveSassCompile.settings.generateMap": false,
+		"python-envs.pythonProjects": [
+			{
+				"path": ".",
+				"envManager": "ms-python.python:venv",
+				"packageManager": "ms-python.python:pip"
+			}
+		]
 	}
 }

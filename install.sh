@@ -145,11 +145,11 @@ fi
 if [ "$WITHOUT_DEFAULT_APPS" = true ]; then
   echo ""
   echo "Running first-time bench provisioning inside the frappe container without default apps (this can take a while on a fresh install)..."
-  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh --no-default-apps
+  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh --no-default-apps -y
 else
   echo ""
   echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
-  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh
+  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh -y
 fi
 
 cat << EOF

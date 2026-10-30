@@ -7,20 +7,123 @@ usage() {
 Usage: ./setup-bench.sh [mode]
 
 Flags:
-  --no-default-apps   Doesn't install the default erpnext and hrms apps in the
-                      frappe container (bootstrap/setup-bench.sh). Off by
-                      default.
+  --no-default-apps   Doesn't install the default apps (erpnext, hrms, raven,
+                      meet, drive, insights, helpdesk) in the frappe container
+                      (bootstrap/setup-bench.sh). Off by default.
+  -y, --yes           Don't prompt for app versions; use the hard-coded
+                      defaults (or FRAPPE_VERSION, ERPNEXT_VERSION, HRMS_VERSION,
+                      RAVEN_VERSION, MEET_VERSION, DRIVE_VERSION,
+                      INSIGHTS_VERSION, HELPDESK_VERSION env vars).
 EOF
 }
 
 WITHOUT_DEFAULT_APPS=false
+USE_DEFAULTS=false
 for arg in "$@"; do
   case "$arg" in
     --no-default-apps) WITHOUT_DEFAULT_APPS=true ;;
+    -y|--yes) USE_DEFAULTS=true ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg"; usage; exit 1 ;;
   esac
 done
+
+# ---------------------------------------------------------------------------
+# App versions (git tag or branch). Hard-coded defaults; override by typing a
+# value at the prompt, or by exporting e.g. FRAPPE_VERSION=v16.54.0 beforehand.
+# ---------------------------------------------------------------------------
+DEFAULT_FRAPPE_VERSION="v16.54.0"
+DEFAULT_ERPNEXT_VERSION="v16.53.0"
+DEFAULT_HRMS_VERSION="v16.53.0"
+DEFAULT_RAVEN_VERSION="v3.2.0"
+DEFAULT_MEET_VERSION="develop"
+DEFAULT_DRIVE_VERSION="v0.4.4"
+DEFAULT_INSIGHTS_VERSION="v3.15.1"
+DEFAULT_HELPDESK_VERSION="v1.31.1"
+
+FRAPPE_VERSION="${FRAPPE_VERSION:-$DEFAULT_FRAPPE_VERSION}"
+ERPNEXT_VERSION="${ERPNEXT_VERSION:-$DEFAULT_ERPNEXT_VERSION}"
+HRMS_VERSION="${HRMS_VERSION:-$DEFAULT_HRMS_VERSION}"
+RAVEN_VERSION="${RAVEN_VERSION:-$DEFAULT_RAVEN_VERSION}"
+MEET_VERSION="${MEET_VERSION:-$DEFAULT_MEET_VERSION}"
+DRIVE_VERSION="${DRIVE_VERSION:-$DEFAULT_DRIVE_VERSION}"
+INSIGHTS_VERSION="${INSIGHTS_VERSION:-$DEFAULT_INSIGHTS_VERSION}"
+HELPDESK_VERSION="${HELPDESK_VERSION:-$DEFAULT_HELPDESK_VERSION}"
+
+# Interactive = a human is attached and --yes wasn't passed.
+# (devcontainer/CI runs are non-interactive and never wait for input.)
+is_interactive() {
+  [ "$USE_DEFAULTS" = false ] && [ -t 0 ]
+}
+
+# Exit status: 0 = ref exists, 1 = ref does not exist,
+#              2 = couldn't check (network/GitHub problem).
+ref_status() {
+  local url="$1" ref="$2" rc=0
+  git ls-remote --exit-code "$url" "refs/tags/$ref" "refs/heads/$ref" >/dev/null 2>&1 || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    2) return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+# resolve_version <label> <variable name> <repo url> <hard-coded default>
+#
+# Interactive:     prompts, validates, and asks again until a valid
+#                  tag/branch is entered.
+# Non-interactive: validates the env-var/default value; if it doesn't exist,
+#                  falls back to the hard-coded default. Only aborts if that
+#                  default doesn't exist either (nothing sane left to use).
+# If GitHub can't be reached, the value is accepted unverified so a network
+# blip doesn't block or loop the install.
+resolve_version() {
+  local label="$1" var="$2" url="$3" default="$4"
+  local current="${!var}" input status
+
+  while true; do
+    if is_interactive; then
+      read -r -p "${label} version [${current}]: " input
+      current="${input:-$current}"
+    fi
+
+    status=0
+    ref_status "$url" "$current" || status=$?
+
+    if [ "$status" -eq 0 ]; then
+      break
+    elif [ "$status" -eq 2 ]; then
+      echo "${label}: couldn't reach ${url} to verify '${current}' — continuing unverified." >&2
+      break
+    fi
+
+    echo "${label}: '${current}' is not a tag or branch of ${url}." >&2
+    if is_interactive; then
+      echo "Please enter a different version." >&2
+      current="$default"
+    elif [ "$current" != "$default" ]; then
+      echo "${label}: falling back to the default '${default}'." >&2
+      current="$default"
+    else
+      echo "${label}: the default '${default}' doesn't exist either — aborting." >&2
+      exit 1
+    fi
+  done
+
+  printf -v "$var" '%s' "$current"
+}
+
+resolve_version "frappe" FRAPPE_VERSION https://github.com/frappe/frappe "$DEFAULT_FRAPPE_VERSION"
+
+if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
+  resolve_version "erpnext"  ERPNEXT_VERSION  https://github.com/frappe/erpnext  "$DEFAULT_ERPNEXT_VERSION"
+  resolve_version "hrms"     HRMS_VERSION     https://github.com/frappe/hrms     "$DEFAULT_HRMS_VERSION"
+  resolve_version "raven"    RAVEN_VERSION    https://github.com/frappe/raven    "$DEFAULT_RAVEN_VERSION"
+  resolve_version "meet"     MEET_VERSION     https://github.com/frappe/meet     "$DEFAULT_MEET_VERSION"
+  resolve_version "drive"    DRIVE_VERSION    https://github.com/frappe/drive    "$DEFAULT_DRIVE_VERSION"
+  resolve_version "insights" INSIGHTS_VERSION https://github.com/frappe/insights "$DEFAULT_INSIGHTS_VERSION"
+  resolve_version "helpdesk" HELPDESK_VERSION https://github.com/frappe/helpdesk "$DEFAULT_HELPDESK_VERSION"
+fi
 
 sudo chmod 700 ~/.ssh
 sudo chmod 600 ~/.ssh/id_* 2>/dev/null || true
@@ -56,7 +159,7 @@ echo "SeaweedFS is ready."
 if [ ! -f frappe-bench/sites/apps.txt ]; then
   echo "No complete frappe-bench found — (re)initializing..."
   rm -rf frappe-bench
-  bench init frappe-bench --frappe-branch version-16 --skip-redis-config-generation
+  bench init frappe-bench --frappe-branch "$FRAPPE_VERSION" --skip-redis-config-generation
 fi
 cd frappe-bench
 
@@ -79,27 +182,33 @@ cat > .claude/settings.json << 'EOF'
       "Write(apps/raven/**)",
       "Edit(apps/meet/**)",
       "Write(apps/meet/**)",
- 
+      "Edit(apps/drive/**)",
+      "Write(apps/drive/**)",
+      "Edit(apps/insights/**)",
+      "Write(apps/insights/**)",
+      "Edit(apps/helpdesk/**)",
+      "Write(apps/helpdesk/**)",
+
       "Read(env/**)",
       "Edit(env/**)",
       "Write(env/**)",
- 
+
       "Read(logs/**)",
       "Edit(logs/**)",
       "Write(logs/**)",
- 
+
       "Read(sites/**)",
       "Edit(sites/**)",
       "Write(sites/**)",
- 
+
       "Read(**/node_modules/**)",
       "Edit(**/node_modules/**)",
       "Write(**/node_modules/**)",
- 
+
       "Read(**/.git/**)",
       "Edit(**/.git/**)",
       "Write(**/.git/**)",
- 
+
       "Bash(cat env/*)",
       "Bash(cat logs/*)",
       "Bash(cat sites/*)"
@@ -110,35 +219,35 @@ EOF
 
 cat > CLAUDE.md << 'EOF'
 # frappe-bench
- 
+
 Frappe/ERPNext bench, main site (`TCF_SITE_NAME` in `.env`, default `tcf.local`) plus a dedicated Meet site (`MEET_SITE_NAME` in `.env`, default `meet.tcf.local`) for frappe-meet, kept separate so it can live at its own hostname — see docker-compose.yml's `meet-sfu` service for the call-media side of it. Bench root: everything below is relative to this file's directory.
- 
+
 ## App layout
- 
+
 - **Vendored (dependency) apps — read for reference only, never edit:**
-  `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
+  `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet`, `apps/drive`, `apps/insights`, `apps/helpdesk` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
 - **Custom apps — this is the actual codebase:**
   `apps/tcf_core`, `apps/tcf_erp`, `apps/tcf_hr`, `apps/tcf_plm`, `apps/tcf_qms`, `apps/tcf_web` — FabioTessaro's own repos. Work happens here.
- 
+
 ## Never read or edit
- 
-`env/` (Python venv), `logs/`, `sites/**` (site data/config/backups), any `node_modules/` or `.git/` under `apps/*`. These are also denied in `.claude/settings.json`, but that only binds the Read/Edit/Write tools — when using `grep`/`find`/`rg` via Bash, explicitly exclude these paths (e.g. `--exclude-dir={env,logs,node_modules,.git} apps/frappe apps/erpnext apps/hrms apps/raven apps/meet sites`) since Bash isn't path-aware at the permission level.
- 
+
+`env/` (Python venv), `logs/`, `sites/**` (site data/config/backups), any `node_modules/` or `.git/` under `apps/*`. These are also denied in `.claude/settings.json`, but that only binds the Read/Edit/Write tools — when using `grep`/`find`/`rg` via Bash, explicitly exclude these paths (e.g. `--exclude-dir={env,logs,node_modules,.git} apps/frappe apps/erpnext apps/hrms apps/raven apps/meet apps/drive apps/insights apps/helpdesk sites`) since Bash isn't path-aware at the permission level.
+
 ## Workflow — do not skip straight to code
- 
+
 Don't make use of worktrees. Edit the files directly for me to check myself and decide when to commit.
 For any feature or non-trivial change, work in this order and stop for my review between steps:
- 
+
 1. **Brainstorm** — discuss the feature/intent with me first; don't assume scope.
 2. **Scope** — enumerate exactly which doctypes/files/hooks/behaviors need to change.
 3. **Propose** — show the concrete plan/diff for review before touching files.
 4. **Review** — I approve or redirect.
 5. **Implement** — only after approval.
- 
+
 Trivial one-line fixes (typo, obvious bug with an unambiguous fix) can skip straight to implementation — everything else goes through the steps above.
- 
+
 ## Token optimization
- 
+
 - Don't re-read a file already open in this conversation's context.
 - Prefer targeted reads of a specific path over broad directory
   exploration.
@@ -154,33 +263,45 @@ bench set-config -g redis_queue redis://redis-queue:6379
 
 if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   if [ ! -d "apps/erpnext" ]; then
-    bench get-app --branch version-16 erpnext
+    bench get-app --branch "$ERPNEXT_VERSION" erpnext
   else
     echo "apps/erpnext already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/hrms" ]; then
-    bench get-app --branch version-16 hrms
+    bench get-app --branch "$HRMS_VERSION" hrms
   else
     echo "apps/hrms already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/raven" ]; then
-    bench get-app --branch main https://github.com/frappe/raven
+    bench get-app --branch "$RAVEN_VERSION" https://github.com/frappe/raven
   else
     echo "apps/raven already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/meet" ]; then
-    bench get-app --branch develop https://github.com/frappe/meet
+    bench get-app --branch "$MEET_VERSION" https://github.com/frappe/meet
   else
     echo "apps/meet already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/drive" ]; then
-    bench get-app --branch develop https://github.com/frappe/drive
+    bench get-app --branch "$DRIVE_VERSION" https://github.com/frappe/drive
   else
     echo "apps/drive already exists — skipping get-app."
+  fi
+
+  if [ ! -d "apps/insights" ]; then
+    bench get-app --branch "$INSIGHTS_VERSION" https://github.com/frappe/insights
+  else
+    echo "apps/insights already exists — skipping get-app."
+  fi
+
+  if [ ! -d "apps/helpdesk" ]; then
+    bench get-app --branch "$HELPDESK_VERSION" https://github.com/frappe/helpdesk
+  else
+    echo "apps/helpdesk already exists — skipping get-app."
   fi
 fi
 
@@ -201,7 +322,7 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
     --mariadb-root-password "${MARIADB_ROOT_PASSWORD}" \
     --admin-password "${ADMIN_PASSWORD}" \
     --no-mariadb-socket
- 
+
   bench --site "${TCF_SITE_NAME}" set-config developer_mode 1
   bench --site "${TCF_SITE_NAME}" set-config seaweedfs_endpoint "${SEAWEEDFS_ENDPOINT}"
   bench --site "${TCF_SITE_NAME}" set-config seaweedfs_access_key "${SEAWEEDFS_ACCESS_KEY}"
@@ -209,15 +330,17 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
   bench --site "${TCF_SITE_NAME}" set-config sfu_secret "${JWT_SECRET}"
   bench --site "${TCF_SITE_NAME}" set-config sfu_server_url "http://${WEBRTC_ANNOUNCED_IP}"
   bench --site "${TCF_SITE_NAME}" set-config sfu_server_port 3000 -p
-  
+
   if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
       bench --site "${TCF_SITE_NAME}" install-app erpnext
       bench --site "${TCF_SITE_NAME}" install-app hrms
       bench --site "${TCF_SITE_NAME}" install-app raven
       bench --site "${TCF_SITE_NAME}" install-app meet
       bench --site "${TCF_SITE_NAME}" install-app drive
+      bench --site "${TCF_SITE_NAME}" install-app insights
+      bench --site "${TCF_SITE_NAME}" install-app helpdesk
   fi
- 
+
   if [ -n "$TCF_APPS" ]; then
     for app in $TCF_APPS; do
       bench --site "${TCF_SITE_NAME}" install-app "$app"
@@ -232,14 +355,14 @@ python3 << 'PYEOF'
 import os
 import boto3
 from botocore.exceptions import ClientError
- 
+
 s3 = boto3.client(
     "s3",
     endpoint_url=os.environ["SEAWEEDFS_ENDPOINT"],
     aws_access_key_id=os.environ["SEAWEEDFS_ACCESS_KEY"],
     aws_secret_access_key=os.environ["SEAWEEDFS_SECRET_KEY"],
 )
- 
+
 for bucket in ["cad-vault", "attachments-vault", "drive-vault"]:
     try:
         s3.head_bucket(Bucket=bucket)

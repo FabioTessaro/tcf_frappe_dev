@@ -10,10 +10,11 @@ Flags:
   --no-default-apps   Doesn't install the default apps (erpnext, hrms, raven,
                       meet, drive, insights, helpdesk) in the frappe container
                       (bootstrap/setup-bench.sh). Off by default.
-  -y, --yes           Don't prompt for app versions; use the hard-coded
-                      defaults (or FRAPPE_VERSION, ERPNEXT_VERSION, HRMS_VERSION,
-                      RAVEN_VERSION, MEET_VERSION, DRIVE_VERSION,
-                      INSIGHTS_VERSION, HELPDESK_VERSION env vars).
+  -y, --yes           Don't prompt for app versions; use the values from the
+                      environment (.env): FRAPPE_VERSION, ERPNEXT_VERSION,
+                      HRMS_VERSION, RAVEN_VERSION, MEET_VERSION, DRIVE_VERSION,
+                      INSIGHTS_VERSION, HELPDESK_VERSION. Aborts if one is
+                      missing or doesn't exist.
 EOF
 }
 
@@ -29,26 +30,13 @@ for arg in "$@"; do
 done
 
 # ---------------------------------------------------------------------------
-# App versions (git tag or branch). Hard-coded defaults; override by typing a
-# value at the prompt, or by exporting e.g. FRAPPE_VERSION=v16.54.0 beforehand.
+# App versions (git tag or branch) come from the environment only — normally
+# the .env written by bootstrap/setup-env.sh:
+#   FRAPPE_VERSION, ERPNEXT_VERSION, HRMS_VERSION, RAVEN_VERSION,
+#   MEET_VERSION, DRIVE_VERSION, INSIGHTS_VERSION, HELPDESK_VERSION
+# There are no defaults in this script. FRAPPE_VERSION is always required; the
+# others are required unless --no-default-apps is used.
 # ---------------------------------------------------------------------------
-DEFAULT_FRAPPE_VERSION="v16.54.0"
-DEFAULT_ERPNEXT_VERSION="v16.53.0"
-DEFAULT_HRMS_VERSION="v16.53.0"
-DEFAULT_RAVEN_VERSION="v3.2.0"
-DEFAULT_MEET_VERSION="develop"
-DEFAULT_DRIVE_VERSION="v0.4.4"
-DEFAULT_INSIGHTS_VERSION="v3.15.1"
-DEFAULT_HELPDESK_VERSION="v1.31.1"
-
-FRAPPE_VERSION="${FRAPPE_VERSION:-$DEFAULT_FRAPPE_VERSION}"
-ERPNEXT_VERSION="${ERPNEXT_VERSION:-$DEFAULT_ERPNEXT_VERSION}"
-HRMS_VERSION="${HRMS_VERSION:-$DEFAULT_HRMS_VERSION}"
-RAVEN_VERSION="${RAVEN_VERSION:-$DEFAULT_RAVEN_VERSION}"
-MEET_VERSION="${MEET_VERSION:-$DEFAULT_MEET_VERSION}"
-DRIVE_VERSION="${DRIVE_VERSION:-$DEFAULT_DRIVE_VERSION}"
-INSIGHTS_VERSION="${INSIGHTS_VERSION:-$DEFAULT_INSIGHTS_VERSION}"
-HELPDESK_VERSION="${HELPDESK_VERSION:-$DEFAULT_HELPDESK_VERSION}"
 
 # Interactive = a human is attached and --yes wasn't passed.
 # (devcontainer/CI runs are non-interactive and never wait for input.)
@@ -68,23 +56,36 @@ ref_status() {
   esac
 }
 
-# resolve_version <label> <variable name> <repo url> <hard-coded default>
+# resolve_version <label> <variable name> <repo url>
 #
-# Interactive:     prompts, validates, and asks again until a valid
-#                  tag/branch is entered.
-# Non-interactive: validates the env-var/default value; if it doesn't exist,
-#                  falls back to the hard-coded default. Only aborts if that
-#                  default doesn't exist either (nothing sane left to use).
+# Starts from the value already in the environment (.env).
+# Interactive:     prompts (pre-filled with that value if there is one),
+#                  validates, and asks again until a valid tag/branch is entered.
+# Non-interactive: validates the value; aborts with a clear message if it is
+#                  unset or doesn't exist, since there is no default to use.
 # If GitHub can't be reached, the value is accepted unverified so a network
 # blip doesn't block or loop the install.
 resolve_version() {
-  local label="$1" var="$2" url="$3" default="$4"
-  local current="${!var}" input status
+  local label="$1" var="$2" url="$3"
+  local current="${!var:-}" input status
 
   while true; do
     if is_interactive; then
-      read -r -p "${label} version [${current}]: " input
+      if [ -n "$current" ]; then
+        read -r -p "${label} version [${current}]: " input
+      else
+        read -r -p "${label} version: " input
+      fi
       current="${input:-$current}"
+    fi
+
+    if [ -z "$current" ]; then
+      if is_interactive; then
+        echo "${label}: a version is required." >&2
+        continue
+      fi
+      echo "${label}: ${var} is not set — add it to .env (bootstrap/setup-env.sh writes it) — aborting." >&2
+      exit 1
     fi
 
     status=0
@@ -100,12 +101,9 @@ resolve_version() {
     echo "${label}: '${current}' is not a tag or branch of ${url}." >&2
     if is_interactive; then
       echo "Please enter a different version." >&2
-      current="$default"
-    elif [ "$current" != "$default" ]; then
-      echo "${label}: falling back to the default '${default}'." >&2
-      current="$default"
+      current=""
     else
-      echo "${label}: the default '${default}' doesn't exist either — aborting." >&2
+      echo "${label}: fix ${var} in .env — aborting." >&2
       exit 1
     fi
   done
@@ -113,16 +111,16 @@ resolve_version() {
   printf -v "$var" '%s' "$current"
 }
 
-resolve_version "frappe" FRAPPE_VERSION https://github.com/frappe/frappe "$DEFAULT_FRAPPE_VERSION"
+resolve_version "frappe" FRAPPE_VERSION https://github.com/frappe/frappe
 
 if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
-  resolve_version "erpnext"  ERPNEXT_VERSION  https://github.com/frappe/erpnext  "$DEFAULT_ERPNEXT_VERSION"
-  resolve_version "hrms"     HRMS_VERSION     https://github.com/frappe/hrms     "$DEFAULT_HRMS_VERSION"
-  resolve_version "raven"    RAVEN_VERSION    https://github.com/frappe/raven    "$DEFAULT_RAVEN_VERSION"
-  resolve_version "meet"     MEET_VERSION     https://github.com/frappe/meet     "$DEFAULT_MEET_VERSION"
-  resolve_version "drive"    DRIVE_VERSION    https://github.com/frappe/drive    "$DEFAULT_DRIVE_VERSION"
-  resolve_version "insights" INSIGHTS_VERSION https://github.com/frappe/insights "$DEFAULT_INSIGHTS_VERSION"
-  resolve_version "helpdesk" HELPDESK_VERSION https://github.com/frappe/helpdesk "$DEFAULT_HELPDESK_VERSION"
+  resolve_version "erpnext"  ERPNEXT_VERSION  https://github.com/frappe/erpnext
+  resolve_version "hrms"     HRMS_VERSION     https://github.com/frappe/hrms
+  resolve_version "raven"    RAVEN_VERSION    https://github.com/frappe/raven
+  resolve_version "meet"     MEET_VERSION     https://github.com/frappe/meet
+  resolve_version "drive"    DRIVE_VERSION    https://github.com/frappe/drive
+  resolve_version "insights" INSIGHTS_VERSION https://github.com/frappe/insights
+  resolve_version "helpdesk" HELPDESK_VERSION https://github.com/frappe/helpdesk
 fi
 
 sudo chmod 700 ~/.ssh

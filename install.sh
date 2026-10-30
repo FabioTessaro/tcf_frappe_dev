@@ -29,8 +29,8 @@ Flags:
                       bootstrap/setup-agents.sh by hand after your first
                       "Reopen in Container" if you want them there.
  
-  --no-default-apps   Doesn't install the default erpnext, hrms, raven, and
-                      meet apps in the frappe container
+  --no-default-apps   Doesn't install the default erpnext, hrms, raven, insight,
+                      helpdesk and meet apps in the frappe container
                       (bootstrap/setup-bench.sh). Off by default. Only takes
                       effect in --attach mode since --reopen handles the
                       setup-bench.sh step itself and doesn't pass this flag

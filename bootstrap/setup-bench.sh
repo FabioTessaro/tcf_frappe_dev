@@ -8,12 +8,12 @@ Usage: ./setup-bench.sh [mode]
 
 Flags:
   --no-default-apps   Doesn't install the default apps (erpnext, hrms, raven,
-                      meet, drive, insights, helpdesk) in the frappe container
+                      meet, drive, insights) in the frappe container
                       (bootstrap/setup-bench.sh). Off by default.
   -y, --yes           Don't prompt for app versions; use the values from the
                       environment (.env): FRAPPE_VERSION, ERPNEXT_VERSION,
                       HRMS_VERSION, RAVEN_VERSION, MEET_VERSION, DRIVE_VERSION,
-                      INSIGHTS_VERSION, HELPDESK_VERSION. Aborts if one is
+                      INSIGHTS_VERSION. Aborts if one is
                       missing or doesn't exist.
 EOF
 }
@@ -220,7 +220,7 @@ Frappe/ERPNext bench, main site (`TCF_SITE_NAME` in `.env`, default `tcf.local`)
 ## App layout
 
 - **Vendored (dependency) apps — read for reference only, never edit:**
-  `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet`, `apps/drive`, `apps/insights`, `apps/helpdesk` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
+  `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet`, `apps/drive`, `apps/insights` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
 - **Custom apps — this is the actual codebase:**
   `apps/tcf_core`, `apps/tcf_erp`, `apps/tcf_hr`, `apps/tcf_plm`, `apps/tcf_qms`, `apps/tcf_web` — FabioTessaro's own repos. Work happens here.
 

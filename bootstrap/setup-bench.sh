@@ -120,7 +120,6 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   resolve_version "meet"     MEET_VERSION     https://github.com/frappe/meet
   resolve_version "drive"    DRIVE_VERSION    https://github.com/frappe/drive
   resolve_version "insights" INSIGHTS_VERSION https://github.com/frappe/insights
-  resolve_version "helpdesk" HELPDESK_VERSION https://github.com/frappe/helpdesk
 fi
 
 sudo chmod 700 ~/.ssh
@@ -184,8 +183,6 @@ cat > .claude/settings.json << 'EOF'
       "Write(apps/drive/**)",
       "Edit(apps/insights/**)",
       "Write(apps/insights/**)",
-      "Edit(apps/helpdesk/**)",
-      "Write(apps/helpdesk/**)",
 
       "Read(env/**)",
       "Edit(env/**)",
@@ -295,12 +292,6 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   else
     echo "apps/insights already exists — skipping get-app."
   fi
-
-  if [ ! -d "apps/helpdesk" ]; then
-    bench get-app --branch "$HELPDESK_VERSION" https://github.com/frappe/helpdesk
-  else
-    echo "apps/helpdesk already exists — skipping get-app."
-  fi
 fi
 
 if [ -n "$TCF_APPS" ]; then
@@ -336,7 +327,6 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
       bench --site "${TCF_SITE_NAME}" install-app meet
       bench --site "${TCF_SITE_NAME}" install-app drive
       bench --site "${TCF_SITE_NAME}" install-app insights
-      bench --site "${TCF_SITE_NAME}" install-app helpdesk
   fi
 
   if [ -n "$TCF_APPS" ]; then

@@ -8,7 +8,7 @@ Usage: ./setup-bench.sh [mode]
 
 Flags:
   --no-default-apps   Doesn't install the default apps (erpnext, hrms, raven,
-                      meet, drive, insights) in the frappe container
+                      meet, drive, insights, wiki) in the frappe container
                       (bootstrap/setup-bench.sh). Off by default.
   -y, --yes           Don't prompt for app versions; use the values from the
                       environment (.env): FRAPPE_VERSION, ERPNEXT_VERSION,
@@ -120,6 +120,7 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   resolve_version "meet"     MEET_VERSION     https://github.com/frappe/meet
   resolve_version "drive"    DRIVE_VERSION    https://github.com/frappe/drive
   resolve_version "insights" INSIGHTS_VERSION https://github.com/frappe/insights
+  resolve_version "wiki"     WIKI_VERSION     https://github.com/frappe/wiki
 fi
 
 sudo chmod 700 ~/.ssh
@@ -183,6 +184,8 @@ cat > .claude/settings.json << 'EOF'
       "Write(apps/drive/**)",
       "Edit(apps/insights/**)",
       "Write(apps/insights/**)",
+      "Edit(apps/wiki/**)",
+      "Write(apps/wiki/**)",
 
       "Read(env/**)",
       "Edit(env/**)",
@@ -220,13 +223,13 @@ Frappe/ERPNext bench, main site (`TCF_SITE_NAME` in `.env`, default `tcf.local`)
 ## App layout
 
 - **Vendored (dependency) apps — read for reference only, never edit:**
-  `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet`, `apps/drive`, `apps/insights` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
+  `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet`, `apps/drive`, `apps/insights`, `apps/wiki` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
 - **Custom apps — this is the actual codebase:**
   `apps/tcf_core`, `apps/tcf_erp`, `apps/tcf_hr`, `apps/tcf_plm`, `apps/tcf_qms`, `apps/tcf_web` — FabioTessaro's own repos. Work happens here.
 
 ## Never read or edit
 
-`env/` (Python venv), `logs/`, `sites/**` (site data/config/backups), any `node_modules/` or `.git/` under `apps/*`. These are also denied in `.claude/settings.json`, but that only binds the Read/Edit/Write tools — when using `grep`/`find`/`rg` via Bash, explicitly exclude these paths (e.g. `--exclude-dir={env,logs,node_modules,.git} apps/frappe apps/erpnext apps/hrms apps/raven apps/meet apps/drive apps/insights apps/helpdesk sites`) since Bash isn't path-aware at the permission level.
+`env/` (Python venv), `logs/`, `sites/**` (site data/config/backups), any `node_modules/` or `.git/` under `apps/*`. These are also denied in `.claude/settings.json`, but that only binds the Read/Edit/Write tools — when using `grep`/`find`/`rg` via Bash, explicitly exclude these paths (e.g. `--exclude-dir={env,logs,node_modules,.git} apps/frappe apps/erpnext apps/hrms apps/raven apps/meet apps/drive apps/insights apps/wiki sites`) since Bash isn't path-aware at the permission level.
 
 ## Workflow — do not skip straight to code
 
@@ -292,6 +295,12 @@ if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   else
     echo "apps/insights already exists — skipping get-app."
   fi
+
+  if [ ! -d "apps/wiki" ]; then
+    bench get-app --branch "$WIKI_VERSION" https://github.com/frappe/wiki
+  else
+    echo "apps/wiki already exists — skipping get-app."
+  fi
 fi
 
 if [ -n "$TCF_APPS" ]; then
@@ -327,6 +336,7 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
       bench --site "${TCF_SITE_NAME}" install-app meet
       bench --site "${TCF_SITE_NAME}" install-app drive
       bench --site "${TCF_SITE_NAME}" install-app insights
+      bench --site "${TCF_SITE_NAME}" install-app wiki
   fi
 
   if [ -n "$TCF_APPS" ]; then

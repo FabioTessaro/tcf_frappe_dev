@@ -12,6 +12,16 @@ set -u
 
 ARCH="$(uname -m)"
 
+# --- Ensure Local Bin Directory & PATH -----------------------------------
+# Create directory if missing and load into current script session
+mkdir -p "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:$PATH"
+
+# Persist PATH in ~/.bashrc if not already present
+if [ -f "$HOME/.bashrc" ] && ! grep -q '\.local/bin' "$HOME/.bashrc"; then
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+fi
+
 # --- Claude Code ---------------------------------------------------------
 if command -v claude &> /dev/null; then
   echo "Claude Code already installed ($(claude --version 2>/dev/null))."

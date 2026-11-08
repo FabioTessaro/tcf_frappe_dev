@@ -328,6 +328,7 @@ if [ ! -d "sites/${TCF_SITE_NAME}" ]; then
   bench --site "${TCF_SITE_NAME}" set-config sfu_secret "${JWT_SECRET}"
   bench --site "${TCF_SITE_NAME}" set-config sfu_server_url "http://${WEBRTC_ANNOUNCED_IP}"
   bench --site "${TCF_SITE_NAME}" set-config sfu_server_port 3000 -p
+  bench --site "${TCF_SITE_NAME}" set-config allow_tests true
 
   if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
       bench --site "${TCF_SITE_NAME}" install-app erpnext

@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --dir frontend dev",
-    "build": "pnpm --dir frontend build",
+    "build": "if [ -f frontend/index.html ]; then pnpm --dir frontend build; else echo 'Skipping frontend build: frontend/index.html is not present yet.'; fi",
     "typecheck": "pnpm --dir frontend typecheck",
     "lint": "pnpm --dir frontend lint",
     "lint:styles": "pnpm --dir frontend lint:styles",

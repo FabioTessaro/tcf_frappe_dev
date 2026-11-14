@@ -13,4 +13,4 @@ export PATH="$HOME/.local/bin:$PATH"
 
 bash bootstrap/install-system-dependencies.sh
 bash bootstrap/provision-bench.sh -y
-bash ./setup-env.sh --skip-system-tools --defer-app-selection
+bash ./setup-env.sh --skip-system-tools

@@ -19,6 +19,8 @@ The document is an architecture reference; the scripts in this repository provis
 - Frappe bench and the apps configured in `.env`.
 - MariaDB, Redis, SeaweedFS and the Frappe Meet SFU through Docker Compose.
 - Node.js, Corepack, pnpm and the frontend development toolchain inside the Dev Container.
+- Frontend dependencies for the configured core app.
+- Bench application assets, compiled after the frontend toolchain is installed.
 - VS Code workspace settings and extension recommendations.
 - Playwright and Chromium for browser-based end-to-end tests.
 
@@ -48,14 +50,25 @@ cd frappe-dev
 ./install.sh
 ```
 
-The installer:
+On the first run, the installer asks for the environment configuration, including:
+
+- Frappe and dependency app versions.
+- Site and service credentials.
+- The core app that owns the Vue frontend (`CORE_APP`, default `tcf_core`).
+- Additional custom apps to clone and install.
+
+The core app is automatically included in `TCF_APPS`, so it does not need to be entered again as an additional app.
+
+The installer then:
 
 1. Checks Git identity and SSH access.
-2. Calls the private bootstrap helper `bootstrap/setup-env.sh` to create `.env` when it does not already exist.
+2. Creates `.env` from the checked-in template, or migrates missing core-app configuration in an existing `.env`.
 3. Generates the Dev Container configuration from the checked-in template.
-4. Installs Docker when required and starts the project services.
-5. Provisions the Frappe bench and configured apps.
-6. Installs the container-side development toolchain and prepares Playwright.
+4. Installs Docker when required and starts the project services in Attach mode.
+5. Provisions the Frappe bench and configured apps. Asset compilation is deferred at this stage.
+6. Installs the container-side development toolchain, including Node.js, Corepack and pnpm.
+7. Selects `CORE_APP`, installs its frontend dependencies and builds the Bench assets.
+8. Installs Playwright browsers and configures the development tools.
 
 `install.sh` defaults to the **Attach to Running Container** workflow. Use `./install.sh --reopen` to prepare the **Reopen in Container** workflow instead.
 
@@ -79,25 +92,34 @@ Run:
 ./install.sh --reopen
 ```
 
-Then open the repository in VS Code over Remote - SSH and run **Dev Containers: Reopen in Container**. The Dev Container's `postCreateCommand` provisions the bench and common development tools. When more than one custom app is installed, select the core app afterwards from the container terminal:
+Then open the repository in VS Code over Remote - SSH and run **Dev Containers: Reopen in Container**.
 
-```bash
-./setup-env.sh
-```
+The Dev Container's `postCreateCommand` automatically provisions the Bench, installs the Node.js and pnpm toolchain, prepares the core frontend, and builds the application assets.
+
+The configured `CORE_APP` is read from `.env`, so no interactive core-app selection or manual provisioning command is required after reopening.
 
 ## Configuration
 
-`install.sh` creates `.env` on the first run by calling `bootstrap/setup-env.sh`. That helper is an internal part of initial installation; run `./install.sh` rather than invoking it manually. The root-level `./setup-env.sh` has a different responsibility: it installs and configures the development pipeline inside the Dev Container and never changes `.env`. After initial installation, `./new-app.sh` is the only workflow that updates `.env`: it adds the new app to `TCF_APPS` only after the app has been successfully pushed. The file contains credentials, service settings, app versions and custom-app configuration. **Do not commit `.env`.**
+`install.sh` creates `.env` on the first run by calling `bootstrap/setup-env.sh`. That helper is an internal part of installation; run `./install.sh` rather than invoking it manually.
 
-Important settings:
+The root-level `./setup-env.sh` has a different responsibility: it installs and configures the development pipeline inside the Dev Container. It does not create or modify `.env`.
+
+The file contains credentials, service settings, app versions and custom-app configuration. **Do not commit `.env`.**
+
+### Important settings
 
 - `TCF_SITE_NAME`: Frappe site name (default `tcf.local`).
-- `TCF_APPS`: space-separated custom app names to clone and install.
+- `CORE_APP`: custom Frappe app that owns the Vue portal and its frontend development pipeline (default `tcf_core`).
+- `TCF_APPS`: space-separated custom app names to clone and install. The core app is included automatically.
 - `TCF_APPS_GIT_PREFIX`: Git URL prefix used to clone custom apps.
 - `*_VERSION`: Git tags or branches for the Frappe and dependency apps.
 - `WEBRTC_ANNOUNCED_IP`: address advertised by the Meet SFU to WebRTC clients.
 
-Custom app folders are cloned into `frappe-bench/apps/`. Add or create apps with `./new-app.sh <app-name>`; successful pushes are added to `TCF_APPS` so future bench provisioning can restore them.
+`CORE_APP` must identify one of the apps included in `TCF_APPS`. The selected app must also be cloned into `frappe-bench/apps/` and installed on the configured Frappe site.
+
+For an existing `.env` without `CORE_APP`, `install.sh` adds the default `tcf_core` setting and ensures that the core app is included in `TCF_APPS`, preserving the other environment settings.
+
+Custom app folders are cloned into `frappe-bench/apps/`. Add or create apps with `./new-app.sh <app-name>`. Successful pushes are added to `TCF_APPS` so future bench provisioning can restore them.
 
 ## Common commands
 
@@ -105,19 +127,24 @@ Run the root scripts from the repository directory. They resolve paths relative 
 
 | Command | Purpose |
 |---|---|
-| `./install.sh` | Initial setup or repair; accepts `--attach` (default) or `--reopen`. |
-| `./setup-env.sh` | Set up or repair the development pipeline inside the Dev Container: Node.js, pnpm, frontend dependencies, Playwright and workspace tooling. Does not modify `.env`. |
-| `./startup.sh` | Start the services and offer to repair an incomplete bench. Safe to repeat. |
+| `./install.sh` | Initial setup using Attach to Running Container mode. |
+| `./install.sh --attach` | Explicitly use Attach to Running Container mode. |
+| `./install.sh --reopen` | Prepare the Reopen in Container workflow. |
+| `./install.sh --no-default-apps` | Skip the default dependency apps during Attach-mode provisioning. |
+| `./setup-env.sh` | Set up or repair the development pipeline inside the Dev Container: Node.js, pnpm, frontend dependencies, Bench assets, Playwright and workspace tooling. Does not modify `.env`. |
+| `./startup.sh` | Start the services and offer to repair an incomplete Bench. Safe to repeat. |
 | `./shutdown.sh` | Stop the services. Optional cleanup tiers: `--clean`, `--volumes`, `--images`, `--all`. |
 | `./reseed.sh` | Re-download and seed the VS Code Server build in the `frappe` container. |
 | `./new-app.sh <app-name>` | Create and optionally install a custom Frappe app, create its Git remote and add it to `TCF_APPS` in `.env` after a successful push. |
 | `./check-env.sh` | Read-only development-environment audit. Run inside the Dev Container. |
 
-The pipeline setup is separate from the read-only audit script and can be re-run when repairing or updating the container toolchain:
+The pipeline setup is separate from the read-only audit script. It can be re-run when repairing or updating the container toolchain:
 
 ```bash
 ./setup-env.sh
 ```
+
+The frontend dependency installer maintains the core app's frontend package manifest and uses pnpm for frontend dependencies. The Frappe app root remains compatible with Bench's Yarn-based app installation.
 
 ## Local access
 
@@ -136,17 +163,17 @@ MariaDB is exposed on port `3306` for local database tools such as DBeaver. The 
 ```text
 .
 ├── bootstrap/
-│   ├── setup-env.sh     # Internal .env generation; called by install.sh only
-│   ├── templates/       # Templates for generated configuration files
-│   └── *.sh             # Provisioning and configuration helpers
-├── .devcontainer/       # Docker Compose development services
-├── install.sh           # Initial setup and orchestration
-├── setup-env.sh         # Development pipeline toolchain setup
-├── startup.sh           # Start services
-├── shutdown.sh          # Stop services and optional cleanup
-├── reseed.sh            # VS Code Server recovery
-├── new-app.sh           # Custom Frappe app scaffolding
-└── check-env.sh         # Read-only environment audit
+│   ├── setup-env.sh       # Internal .env creation and migration helper
+│   ├── templates/         # Templates for generated configuration files
+│   └── *.sh               # Provisioning and configuration helpers
+├── .devcontainer/         # Docker Compose and Dev Container configuration
+├── install.sh             # Initial setup and orchestration
+├── setup-env.sh           # Development pipeline toolchain setup
+├── startup.sh             # Start services
+├── shutdown.sh            # Stop services and optional cleanup
+├── reseed.sh              # VS Code Server recovery
+├── new-app.sh             # Custom Frappe app scaffolding
+└── check-env.sh           # Read-only environment audit
 ```
 
 ## License

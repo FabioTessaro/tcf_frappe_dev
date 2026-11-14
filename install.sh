@@ -63,9 +63,9 @@ done
 log_step "Preparing Git access"
 bash bootstrap/configure-git.sh
 
-if [ ! -f .env ]; then
-  TCF_INSTALL_INITIALIZING_ENV=1 bash ./bootstrap/setup-env.sh
-fi
+# Create .env on first installation, or migrate missing settings
+# in an existing environment file.
+TCF_INSTALL_INITIALIZING_ENV=1 bash ./bootstrap/setup-env.sh
 
 if [ "$WITH_FTP" = true ]; then
   echo ""
@@ -115,11 +115,10 @@ Install complete for "Reopen in Container" mode. Nothing was started —
 container itself.
 
 The generated postCreateCommand provisions the bench and the frontend
-pipeline automatically. If more than one custom app is installed, core-app
-selection is deferred because postCreateCommand is non-interactive. After
-reopening, run this from the integrated terminal to select the core app and
-install its frontend dependencies:
-    ./setup-env.sh
+pipeline automatically. The generated postCreateCommand automatically provisions the Bench,
+installs the frontend toolchain and dependencies, and builds all assets.
+The configured CORE_APP in .env is selected automatically.
+No manual provisioning commands are required after reopening.
 
 Next steps:
   1. On whichever machine you'll browse FROM (this VM or your own laptop),

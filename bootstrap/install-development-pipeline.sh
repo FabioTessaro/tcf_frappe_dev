@@ -12,19 +12,16 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/pipeline-common.sh"
 
 SKIP_SYSTEM_TOOLS=false
-DEFER_APP_SELECTION=false
 SKIP_DEVTOOLS=false
 for arg in "$@"; do
   case "$arg" in
     --skip-system-tools) SKIP_SYSTEM_TOOLS=true ;;
-    --defer-app-selection) DEFER_APP_SELECTION=true ;;
     --skip-devtools) SKIP_DEVTOOLS=true ;;
     -h|--help)
       cat <<HELP
 Usage: bootstrap/install-development-pipeline.sh [options]
 
   --skip-system-tools     Do not install apt packages, uv or pre-commit
-  --defer-app-selection   Install common tools even when core selection needs a TTY
   --skip-devtools         Do not generate the VS Code workspace or Git hooks
 HELP
       exit 0
@@ -69,11 +66,8 @@ if pipeline_select_core_app "$SITE_NAME"; then
   bash "$SCRIPT_DIR/install-playwright-browsers.sh" "$FRONTEND_DIR"
 else
   CORE_SELECTION_STATUS=$?
-  if [[ "$CORE_SELECTION_STATUS" -eq 2 && "$DEFER_APP_SELECTION" == true ]]; then
-    echo "Deferring frontend dependency installation until a core app is selected interactively."
-  else
-    exit "$CORE_SELECTION_STATUS"
-  fi
+  echo "Core app selection failed. Check CORE_APP and TCF_APPS in .env." >&2
+  exit "$CORE_SELECTION_STATUS"
 fi
 
 if [[ "$SKIP_DEVTOOLS" == false ]]; then
@@ -87,6 +81,3 @@ Pipeline bootstrap complete.
   System tools / uv / pre-commit: $([[ "$SKIP_SYSTEM_TOOLS" == true ]] && echo 'not changed (--skip-system-tools)' || echo 'checked and installed')
   Core app: ${CORE_APP:-not selected yet}
 SUMMARY
-if [[ -z "${CORE_APP:-}" ]]; then
-  echo "Run ./setup-env.sh from an interactive terminal to select the core app and install its frontend dependencies."
-fi

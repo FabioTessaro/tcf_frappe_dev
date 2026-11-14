@@ -28,9 +28,13 @@ read_env_value() {
 SITE="${SITE:-${TCF_SITE_NAME:-$(read_env_value TCF_SITE_NAME)}}"
 SITE="${SITE:-tcf.local}"
 TCF_APPS="${TCF_APPS:-$(read_env_value TCF_APPS)}"
-CORE_APP="${CORE_APP:-}"
+CORE_APP="${CORE_APP:-$(read_env_value CORE_APP)}"
 FRONTEND_DIR="${FRONTEND_DIR:-}"
 PYTHON="${PYTHON:-$BENCH_DIR/env/bin/python}"
+
+MARIADB_ROOT_USERNAME="${MARIADB_ROOT_USERNAME:-$(read_env_value MARIADB_ROOT_USERNAME)}"
+MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-$(read_env_value MARIADB_ROOT_PASSWORD)}"
+SEAWEEDFS_ENDPOINT="${SEAWEEDFS_ENDPOINT:-$(read_env_value SEAWEEDFS_ENDPOINT)}"
 
 # provision-bench.sh installs uv tools in ~/.local/bin; Node is managed by nvm.
 export PATH="$HOME/.local/bin:$PATH"
@@ -212,7 +216,15 @@ select_core_app() {
   local selected_index selection candidate index=1
   local -a custom_apps=()
 
-  mapfile -t custom_apps < <(discover_custom_apps)
+  local discovered_apps
+  if ! discovered_apps="$(discover_custom_apps)"; then
+    fail "Unable to query installed apps on site '$SITE'. Check Bench and the site configuration."
+    return 1
+  fi
+
+  if [[ -n "$discovered_apps" ]]; then
+    mapfile -t custom_apps <<< "$discovered_apps"
+  fi
   if (( ${#custom_apps[@]} == 0 )); then
     fail "Core app selection — no installed custom apps found for site '$SITE' in $BENCH_DIR/apps"
     printf '  Install the custom app on the site, or check SITE and BENCH_DIR.\n' >&2
@@ -277,6 +289,7 @@ check_command "timeout" timeout "--version"
 check_command "Socket inspection (iproute2)" ss "--version"
 check_command "uv" uv "--version"
 check_command "pre-commit" pre-commit "--version"
+check_command "Yarn" yarn "--version"
 
 section "Frappe backend"
 check_dir "Frappe bench directory" "$BENCH_DIR"
@@ -312,7 +325,22 @@ else
 fi
 
 CORE_PYTHON_DIR="$BENCH_DIR/apps/$CORE_APP/$CORE_APP"
-check_file "Core app package.json (delegates to frontend)" "$BENCH_DIR/apps/$CORE_APP/package.json"
+
+CORE_PACKAGE_JSON="$BENCH_DIR/apps/$CORE_APP/package.json"
+
+if [[ -f "$CORE_PACKAGE_JSON" ]]; then
+  if node -e '
+    const pkg = require(process.argv[1]);
+    process.exit(
+      pkg.scripts?.build === "pnpm --dir frontend build" &&
+      !pkg.packageManager?.startsWith("pnpm@") ? 0 : 1
+    );
+  ' "$CORE_PACKAGE_JSON" >/dev/null 2>&1; then
+    ok "Frappe app build script delegates to frontend pnpm build"
+  else
+    fail "Core app root package.json has an incorrect build script or pnpm packageManager declaration"
+  fi
+fi
 check_dir "Core Python package" "$CORE_PYTHON_DIR"
 check_dir "Core backend tests" "$CORE_PYTHON_DIR/tests"
 
@@ -399,7 +427,8 @@ if [[ -d "$FRONTEND_DIR" && -f "$FRONTEND_DIR/package.json" ]] && command -v nod
     vue typescript vite @vitejs/plugin-vue vue-tsc pinia vue-router vue-i18n \
     sass tailwindcss vitest @vue/test-utils msw eslint eslint-plugin-vue \
     eslint-plugin-boundaries @typescript-eslint/parser @typescript-eslint/eslint-plugin \
-    stylelint stylelint-config-standard-scss prettier; do
+    stylelint stylelint-config-standard-scss prettier @eslint/js globals eslint-config-prettier \
+    postcss autoprefixer @tailwindcss/forms prettier-plugin-tailwindcss; do
     check_node_module "$module"
   done
   check_any_node_module "DOM test environment" happy-dom jsdom

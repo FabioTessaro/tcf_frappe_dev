@@ -22,7 +22,7 @@ services:
   redis-queue:
     image: docker.io/redis:alpine
     restart: unless-stopped
-  
+
   seaweedfs:
     image: chrislusf/seaweedfs
     restart: unless-stopped
@@ -37,7 +37,7 @@ services:
       - seaweedfs-data:/data
     env_file:
       - ../.env
-  
+
   meet-sfu:
     image: ghcr.io/frappe/meet/sfu-server:latest
     restart: unless-stopped
@@ -80,7 +80,7 @@ services:
       - "9000-9005:9000-9005"
       - "6787:6787"
       - "5173:5173" # Vite development server
-      
+
 volumes:
   mariadb-data:
   seaweedfs-data:

@@ -12,7 +12,7 @@ cd "$(dirname "$0")"
 usage() {
   cat << EOF
 Usage: ./install.sh [mode]
- 
+
 Modes:
   --attach   (default) Set up for VS Code's "Attach to Running Container":
              installs Docker if missing, pulls and starts the containers,
@@ -24,7 +24,7 @@ Modes:
              container, installing the VS Code Server inside it, and bench
              plus frontend-pipeline provisioning are handled by VS Code's
              postCreateCommand.
- 
+
 Flags:
   --with-agents       Also install the Claude Code and Codex CLIs inside the
                       frappe container (bootstrap/install-agents.sh). Off by
@@ -32,7 +32,7 @@ Flags:
                       never touches the container, so run
                       bootstrap/install-agents.sh by hand after your first
                       "Reopen in Container" if you want them there.
- 
+
   --no-default-apps   Doesn't install the default erpnext, hrms, raven, insight,
                       helpdesk and meet apps in the frappe container
                       (bootstrap/provision-bench.sh). Off by default. Only takes
@@ -106,21 +106,21 @@ if [ "$MODE" == "reopen" ]; then
 
   # --- add this ---
   bash bootstrap/configure-workspace.sh --no-install || true
-  
+
   cat << EOF
- 
+
 =====================================================================
 Install complete for "Reopen in Container" mode. Nothing was started —
 .devcontainer/devcontainer.json is ready and VS Code builds/starts the
 container itself.
- 
+
 The generated postCreateCommand provisions the bench and the frontend
 pipeline automatically. If more than one custom app is installed, core-app
 selection is deferred because postCreateCommand is non-interactive. After
 reopening, run this from the integrated terminal to select the core app and
 install its frontend dependencies:
     ./setup-env.sh
- 
+
 Next steps:
   1. On whichever machine you'll browse FROM (this VM or your own laptop),
      add this to its hosts file so the ERP site and Meet site resolve:
@@ -128,11 +128,11 @@ Next steps:
          <remote-host-ip>   <your MEET_SITE_NAME, default meet.tcf.local>
   2. Open this folder in VS Code (Remote-SSH into this VM), then run
      "Dev Containers: Reopen in Container".
- 
+
 Site:      http://<TCF_SITE_NAME>:8000  (user: Administrator, password: see
            ADMIN_PASSWORD in .env)
 MariaDB:   <remote-host-ip>:3306 (e.g. for DBeaver — root / see .env)
- 
+
 Day to day:
   ./shutdown.sh   — stop containers safely at the end of a session
   ./startup.sh    — bring them back up after a manual stop or reboot
@@ -176,12 +176,12 @@ echo "Generating the VS Code workspace..."
 bash bootstrap/configure-workspace.sh --no-install || true
 
 cat << EOF
- 
+
 =====================================================================
 Install complete. Containers are running with a "restart: unless-stopped"
 policy, so they'll come back up automatically after a Docker/VM restart —
 no need to re-run this script unless you deliberately tear things down.
- 
+
 Next steps:
   1. On whichever machine you'll browse FROM (this VM or your own laptop),
      add this to its hosts file so the ERP site and Meet site resolve:
@@ -197,11 +197,11 @@ Next steps:
      40000-40099 and TCP 3000 too (Meet's SFU media + signalling ports,
      see docker-compose.yml's meet-sfu service) — without these, calls
      will connect but no audio/video will get through.
- 
+
 Site:      http://<TCF_SITE_NAME>:8000  (user: Administrator, password: see
            ADMIN_PASSWORD in .env)
 MariaDB:   <remote-host-ip>:3306 (e.g. for DBeaver — root / see .env)
- 
+
 Day to day:
   ./shutdown.sh   — stop containers safely at the end of a session
   ./startup.sh    — bring them back up after a manual stop or reboot

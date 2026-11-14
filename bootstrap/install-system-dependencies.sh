@@ -74,7 +74,8 @@ command -v uv >/dev/null 2>&1 || { echo "uv installation failed." >&2; exit 1; }
 if ! command -v pre-commit >/dev/null 2>&1; then
   echo "Installing pre-commit with uv..."
   uv tool install pre-commit
-  export PATH="$(uv tool dir --bin 2>/dev/null || printf '%s' "$HOME/.local/bin"):$PATH"
+  UV_TOOL_BIN_DIR="$(uv tool dir --bin 2>/dev/null || printf '%s' "$HOME/.local/bin")"
+  export PATH="$UV_TOOL_BIN_DIR:$PATH"
 fi
 command -v pre-commit >/dev/null 2>&1 || { echo "pre-commit installation failed or its executable is not on PATH." >&2; exit 1; }
 

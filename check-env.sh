@@ -137,7 +137,7 @@ check_any_node_module() {
 }
 
 check_npm_script() {
-  local label="$1" package_file="$FRONTEND_DIR/package.json" script
+  local label="$1" package_file="$FRONTEND_DIR/package.json"
   shift
   if [[ ! -f "$package_file" ]]; then
     fail "$label — frontend package.json not found"

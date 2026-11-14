@@ -133,7 +133,7 @@ done
 # install/startup path, a real failure when the user explicitly re-seeds.
 if [ "$RESEED" = true ]; then GIVE_UP_RC=1; else GIVE_UP_RC=0; fi
 
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit
 source bootstrap/project-common.sh
 
 echo "Checking whether the VS Code Server needs pre-seeding..."
@@ -178,7 +178,6 @@ purge_others() {
 }
 
 HASH=""
-CONFIRMED=true
 SOURCE="detected"
 QUERY_PLATFORM=""
 
@@ -195,23 +194,31 @@ if [ -n "$CUSTOM_COMMIT" ]; then
 fi
 
 if [ -z "$HASH" ] && [ "$FORCE_LATEST" = false ]; then
-  # 1. Newer "CLI" layout on the host (created by plain Remote-SSH too)
+  # 1. Newer CLI layout on the host
   if [ -d "$HOME/.vscode-server/cli/servers" ]; then
-    HASH=$(ls -t "$HOME/.vscode-server/cli/servers" 2>/dev/null \
-      | grep -m1 '^Stable-' | sed 's/^Stable-//')
+    HASH=$(find "$HOME/.vscode-server/cli/servers" \
+      -mindepth 1 -maxdepth 1 -type d -name 'Stable-*' \
+      -printf '%T@ %f\n' 2>/dev/null |
+      sort -nr |
+      head -n 1 |
+      cut -d' ' -f2- |
+      sed 's/^Stable-//')
   fi
 
   # 2. Classic layout on the host
   if [ -z "$HASH" ] && [ -d "$HOME/.vscode-server/bin" ]; then
-    HASH=$(ls -t "$HOME/.vscode-server/bin" 2>/dev/null \
-      | grep -m1 -E '^[0-9a-f]{40}$')
+    HASH=$(find "$HOME/.vscode-server/bin" \
+      -mindepth 1 -maxdepth 1 -type d \
+      -printf '%T@ %f\n' 2>/dev/null |
+      sort -nr |
+      awk 'length($2) == 40 && $2 ~ /^[0-9a-f]+$/ { print $2; exit }')
   fi
 
-  # 3. Leftover partial folder inside the container from a previous hung attach
+  # 3. Leftover partial folder inside the container
   if [ -z "$HASH" ]; then
     HASH=$($DOCKER_COMPOSE exec -T frappe sh -c \
-      "ls -t /home/frappe/.vscode-server/bin/ 2>/dev/null" \
-      | grep -m1 -E '^[0-9a-f]{40}(_[0-9]+)?$' | sed -E 's/_[0-9]+$//')
+      "find /home/frappe/.vscode-server/bin -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' 2>/dev/null | sort -nr" |
+      awk '$2 ~ /^[0-9a-f]+_[0-9]+$/ { sub(/_[0-9]+$/, "", $2); print $2; exit }')
   fi
 fi
 
@@ -246,7 +253,6 @@ if [ -z "$HASH" ]; then
   HASH=$(echo "$LATEST_JSON" | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' \
     | head -1 | sed -E 's/.*"([0-9a-f]{40})".*/\1/')
   if [ -n "$HASH" ]; then
-    CONFIRMED=false
     SOURCE="latest"
   fi
 fi

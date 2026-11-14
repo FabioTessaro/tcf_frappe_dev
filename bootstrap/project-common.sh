@@ -49,10 +49,14 @@ detect_docker() {
 }
 
 detect_docker
+# Used by the root lifecycle scripts that source this file.
+# shellcheck disable=SC2034
 DOCKER_STATUS=$?
 
 # Word-splits intentionally when used unquoted (e.g. $DOCKER_COMPOSE up -d),
 # so DOCKER being "sudo docker" works as two separate argv entries.
+# Used by the root lifecycle scripts that source this file.
+# shellcheck disable=SC2034
 DOCKER_COMPOSE="$DOCKER compose -f $COMPOSE_FILE --env-file $ENV_FILE"
 
 # --- .env helpers ------------------------------------------------------------

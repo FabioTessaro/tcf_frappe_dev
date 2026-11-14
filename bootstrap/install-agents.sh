@@ -16,7 +16,7 @@ set -u
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/template-lib.sh"
-ARCH="$(uname -m)"
+# ARCH="$(uname -m)"
 
 # --- Ensure Local Bin Directory & PATH -----------------------------------
 # Create directory if missing and load into current script session

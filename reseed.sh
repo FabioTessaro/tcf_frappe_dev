@@ -7,7 +7,7 @@ set -e
 
 # Work relative to this script's location, so it behaves the same regardless
 # of the caller's current directory.
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.." || exit
 
 usage() {
   cat << EOF
@@ -89,14 +89,25 @@ is_valid_commit() {
 
 detect_host_commit() {
   local h=""
+
   if [ -d "$HOME/.vscode-server/cli/servers" ]; then
-    h=$(ls -t "$HOME/.vscode-server/cli/servers" 2>/dev/null \
-      | grep -m1 '^Stable-' | sed 's/^Stable-//' || true)
+    h=$(find "$HOME/.vscode-server/cli/servers" \
+      -mindepth 1 -maxdepth 1 -type d -name 'Stable-*' \
+      -printf '%T@ %f\n' 2>/dev/null |
+      sort -nr |
+      head -n 1 |
+      cut -d' ' -f2- |
+      sed 's/^Stable-//')
   fi
+
   if [ -z "$h" ] && [ -d "$HOME/.vscode-server/bin" ]; then
-    h=$(ls -t "$HOME/.vscode-server/bin" 2>/dev/null \
-      | grep -m1 -E '^[0-9a-f]{40}$' || true)
+    h=$(find "$HOME/.vscode-server/bin" \
+      -mindepth 1 -maxdepth 1 -type d \
+      -printf '%T@ %f\n' 2>/dev/null |
+      sort -nr |
+      awk 'length($2) == 40 && $2 ~ /^[0-9a-f]+$/ { print $2; exit }')
   fi
+
   echo "$h"
 }
 

@@ -145,6 +145,7 @@ DRIVE_VERSION=$(prompt "DRIVE_VERSION" "$DEFAULT_DRIVE_VERSION")
 INSIGHTS_VERSION=$(prompt "INSIGHTS_VERSION" "$DEFAULT_INSIGHTS_VERSION")
 WIKI_VERSION=$(prompt "WIKI_VERSION" "$DEFAULT_WIKI_VERSION")
 
+TCF_APPS_GIT_PREFIX=$(prompt "TCF_APPS_GIT_PREFIX" "git@github.com:FabioTessaro")
 CORE_APP=$(prompt "CORE_APP" "tcf_core")
 
 if [[ ! "$CORE_APP" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
@@ -152,7 +153,6 @@ if [[ ! "$CORE_APP" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
   exit 1
 fi
 
-TCF_APPS_GIT_PREFIX=$(prompt "TCF_APPS_GIT_PREFIX" "git@github.com:FabioTessaro")
 # The core app is always part of the custom-app list.
 TCF_APPS=("$CORE_APP")
 

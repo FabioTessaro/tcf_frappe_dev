@@ -57,7 +57,15 @@ CORE_SELECTION_STATUS=0
 if pipeline_select_core_app "$SITE_NAME"; then
   FRONTEND_DIR="$PIPELINE_BENCH_DIR/apps/$CORE_APP/frontend"
   export FRONTEND_DIR
+
   bash "$SCRIPT_DIR/install-frontend-dependencies.sh" "$FRONTEND_DIR"
+
+  log_step "Building Frappe application assets"
+  (
+    cd "$PIPELINE_BENCH_DIR"
+    bench build
+  )
+
   bash "$SCRIPT_DIR/install-playwright-browsers.sh" "$FRONTEND_DIR"
 else
   CORE_SELECTION_STATUS=$?

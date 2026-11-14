@@ -187,43 +187,43 @@ bench set-config -g redis_queue redis://redis-queue:6379
 
 if [ "$WITHOUT_DEFAULT_APPS" = false ]; then
   if [ ! -d "apps/erpnext" ]; then
-    bench get-app --branch "$ERPNEXT_VERSION" erpnext
+    bench get-app --skip-assets --branch "$ERPNEXT_VERSION" erpnext
   else
     echo "apps/erpnext already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/hrms" ]; then
-    bench get-app --branch "$HRMS_VERSION" hrms
+    bench get-app --skip-assets --branch "$HRMS_VERSION" hrms
   else
     echo "apps/hrms already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/raven" ]; then
-    bench get-app --branch "$RAVEN_VERSION" https://github.com/frappe/raven
+    bench get-app --skip-assets --branch "$RAVEN_VERSION" https://github.com/frappe/raven
   else
     echo "apps/raven already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/meet" ]; then
-    bench get-app --branch "$MEET_VERSION" https://github.com/frappe/meet
+    bench get-app --skip-assets --branch "$MEET_VERSION" https://github.com/frappe/meet
   else
     echo "apps/meet already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/drive" ]; then
-    bench get-app --branch "$DRIVE_VERSION" https://github.com/frappe/drive
+    bench get-app --skip-assets --branch "$DRIVE_VERSION" https://github.com/frappe/drive
   else
     echo "apps/drive already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/insights" ]; then
-    bench get-app --branch "$INSIGHTS_VERSION" https://github.com/frappe/insights
+    bench get-app --skip-assets --branch "$INSIGHTS_VERSION" https://github.com/frappe/insights
   else
     echo "apps/insights already exists — skipping get-app."
   fi
 
   if [ ! -d "apps/wiki" ]; then
-    bench get-app --branch "$WIKI_VERSION" https://github.com/frappe/wiki
+    bench get-app --skip-assets --branch "$WIKI_VERSION" https://github.com/frappe/wiki
   else
     echo "apps/wiki already exists — skipping get-app."
   fi
@@ -232,7 +232,7 @@ fi
 if [ -n "$TCF_APPS" ]; then
   for app in $TCF_APPS; do
     if [ ! -d "apps/${app}" ]; then
-      bench get-app "${TCF_APPS_GIT_PREFIX}/${app}.git"
+      bench get-app --skip-assets "${TCF_APPS_GIT_PREFIX}/${app}.git"
     else
       echo "apps/${app} already exists — skipping get-app."
     fi

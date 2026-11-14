@@ -45,9 +45,16 @@ if ! command -v corepack >/dev/null 2>&1; then
   npm install --global corepack@latest
 fi
 corepack enable
+
+# Frappe Bench uses Yarn Classic for app installation and asset builds.
+# Install it globally through Corepack to avoid interactive downloads later.
+COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack install --global yarn@1.22.22
+
+# pnpm manages the Vue frontend independently.
 corepack prepare pnpm@latest --activate
 
 printf '\nNode.js: %s\n' "$(node --version)"
 printf 'npm:     %s\n' "$(npm --version)"
 printf 'Corepack:%s\n' "$(corepack --version)"
 printf 'pnpm:    %s\n' "$(pnpm --version)"
+printf 'Yarn:    %s\n' "$(yarn --version)"

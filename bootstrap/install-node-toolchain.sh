@@ -6,7 +6,7 @@ log_init "${BASH_SOURCE[0]}"
 # Install a user-local, pinned Node.js major and activate Corepack/pnpm.
 set -euo pipefail
 
-NODE_VERSION="${NODE_VERSION:-26}"
+NODE_VERSION="${NODE_VERSION:-24}"
 NVM_VERSION="${NVM_VERSION:-v0.40.3}"
 NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 export NVM_DIR

@@ -42,7 +42,7 @@ if [[ "$SKIP_SYSTEM_TOOLS" == false ]]; then
   bash "$SCRIPT_DIR/install-system-dependencies.sh"
 fi
 
-NODE_VERSION="${NODE_VERSION:-26}"
+NODE_VERSION="${NODE_VERSION:-24}"
 export NODE_VERSION
 bash "$SCRIPT_DIR/install-node-toolchain.sh"
 

@@ -169,7 +169,7 @@ fi
 
 echo ""
 echo "Installing the frontend development pipeline inside the frappe container..."
-$DOCKER_COMPOSE exec frappe bash ./setup-env.sh --skip-system-tools --defer-app-selection
+$DOCKER_COMPOSE exec frappe bash ./setup-env.sh --skip-system-tools
 
 echo ""
 echo "Generating the VS Code workspace..."

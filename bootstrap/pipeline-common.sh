@@ -91,13 +91,19 @@ pipeline_custom_apps() {
 }
 
 pipeline_select_core_app() {
-  local site="$1" selected="${CORE_APP:-}" item choice index=1
+  local site="$1" selected="${CORE_APP:-$(pipeline_env_value CORE_APP)}" item choice index=1
   local -a candidates=()
 
   mapfile -t candidates < <(pipeline_custom_apps "$site")
   if (( ${#candidates[@]} == 0 )); then
     echo "No installed custom apps found for site '$site'." >&2
     echo "Check TCF_APPS in .env and confirm those apps are installed on the site." >&2
+
+    if [[ -n "$selected" ]]; then
+      echo "Configured CORE_APP '$selected' is not an eligible installed custom app." >&2
+      return 1
+    fi
+
     [[ -t 0 ]] && return 1 || return 2
   fi
 

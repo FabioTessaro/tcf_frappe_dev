@@ -2,7 +2,7 @@
 set -e
 
 cd "$(dirname "$0")"
-source bootstrap/lib.sh
+source bootstrap/project-common.sh
 
 require_env_file
 
@@ -16,7 +16,7 @@ case "$DOCKER_STATUS" in
     echo "Docker is installed but the daemon doesn't seem to be running."
     if confirm "Start the Docker service now (sudo systemctl start docker)?"; then
       sudo systemctl start docker
-      source bootstrap/lib.sh
+      source bootstrap/project-common.sh
       if [ "$DOCKER_STATUS" != "0" ]; then
         echo "Docker still isn't reachable after starting the service — aborting."
         exit 1
@@ -35,7 +35,7 @@ echo "Starting containers..."
 $DOCKER_COMPOSE up -d
 
 echo ""
-bash bootstrap/setup-vscode.sh
+bash bootstrap/seed-vscode-server.sh
 
 echo ""
 echo "Waiting for MariaDB..."
@@ -60,11 +60,15 @@ if ! $DOCKER_COMPOSE exec -T frappe test -f frappe-bench/sites/apps.txt 2>/dev/n
   echo "frappe-bench doesn't look fully provisioned inside the frappe container"
   echo "(expected after a --volumes or --all shutdown, or on a very first run"
   echo "if you're using startup.sh instead of install.sh)."
-  if confirm "Run bench provisioning now (bootstrap/setup-bench.sh)?"; then
-    $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh
+  if confirm "Run bench and toolchain provisioning now?"; then
+    $DOCKER_COMPOSE exec frappe bash ./bootstrap/install-system-dependencies.sh
+    $DOCKER_COMPOSE exec frappe ./bootstrap/provision-bench.sh
+    $DOCKER_COMPOSE exec frappe bash ./setup-env.sh --skip-system-tools --defer-app-selection
   else
     echo "Skipping. Run it manually later with:"
-    echo "  docker compose -f .devcontainer/docker-compose.yml exec frappe ./bootstrap/setup-bench.sh"
+    echo "  docker compose -f .devcontainer/docker-compose.yml exec frappe bash ./bootstrap/install-system-dependencies.sh"
+    echo "  docker compose -f .devcontainer/docker-compose.yml exec frappe ./bootstrap/provision-bench.sh"
+    echo "  docker compose -f .devcontainer/docker-compose.yml exec frappe bash ./setup-env.sh --skip-system-tools --defer-app-selection"
   fi
 fi
 

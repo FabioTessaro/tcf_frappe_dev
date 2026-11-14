@@ -1,0 +1,48 @@
+{
+  "model": "sonnet",
+  "effortLevel": "medium",
+  "permissions": {
+    "deny": [
+      "Edit(apps/frappe/**)",
+      "Write(apps/frappe/**)",
+      "Edit(apps/erpnext/**)",
+      "Write(apps/erpnext/**)",
+      "Edit(apps/hrms/**)",
+      "Write(apps/hrms/**)",
+      "Edit(apps/raven/**)",
+      "Write(apps/raven/**)",
+      "Edit(apps/meet/**)",
+      "Write(apps/meet/**)",
+      "Edit(apps/drive/**)",
+      "Write(apps/drive/**)",
+      "Edit(apps/insights/**)",
+      "Write(apps/insights/**)",
+      "Edit(apps/wiki/**)",
+      "Write(apps/wiki/**)",
+
+      "Read(env/**)",
+      "Edit(env/**)",
+      "Write(env/**)",
+
+      "Read(logs/**)",
+      "Edit(logs/**)",
+      "Write(logs/**)",
+
+      "Read(sites/**)",
+      "Edit(sites/**)",
+      "Write(sites/**)",
+
+      "Read(**/node_modules/**)",
+      "Edit(**/node_modules/**)",
+      "Write(**/node_modules/**)",
+
+      "Read(**/.git/**)",
+      "Edit(**/.git/**)",
+      "Write(**/.git/**)",
+
+      "Bash(cat env/*)",
+      "Bash(cat logs/*)",
+      "Bash(cat sites/*)"
+    ]
+  }
+}

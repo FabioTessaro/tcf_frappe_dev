@@ -79,6 +79,7 @@ services:
       - "8000-8005:8000-8005"
       - "9000-9005:9000-9005"
       - "6787:6787"
+      - "5173:5173" # Vite development server
       
 volumes:
   mariadb-data:

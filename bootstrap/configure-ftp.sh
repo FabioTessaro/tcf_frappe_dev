@@ -2,8 +2,9 @@
 set -e
 
 # Work relative to this script's location
-cd "$(dirname "$0")"
-source lib.sh 2>/dev/null || true
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/project-common.sh" 2>/dev/null || true
+source "$SCRIPT_DIR/template-lib.sh"
 
 echo "======================================================"
 echo "FTP Server Setup (vsftpd)"
@@ -78,9 +79,12 @@ set_vsftpd_conf "userlist_deny" "NO"
 set_vsftpd_conf "pasv_min_port" "40000"
 set_vsftpd_conf "pasv_max_port" "50000"
 
-# 3. Configure /etc/vsftpd.userlist
+# 3. Configure /etc/vsftpd.userlist from the checked-in template.
 echo "Configuring FTP user list..."
-echo "$FTP_USER" | sudo tee /etc/vsftpd.userlist > /dev/null
+USERLIST_TMP=$(mktemp)
+trap 'rm -f "$USERLIST_TMP"' EXIT
+render_template "$SCRIPT_DIR/templates/vsftpd.userlist.template" "$USERLIST_TMP" "FTP_USER=$FTP_USER"
+sudo install -m 644 "$USERLIST_TMP" /etc/vsftpd.userlist
 
 # 4. Configure Firewall (UFW)
 if command -v ufw &> /dev/null && sudo ufw status | grep -q "Status: active"; then

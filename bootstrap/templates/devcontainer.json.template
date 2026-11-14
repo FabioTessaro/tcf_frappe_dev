@@ -1,11 +1,3 @@
-#!/bin/bash
-set -e
-
-cd "$(dirname "$0")/.."
-
-mkdir -p .devcontainer
-
-cat > .devcontainer/devcontainer.json <<EOF
 {
   "name": "TCF-DEVELOPMENT",
   "dockerComposeFile": "docker-compose.yml",
@@ -13,7 +5,7 @@ cat > .devcontainer/devcontainer.json <<EOF
   "remoteUser": "frappe",
   "workspaceFolder": "/workspace",
   "shutdownAction": "none",
-  features": {
+  "features": {
     "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
   },
 
@@ -22,7 +14,7 @@ cat > .devcontainer/devcontainer.json <<EOF
   // "initializeCommand": "bash ${localWorkspaceFolder}/bootstrap/<INITIALIZE_SCRIPT_PLACEHOLDER>.sh",
 
   // Runs inside the container, once, the first time it's created.
-  "postCreateCommand": "bash ${containerWorkspaceFolder}/bootstrap/setup-bench.sh",
+  "postCreateCommand": "bash ${containerWorkspaceFolder}/bootstrap/devcontainer-post-create.sh",
 
   // Runs inside the container every time it starts (not just on creation).
   // "postStartCommand": "bash ${containerWorkspaceFolder}/bootstrap/<POST_START_SCRIPT_PLACEHOLDER>.sh",
@@ -33,9 +25,18 @@ cat > .devcontainer/devcontainer.json <<EOF
   "customizations": {
     "vscode": {
       "extensions": [
-        "anthropic.claude-code"
+        "anthropic.claude-code",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "Vue.volar",
+        "dbaeumer.vscode-eslint",
+        "stylelint.vscode-stylelint",
+        "bradlc.vscode-tailwindcss",
+        "mrmlnc.vscode-scss",
+        "wholroyd.jinja",
+        "esbenp.prettier-vscode",
+        "ms-playwright.playwright"
       ]
     }
   }
 }
-EOF

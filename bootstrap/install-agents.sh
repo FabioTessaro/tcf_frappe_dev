@@ -6,10 +6,12 @@
 # tool is already installed.
 
 set -u
-# No "set -e" for the same reason as setup-vscode.sh: a failed download here
+# No "set -e" for the same reason as seed-vscode-server.sh: a failed download here
 # (no outbound internet to Anthropic/GitHub) shouldn't abort install.sh or
 # startup.sh as a whole — just skip and let it be retried by hand.
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/template-lib.sh"
 ARCH="$(uname -m)"
 
 # --- Ensure Local Bin Directory & PATH -----------------------------------
@@ -18,9 +20,7 @@ mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$PATH"
 
 # Persist PATH in ~/.bashrc if not already present
-if [ -f "$HOME/.bashrc" ] && ! grep -q '\.local/bin' "$HOME/.bashrc"; then
-  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
-fi
+append_template_block "$SCRIPT_DIR/templates/local-bin-path.block.template" "$HOME/.bashrc" "BEGIN TCF DEVELOPMENT USER BIN PATH"
 
 # --- Claude Code ---------------------------------------------------------
 if command -v claude &> /dev/null; then

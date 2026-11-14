@@ -7,13 +7,35 @@ set -uo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${WORKSPACE_DIR:-$SCRIPT_DIR}"
 BENCH_DIR="${BENCH_DIR:-$WORKSPACE_DIR/frappe-bench}"
-SITE="${SITE:-${TCF_SITE_NAME:-tcf.local}}"
+ENV_FILE="$WORKSPACE_DIR/.env"
+
+read_env_value() {
+  local key="$1" line value
+  [[ -f "$ENV_FILE" ]] || return 0
+  line=$(grep -E "^[[:space:]]*${key}=" "$ENV_FILE" | tail -n 1 || true)
+  [[ -n "$line" ]] || return 0
+  value="${line#*=}"
+  value="${value%$'\r'}"
+  value="${value#\"}"; value="${value%\"}"
+  value="${value#\'}"; value="${value%\'}"
+  printf '%s' "$value"
+}
+
+SITE="${SITE:-${TCF_SITE_NAME:-$(read_env_value TCF_SITE_NAME)}}"
+SITE="${SITE:-tcf.local}"
+TCF_APPS="${TCF_APPS:-$(read_env_value TCF_APPS)}"
 CORE_APP="${CORE_APP:-}"
 FRONTEND_DIR="${FRONTEND_DIR:-}"
 PYTHON="${PYTHON:-$BENCH_DIR/env/bin/python}"
 
-# setup-bench.sh installs uv tools in ~/.local/bin.
+# provision-bench.sh installs uv tools in ~/.local/bin; Node is managed by nvm.
 export PATH="$HOME/.local/bin:$PATH"
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+  # shellcheck disable=SC1090
+  source "$NVM_DIR/nvm.sh"
+  nvm use default --silent >/dev/null 2>&1 || true
+fi
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -145,7 +167,6 @@ check_tcp() {
 # Override CORE_APP_EXCLUDE to customise this list for a particular bench.
 discover_custom_apps() {
   local apps_output app app_dir
-  local excluded_apps=" ${CORE_APP_EXCLUDE:-frappe erpnext hrms payments} "
   local -a candidates=()
 
   if ! command -v bench >/dev/null 2>&1 || [[ ! -d "$BENCH_DIR" ]]; then
@@ -155,18 +176,29 @@ discover_custom_apps() {
     return 1
   fi
 
-  while IFS= read -r app; do
-    # list-apps normally prints one app per line; accept a version after the
-    # name as well, and ignore headings or other non-app output.
-    app="${app//$'\r'/}"
-    app="${app%%[[:space:]]*}"
-    [[ "$app" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] || continue
-    [[ "$excluded_apps" == *" $app "* ]] && continue
-
-    app_dir="$BENCH_DIR/apps/$app"
-    [[ -d "$app_dir" ]] || continue
-    candidates+=("$app")
-  done <<< "$apps_output"
+  # TCF_APPS is the repository's declared custom-app list. Intersect it with
+  # the site's installed apps so upstream Frappe apps are never offered as core.
+  if [[ -n "$TCF_APPS" ]]; then
+    for app in $TCF_APPS; do
+      [[ "$app" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] || continue
+      app_dir="$BENCH_DIR/apps/$app"
+      [[ -d "$app_dir" ]] || continue
+      if printf '%s\n' "$apps_output" | grep -Eq "(^|[[:space:]])${app}([[:space:]]|$)"; then
+        candidates+=("$app")
+      fi
+    done
+  else
+    local excluded_apps=" ${CORE_APP_EXCLUDE:-frappe erpnext hrms payments raven meet drive insights wiki helpdesk} "
+    while IFS= read -r app; do
+      app="${app//$'\r'/}"
+      app="${app%%[[:space:]]*}"
+      [[ "$app" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] || continue
+      [[ "$excluded_apps" == *" $app "* ]] && continue
+      app_dir="$BENCH_DIR/apps/$app"
+      [[ -d "$app_dir" ]] || continue
+      candidates+=("$app")
+    done <<< "$apps_output"
+  fi
 
   printf '%s\n' "${candidates[@]}"
 }

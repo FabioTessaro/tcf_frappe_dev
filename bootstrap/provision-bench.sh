@@ -1,15 +1,22 @@
 #!/bin/bash
 set -e
+# uv installs user tools here; bench provisioning can run in a non-login shell.
+export PATH="$HOME/.local/bin:$PATH"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/template-lib.sh"
+TEMPLATE_DIR="$SCRIPT_DIR/templates"
+cd "$ROOT_DIR"
 # set -x
 
 usage() {
   cat << EOF
-Usage: ./setup-bench.sh [mode]
+Usage: ./bootstrap/provision-bench.sh [mode]
 
 Flags:
   --no-default-apps   Doesn't install the default apps (erpnext, hrms, raven,
                       meet, drive, insights, wiki) in the frappe container
-                      (bootstrap/setup-bench.sh). Off by default.
+                      (bootstrap/provision-bench.sh). Off by default.
   -y, --yes           Don't prompt for app versions; use the values from the
                       environment (.env): FRAPPE_VERSION, ERPNEXT_VERSION,
                       HRMS_VERSION, RAVEN_VERSION, MEET_VERSION, DRIVE_VERSION,
@@ -31,7 +38,7 @@ done
 
 # ---------------------------------------------------------------------------
 # App versions (git tag or branch) come from the environment only — normally
-# the .env written by bootstrap/setup-env.sh:
+# the .env written by ./bootstrap/setup-env.sh:
 #   FRAPPE_VERSION, ERPNEXT_VERSION, HRMS_VERSION, RAVEN_VERSION,
 #   MEET_VERSION, DRIVE_VERSION, INSIGHTS_VERSION, HELPDESK_VERSION
 # There are no defaults in this script. FRAPPE_VERSION is always required; the
@@ -84,7 +91,7 @@ resolve_version() {
         echo "${label}: a version is required." >&2
         continue
       fi
-      echo "${label}: ${var} is not set — add it to .env (bootstrap/setup-env.sh writes it) — aborting." >&2
+      echo "${label}: ${var} is not set — add it to .env (./bootstrap/setup-env.sh writes it) — aborting." >&2
       exit 1
     fi
 
@@ -164,96 +171,11 @@ cd frappe-bench
 # frappe-bench/ is gitignored and fully regenerated above, so seed the
 # agentic-coding config here rather than relying on it surviving a rebuild.
 mkdir -p .claude
-cat > .claude/settings.json << 'EOF'
-{
-  "model": "sonnet",
-  "effortLevel": "medium",
-  "permissions": {
-    "deny": [
-      "Edit(apps/frappe/**)",
-      "Write(apps/frappe/**)",
-      "Edit(apps/erpnext/**)",
-      "Write(apps/erpnext/**)",
-      "Edit(apps/hrms/**)",
-      "Write(apps/hrms/**)",
-      "Edit(apps/raven/**)",
-      "Write(apps/raven/**)",
-      "Edit(apps/meet/**)",
-      "Write(apps/meet/**)",
-      "Edit(apps/drive/**)",
-      "Write(apps/drive/**)",
-      "Edit(apps/insights/**)",
-      "Write(apps/insights/**)",
-      "Edit(apps/wiki/**)",
-      "Write(apps/wiki/**)",
+render_template "$TEMPLATE_DIR/claude-settings.json.template" .claude/settings.json
 
-      "Read(env/**)",
-      "Edit(env/**)",
-      "Write(env/**)",
-
-      "Read(logs/**)",
-      "Edit(logs/**)",
-      "Write(logs/**)",
-
-      "Read(sites/**)",
-      "Edit(sites/**)",
-      "Write(sites/**)",
-
-      "Read(**/node_modules/**)",
-      "Edit(**/node_modules/**)",
-      "Write(**/node_modules/**)",
-
-      "Read(**/.git/**)",
-      "Edit(**/.git/**)",
-      "Write(**/.git/**)",
-
-      "Bash(cat env/*)",
-      "Bash(cat logs/*)",
-      "Bash(cat sites/*)"
-    ]
-  }
-}
-EOF
-
-cat > CLAUDE.md << 'EOF'
-# frappe-bench
-
-Frappe/ERPNext bench, main site (`TCF_SITE_NAME` in `.env`, default `tcf.local`) plus a dedicated Meet site (`MEET_SITE_NAME` in `.env`, default `meet.tcf.local`) for frappe-meet, kept separate so it can live at its own hostname — see docker-compose.yml's `meet-sfu` service for the call-media side of it. Bench root: everything below is relative to this file's directory.
-
-## App layout
-
-- **Vendored (dependency) apps — read for reference only, never edit:**
-  `apps/frappe`, `apps/erpnext`, `apps/hrms`, `apps/raven`, `apps/meet`, `apps/drive`, `apps/insights`, `apps/wiki` — upstream github.com/frappe/*. Edit/Write are blocked on these via `.claude/settings.json`; reading them to check an API/hook signature is fine, but changes belong upstream, not here. Note: `apps/meet` tracks the now-archived frappe/meet repo rather than its frappe/suite successor — see the comment above setup-bench.sh's `bench get-app` call for that app if this ever needs revisiting.
-- **Custom apps — this is the actual codebase:**
-  `apps/tcf_core`, `apps/tcf_erp`, `apps/tcf_hr`, `apps/tcf_plm`, `apps/tcf_qms`, `apps/tcf_web` — FabioTessaro's own repos. Work happens here.
-
-## Never read or edit
-
-`env/` (Python venv), `logs/`, `sites/**` (site data/config/backups), any `node_modules/` or `.git/` under `apps/*`. These are also denied in `.claude/settings.json`, but that only binds the Read/Edit/Write tools — when using `grep`/`find`/`rg` via Bash, explicitly exclude these paths (e.g. `--exclude-dir={env,logs,node_modules,.git} apps/frappe apps/erpnext apps/hrms apps/raven apps/meet apps/drive apps/insights apps/wiki sites`) since Bash isn't path-aware at the permission level.
-
-## Workflow — do not skip straight to code
-
-Don't make use of worktrees. Edit the files directly for me to check myself and decide when to commit.
-For any feature or non-trivial change, work in this order and stop for my review between steps:
-
-1. **Brainstorm** — discuss the feature/intent with me first; don't assume scope.
-2. **Scope** — enumerate exactly which doctypes/files/hooks/behaviors need to change.
-3. **Propose** — show the concrete plan/diff for review before touching files.
-4. **Review** — I approve or redirect.
-5. **Implement** — only after approval.
-
-Trivial one-line fixes (typo, obvious bug with an unambiguous fix) can skip straight to implementation — everything else goes through the steps above.
-
-## Token optimization
-
-- Don't re-read a file already open in this conversation's context.
-- Prefer targeted reads of a specific path over broad directory
-  exploration.
-- State conclusions and file paths, not full file contents, unless asked
-  to show the content itself.
-- Don't restate the plan file's existing content before appending to it.
-- Don't produce a summary of the whole conversation before acting.
-EOF
+render_template "$TEMPLATE_DIR/claude-bench.md.template" CLAUDE.md \
+  "TCF_SITE_NAME=${TCF_SITE_NAME:-tcf.local}" \
+  "MEET_SITE_NAME=${MEET_SITE_NAME:-meet.tcf.local}"
 
 bench set-config -g db_host mariadb
 bench set-config -g redis_cache redis://redis-cache:6379

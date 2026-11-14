@@ -1,0 +1,20 @@
+{
+    "folders": [
+@@FOLDERS_JSON@@
+    ],
+    "extensions": {
+        "recommendations": [
+@@EXTENSIONS_JSON_INDENT12@@
+        ]
+    },
+    "settings": {
+@@EXTENSION_SETTINGS@@
+        "python-envs.pythonProjects": [
+            {
+                "path": ".",
+                "envManager": "ms-python.python:venv",
+                "packageManager": "ms-python.python:pip"
+            }
+        ]
+    }
+}

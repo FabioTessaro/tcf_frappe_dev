@@ -11,32 +11,32 @@ Usage: ./install.sh [mode]
  
 Modes:
   --attach   (default) Set up for VS Code's "Attach to Running Container":
-             installs Docker if missing, pulls and starts the 5 containers,
+             installs Docker if missing, pulls and starts the containers,
              pre-seeds the VS Code Server build inside frappe (works around
-             a Docker Engine bug — see bootstrap/setup-vscode.sh), and runs
-             first-time bench provisioning inside the frappe container.
+             a Docker Engine bug — see bootstrap/seed-vscode-server.sh), and runs
+             bench plus frontend-pipeline provisioning inside the container.
   --reopen   Set up for VS Code's "Reopen in Container" instead: only
              (re)generates .devcontainer/devcontainer.json. Building the
              container, installing the VS Code Server inside it, and bench
-             provisioning are then handled by VS Code itself — this mode
-             does not start containers or touch the frappe container.
+             plus frontend-pipeline provisioning are handled by VS Code's
+             postCreateCommand.
  
 Flags:
   --with-agents       Also install the Claude Code and Codex CLIs inside the
-                      frappe container (bootstrap/setup-agents.sh). Off by
+                      frappe container (bootstrap/install-agents.sh). Off by
                       default. Only takes effect in --attach mode — --reopen
                       never touches the container, so run
-                      bootstrap/setup-agents.sh by hand after your first
+                      bootstrap/install-agents.sh by hand after your first
                       "Reopen in Container" if you want them there.
  
   --no-default-apps   Doesn't install the default erpnext, hrms, raven, insight,
                       helpdesk and meet apps in the frappe container
-                      (bootstrap/setup-bench.sh). Off by default. Only takes
+                      (bootstrap/provision-bench.sh). Off by default. Only takes
                       effect in --attach mode since --reopen handles the
-                      setup-bench.sh step itself and doesn't pass this flag
+                      provision-bench.sh step itself and doesn't pass this flag
                       through.
   --with-ftp          Also set up and configure an FTP server (vsftpd)
-                      using bootstrap/setup-ftp.sh. Off by default.
+                      using bootstrap/configure-ftp.sh. Off by default.
 EOF
 }
 
@@ -56,20 +56,20 @@ for arg in "$@"; do
   esac
 done
 
-bash bootstrap/setup-git.sh
+bash bootstrap/configure-git.sh
 
 if [ ! -f .env ]; then
-  bash bootstrap/setup-env.sh
+  TCF_INSTALL_INITIALIZING_ENV=1 bash ./bootstrap/setup-env.sh
 fi
 
 if [ "$WITH_FTP" = true ]; then
   echo ""
-  bash bootstrap/setup-ftp.sh
+  bash bootstrap/configure-ftp.sh
 fi
 
 # touch bootstrap/.bootstrap.log
 
-bash bootstrap/setup-devcontainer.sh
+bash bootstrap/configure-devcontainer.sh
 
 # Docker itself is a prerequisite for BOTH modes — "Reopen in Container"
 # still needs it on the VM to build/start anything — so this check and the
@@ -93,12 +93,12 @@ sudo systemctl enable docker.service containerd.service > /dev/null 2>&1 || true
 # From this point on, use the shared docker/compose wrapper so this script
 # behaves consistently with shutdown.sh and startup.sh (sudo-or-not is
 # detected once, in lib.sh).
-source bootstrap/lib.sh
+source bootstrap/project-common.sh
 
 if [ "$MODE" == "reopen" ]; then
 
   # --- add this ---
-  bash bootstrap/setup-workspace.sh || true
+  bash bootstrap/configure-workspace.sh --no-install || true
   
   cat << EOF
  
@@ -107,12 +107,12 @@ Install complete for "Reopen in Container" mode. Nothing was started —
 .devcontainer/devcontainer.json is ready and VS Code builds/starts the
 container itself.
  
-Note: postCreateCommand and the extensions list in devcontainer.json
-are still placeholders (open item, not yet wired up), so bench
-provisioning won't run automatically after the first "Reopen in
-Container" yet. Until that's in place, run this once from a terminal
-inside the container afterward:
-    ./bootstrap/setup-bench.sh
+The generated postCreateCommand provisions the bench and the frontend
+pipeline automatically. If more than one custom app is installed, core-app
+selection is deferred because postCreateCommand is non-interactive. After
+reopening, run this from the integrated terminal to select the core app and
+install its frontend dependencies:
+    ./setup-env.sh
  
 Next steps:
   1. On whichever machine you'll browse FROM (this VM or your own laptop),
@@ -139,27 +139,34 @@ echo "Pulling images and starting containers (mariadb, redis-cache, redis-queue,
 $DOCKER_COMPOSE up -d
 
 echo ""
-bash bootstrap/setup-vscode.sh
+bash bootstrap/seed-vscode-server.sh
 
 if [ "$WITH_AGENTS" = true ]; then
   echo ""
-  $DOCKER_COMPOSE exec frappe bash bootstrap/setup-agents.sh
+  $DOCKER_COMPOSE exec frappe bash bootstrap/install-agents.sh
 fi
+
+echo ""
+echo "Installing container system prerequisites..."
+$DOCKER_COMPOSE exec frappe bash ./bootstrap/install-system-dependencies.sh
 
 if [ "$WITHOUT_DEFAULT_APPS" = true ]; then
   echo ""
   echo "Running first-time bench provisioning inside the frappe container without default apps (this can take a while on a fresh install)..."
-  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh --no-default-apps -y
+  $DOCKER_COMPOSE exec frappe ./bootstrap/provision-bench.sh --no-default-apps -y
 else
   echo ""
   echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
-  $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh -y
+  $DOCKER_COMPOSE exec frappe ./bootstrap/provision-bench.sh -y
 fi
 
-# --- add this ---
+echo ""
+echo "Installing the frontend development pipeline inside the frappe container..."
+$DOCKER_COMPOSE exec frappe bash ./setup-env.sh --skip-system-tools --defer-app-selection
+
 echo ""
 echo "Generating the VS Code workspace..."
-bash bootstrap/setup-workspace.sh || true
+bash bootstrap/configure-workspace.sh --no-install || true
 
 cat << EOF
  
@@ -197,5 +204,5 @@ EOF
 if [ "$WITH_AGENTS" = false ]; then
   echo ""
   echo "Claude Code wasn't installed (pass --with-agents to include"
-  echo "them, or run bootstrap/setup-agents.sh directly anytime)."
+  echo "them, or run bootstrap/install-agents.sh directly anytime)."
 fi

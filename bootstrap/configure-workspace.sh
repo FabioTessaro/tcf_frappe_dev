@@ -4,9 +4,7 @@
 #
 # Writes (all under .vscode/):
 #   dev.code-workspace   one folder per installed custom app (TCF_APPS in
-#                        .env) + the repo root, the SCSS-compile exclude list
-#                        for every vendored app, and the extension
-#                        recommendations.
+#                        .env) + the repo root and extension recommendations.
 #   settings.json        Python interpreter / Pylance settings.
 #   extensions.json      Same extension recommendations, for when the folder
 #                        is opened WITHOUT the .code-workspace file.
@@ -16,21 +14,21 @@
 # is overwritten on every change, so copy it elsewhere if you want to keep it).
 #
 # Usage:
-#   ./bootstrap/setup-workspace.sh                 generate files + install extensions
-#   ./bootstrap/setup-workspace.sh --no-install    generate files only
-#   ./bootstrap/setup-workspace.sh -h | --help
+#   ./bootstrap/configure-workspace.sh                 generate files + install extensions
+#   ./bootstrap/configure-workspace.sh --no-install    generate files only
+#   ./bootstrap/configure-workspace.sh -h | --help
 #
 # Safe to re-run any time — e.g. after adding an app to TCF_APPS and running
-# bootstrap/setup-bench.sh, so the new app shows up as a workspace folder.
+# bootstrap/provision-bench.sh, so the new app shows up as a workspace folder.
 #
-# NOTE: this script deliberately does NOT source bootstrap/lib.sh. lib.sh
-# probes docker (and may ask for a sudo password) on load, which has nothing
+# NOTE: this script deliberately does NOT source bootstrap/project-common.sh. That
+# helper probes docker (and may ask for a sudo password) on load, which has nothing
 # to do with writing editor config — .env is parsed directly instead, and
 # only the handful of keys needed here are read (no secrets are copied into
 # any generated file).
 #
 # NOTE: it also deliberately does NOT create the app folders themselves.
-# setup-bench.sh skips `bench get-app` when apps/<name> already exists, so an
+# provision-bench.sh skips `bench get-app` when apps/<name> already exists, so an
 # empty pre-created folder would stop the app from ever being cloned. Apps
 # that aren't on disk yet are skipped with a warning — re-run this script
 # after provisioning.
@@ -44,7 +42,7 @@
 #   2. Add it as a new line in the EXTENSIONS array below.
 #   3. (Optional) If it needs settings, add them to EXTENSION_SETTINGS below
 #      (the fragment is plain JSON; every line/entry must end with a comma).
-#   4. Re-run ./bootstrap/setup-workspace.sh.
+#   4. Re-run ./bootstrap/configure-workspace.sh.
 # That's it: the same list feeds the workspace recommendations, extensions.json
 # and the CLI install step — there is nothing else to keep in sync.
 # ---------------------------------------------------------------------------
@@ -58,10 +56,16 @@ set -u
 # EXTENSIONS — one ID per line, in "publisher.name" form.
 # ---------------------------------------------------------------------------
 EXTENSIONS=(
-  "wholroyd.jinja"          # Jinja syntax (Frappe web templates)
   "ms-python.python"        # Python
-  "mrmlnc.vscode-scss"      # SCSS intellisense
-  "glenn2223.live-sass"     # Compiles .scss -> .css on save
+  "ms-python.vscode-pylance" # Python language server
+  "Vue.volar"               # Vue 3 language support
+  "dbaeumer.vscode-eslint"  # ESLint
+  "stylelint.vscode-stylelint" # SCSS/CSS linting
+  "bradlc.vscode-tailwindcss" # Tailwind IntelliSense
+  "mrmlnc.vscode-scss"      # SCSS IntelliSense
+  "wholroyd.jinja"          # Jinja syntax (Frappe web templates)
+  "esbenp.prettier-vscode"  # Prettier
+  "ms-playwright.playwright" # Playwright test runner
   # "publisher.name"        # <- add new extensions above this line
 )
 
@@ -71,22 +75,24 @@ EXTENSIONS=(
 # is only cosmetic. EVERY entry must end with a trailing comma (the generated
 # python-envs setting comes after this block, so the file stays valid).
 # Leave it empty if a new extension needs no settings.
-# Static settings only: the live-sass exclude list depends on the installed
-# apps, so it is generated further down.
+# Static settings only. Sass compilation for the Vue portal is handled by Vite.
 # ---------------------------------------------------------------------------
 IFS= read -r -d '' EXTENSION_SETTINGS << 'EOF'
         "files.associations": {
             "*.html": "jinja-html"
         },
-        "liveSassCompile.settings.generateMap": false,
 EOF
 EXTENSION_SETTINGS=${EXTENSION_SETTINGS%$'\n'}   # (cosmetic: drop the trailing blank line)
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-cd "$(dirname "$0")/.." || exit 1
-REPO_ROOT="$(pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+TEMPLATE_DIR="$SCRIPT_DIR/templates"
+# shellcheck source=bootstrap/template-lib.sh
+source "$SCRIPT_DIR/template-lib.sh"
+cd "$REPO_ROOT" || exit 1
 ENV_FILE="$REPO_ROOT/.env"
 BENCH_APPS_DIR="$REPO_ROOT/frappe-bench/apps"
 APPS_TXT="$REPO_ROOT/frappe-bench/sites/apps.txt"
@@ -97,7 +103,7 @@ EXTENSIONS_FILE="$VSCODE_DIR/extensions.json"
 
 usage() {
   cat << EOF
-Usage: bootstrap/setup-workspace.sh [options]
+Usage: bootstrap/configure-workspace.sh [options]
 
   --no-install   Only write the .vscode files; don't install extensions
   -h, --help     Show this help
@@ -151,33 +157,12 @@ valid_app_name() {
   [[ "$1" =~ ^[A-Za-z0-9_-]+$ ]]
 }
 
-# write_file TARGET — writes stdin to TARGET, backing up the old file to
-# TARGET.bak first if (and only if) the content changed.
-write_file() {
-  local target="$1" tmp
-  tmp=$(mktemp)
-  cat > "$tmp"
-  if [ -f "$target" ]; then
-    if cmp -s "$tmp" "$target"; then
-      echo "  unchanged: ${target#"$REPO_ROOT"/}"
-      rm -f "$tmp"
-      return 0
-    fi
-    cp "$target" "$target.bak"
-    echo "  updated:   ${target#"$REPO_ROOT"/} (previous version saved as .bak)"
-  else
-    echo "  created:   ${target#"$REPO_ROOT"/}"
-  fi
-  cat "$tmp" > "$target"
-  rm -f "$tmp"
-}
-
 # ---------------------------------------------------------------------------
 # 1. Work out which apps are installed
 # ---------------------------------------------------------------------------
 
 # Custom apps: the actual codebase, listed in TCF_APPS (written by
-# setup-env.sh, consumed by setup-bench.sh). These become workspace folders.
+# bootstrap/setup-env.sh, consumed by provision-bench.sh). These become workspace folders.
 CUSTOM_APPS=()
 for app in $(env_value TCF_APPS); do
   if valid_app_name "$app"; then
@@ -189,8 +174,8 @@ done
 
 # Vendored apps: upstream code we only read. Every <APP>_VERSION key in .env
 # names one (FRAPPE_VERSION -> frappe, ERPNEXT_VERSION -> erpnext, ...), and
-# the bench's own apps.txt covers anything installed some other way. These are
-# excluded from live-sass so it doesn't try to compile their stylesheets.
+# the bench's own apps.txt covers anything installed some other way. This list
+# is retained for reporting; Vite owns the portal's Sass compilation.
 VENDORED_APPS=()
 for app in $(grep -oE '^[[:space:]]*[A-Z0-9_]+_VERSION=' "$ENV_FILE" \
               | sed -E 's/^[[:space:]]*//; s/_VERSION=$//' | tr 'A-Z' 'a-z'); do
@@ -209,7 +194,7 @@ if [ -f "$APPS_TXT" ]; then
 fi
 
 echo "Custom apps (TCF_APPS): ${CUSTOM_APPS[*]:-none}"
-echo "Vendored apps (excluded from live-sass): ${VENDORED_APPS[*]:-none}"
+echo "Vendored apps (upstream dependencies): ${VENDORED_APPS[*]:-none}"
 
 # ---------------------------------------------------------------------------
 # 2. Build the dynamic JSON fragments
@@ -229,19 +214,9 @@ for app in "${CUSTOM_APPS[@]+"${CUSTOM_APPS[@]}"}"; do
     LISTED_APPS+=("$app")
   else
     echo "Warning: frappe-bench/apps/$app doesn't exist yet — not added as a folder."
-    echo "         Re-run this script once setup-bench.sh has fetched it."
+    echo "         Re-run this script once provision-bench.sh has fetched it."
   fi
 done
-
-# live-sass exclude list: fixed entries + every vendored app.
-EXCLUDES_JSON='            "/**/node_modules/**",
-            "/**/.vscode/**"'
-for app in "${VENDORED_APPS[@]+"${VENDORED_APPS[@]}"}"; do
-  EXCLUDES_JSON+=',
-            "/**/frappe-bench/apps/'"$app"'/**"'
-done
-EXCLUDES_JSON+=',
-            "/**/frappe-bench/apps/**/node_modules/**"'
 
 # Extension IDs as JSON array items (indent passed in, so the same list can
 # be reused at different nesting levels).
@@ -261,68 +236,17 @@ mkdir -p "$VSCODE_DIR"
 echo ""
 echo "Writing VS Code files..."
 
-write_file "$WORKSPACE_FILE" << EOF
-{
-    "folders": [
-$FOLDERS_JSON
-    ],
-    "extensions": {
-        "recommendations": [
-$(extensions_json '            ')
-        ]
-    },
-    "settings": {
-$EXTENSION_SETTINGS
-        "liveSassCompile.settings.excludeList": [
-$EXCLUDES_JSON
-        ],
-        "python-envs.pythonProjects": [
-            {
-                "path": ".",
-                "envManager": "ms-python.python:venv",
-                "packageManager": "ms-python.python:pip"
-            }
-        ]
-    }
-}
-EOF
+EXTENSIONS_JSON_INDENT12="$(extensions_json '            ')"
+EXTENSIONS_JSON_INDENT8="$(extensions_json '        ')"
 
-# Python / Pylance settings. Edit here (not in the generated file) if you
-# want to change them — the next run would overwrite manual edits.
-write_file "$SETTINGS_FILE" << 'EOF'
-{
-    "python.defaultInterpreterPath": "./frappe-bench/env/bin/python",
-    "python-envs.pythonProjects": [
-        {
-            "path": ".",
-            "envManager": "ms-python.python:venv",
-            "packageManager": "ms-python.python:pip"
-        }
-    ],
-    "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.diagnosticSeverityOverrides": {
-        "reportMissingTypeStubs": "none",
-        "reportUnknownArgumentType": "none",
-        "reportUnknownLambdaType": "none",
-        "reportUnknownMemberType": "none",
-        "reportUnknownParameterType": "none",
-        "reportUnknownVariableType": "none",
-        "reportUntypedBaseClass": "none",
-        "reportUntypedClassDecorator": "none",
-        "reportUntypedFunctionDecorator": "none",
-        "reportMissingParameterType": "none",
-        "reportMissingTypeArgument": "none"
-    }
-}
-EOF
+render_template "$TEMPLATE_DIR/vscode-workspace.json.template" "$WORKSPACE_FILE" \
+  "FOLDERS_JSON=$FOLDERS_JSON" \
+  "EXTENSIONS_JSON_INDENT12=$EXTENSIONS_JSON_INDENT12" \
+  "EXTENSION_SETTINGS=$EXTENSION_SETTINGS" || exit 1
 
-write_file "$EXTENSIONS_FILE" << EOF
-{
-    "recommendations": [
-$(extensions_json '        ')
-    ]
-}
-EOF
+render_template "$TEMPLATE_DIR/vscode-settings.json.template" "$SETTINGS_FILE" || exit 1
+render_template "$TEMPLATE_DIR/vscode-extensions.json.template" "$EXTENSIONS_FILE" \
+  "EXTENSIONS_JSON_INDENT8=$EXTENSIONS_JSON_INDENT8" || exit 1
 
 # ---------------------------------------------------------------------------
 # 4. Install the extensions on THIS machine (best effort)

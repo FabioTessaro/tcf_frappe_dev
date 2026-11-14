@@ -1,6 +1,6 @@
 #!/bin/bash
-# Shared helpers for install.sh / shutdown.sh / startup.sh.
-# This file is meant to be sourced ("source bootstrap/lib.sh"), not executed
+# Shared helpers for the root lifecycle scripts.
+# This file is meant to be sourced ("source bootstrap/project-common.sh"), not executed
 # directly — it has no shebang effect of its own and defines variables/
 # functions in the caller's shell.
 

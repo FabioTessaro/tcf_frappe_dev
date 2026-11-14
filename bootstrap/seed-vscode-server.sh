@@ -73,6 +73,8 @@
 #   -h, --help          Show this summary.
 
 set -u
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/template-lib.sh"
 # Deliberately no "set -e": this is a best-effort convenience step and must
 # never fail install.sh/startup.sh as a whole just because, say, this VM
 # has no outbound internet access to Microsoft's CDN. (Re-seed mode is the
@@ -83,7 +85,7 @@ VALID_PLATFORMS="win32-x64 win32-arm64 darwin-x64 darwin-arm64 linux-x64 linux-a
 
 usage() {
   cat << EOF
-Usage: bootstrap/setup-vscode.sh [options]
+Usage: bootstrap/seed-vscode-server.sh [options]
 
   --reseed            Force re-download/re-copy even if already present
   --commit <hash>     Seed this exact 40-char VS Code commit
@@ -128,7 +130,7 @@ done
 if [ "$RESEED" = true ]; then GIVE_UP_RC=1; else GIVE_UP_RC=0; fi
 
 cd "$(dirname "$0")/.."
-source bootstrap/lib.sh
+source bootstrap/project-common.sh
 
 echo "Checking whether the VS Code Server needs pre-seeding..."
 
@@ -224,12 +226,12 @@ if [ -z "$HASH" ]; then
       exit 2
     fi
     QUERY_PLATFORM="$CLI_PLATFORM"
-    echo "$QUERY_PLATFORM" > "$PLATFORM_CACHE"
+    render_template "$SCRIPT_DIR/templates/vscode-platform.state.template" "$PLATFORM_CACHE" "PLATFORM=$QUERY_PLATFORM"
   elif [ "$ASK_PLATFORM" = false ] && [ -f "$PLATFORM_CACHE" ]; then
     QUERY_PLATFORM=$(cat "$PLATFORM_CACHE")
   elif [ -t 0 ]; then
     ask_platform
-    echo "$QUERY_PLATFORM" > "$PLATFORM_CACHE"
+    render_template "$SCRIPT_DIR/templates/vscode-platform.state.template" "$PLATFORM_CACHE" "PLATFORM=$QUERY_PLATFORM"
   else
     # Non-interactive (no TTY) — don't hang waiting on input, just fall
     # back to asking the Linux server platform about itself, as before.

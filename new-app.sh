@@ -27,7 +27,7 @@
 #   -h, --help     show this help
 #
 # The remote URL is ${TCF_APPS_GIT_PREFIX}/<name>.git, the same URL
-# setup-bench.sh clones from, so the repo name must equal the app name.
+# provision-bench.sh clones from, so the repo name must equal the app name.
 
 set -u
 
@@ -77,15 +77,15 @@ command -v bench > /dev/null 2>&1 && IN_CONTAINER=true
 
 [ -f "$ENV_FILE" ] || die "No .env at $ENV_FILE (run ./install.sh first)."
 [ -f "$BENCH_DIR/sites/apps.txt" ] \
-  || die "frappe-bench isn't provisioned yet. Run ./install.sh (or bootstrap/setup-bench.sh) first."
+  || die "frappe-bench isn't provisioned yet. Run ./install.sh (or bootstrap/provision-bench.sh) first."
 
 if [ "$IN_CONTAINER" = true ]; then
   echo "Running inside the container."
 else
   # On the host: reuse the project's docker/compose wrapper (handles
   # sudo-or-not detection) and make sure the frappe container is up.
-  # shellcheck source=bootstrap/lib.sh
-  source "$REPO_ROOT/bootstrap/lib.sh"
+  # shellcheck source=bootstrap/project-common.sh
+  source "$REPO_ROOT/bootstrap/project-common.sh"
   case "$DOCKER_STATUS" in
     1) die "Docker isn't installed here, and 'bench' isn't on PATH either. Run ./install.sh first." ;;
     2) die "Docker is installed but its daemon isn't reachable. Run ./startup.sh first." ;;
@@ -105,7 +105,7 @@ bench_run() {
 }
 
 # precommit_install — pre-commit lives in the container (uv tool install in
-# setup-bench.sh), so the hook has to be installed through it.
+# provision-bench.sh), so the hook has to be installed through it.
 precommit_install() {
   local cmd='export PATH="$HOME/.local/bin:$PATH"; pre-commit install'
   if [ "$IN_CONTAINER" = true ]; then
@@ -217,7 +217,7 @@ if [ "$DO_PUSH" = true ]; then
 fi
 
 # --- 5. Append to TCF_APPS in .env (only once the push succeeded) ------------
-# A rebuild (setup-bench.sh) clones every app in TCF_APPS from the remote, so
+# A rebuild (provision-bench.sh) clones every app in TCF_APPS from the remote, so
 # an app that isn't there yet would break it.
 echo ""
 if [ "$PUSHED" = true ]; then
@@ -266,7 +266,7 @@ PYEOF
     echo "  { \"path\": \"../frappe-bench/apps/$APP\" }"
   fi
 else
-  echo "No .vscode/dev.code-workspace yet — skipped (bootstrap/setup-workspace.sh creates it)."
+  echo "No .vscode/dev.code-workspace yet — skipped (bootstrap/configure-workspace.sh creates it)."
 fi
 
 # --- 7. pre-commit ----------------------------------------------------------

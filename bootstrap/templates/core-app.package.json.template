@@ -1,0 +1,16 @@
+{
+  "name": "tcf-core-app",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --dir frontend dev",
+    "build": "pnpm --dir frontend build",
+    "typecheck": "pnpm --dir frontend typecheck",
+    "lint": "pnpm --dir frontend lint",
+    "lint:styles": "pnpm --dir frontend lint:styles",
+    "test": "pnpm --dir frontend test",
+    "test:unit": "pnpm --dir frontend test:unit",
+    "test:integration": "pnpm --dir frontend test:integration",
+    "test:contract": "pnpm --dir frontend test:contract",
+    "test:e2e": "pnpm --dir frontend test:e2e"
+  }
+}

@@ -10,7 +10,7 @@ usage() {
 Usage: ./reseed.sh [options]
 
 Re-downloads the VS Code Server build and copies it into the frappe
-container again (see bootstrap/setup-vscode.sh for how this works). Use it
+container again (see bootstrap/seed-vscode-server.sh for how this works). Use it
 when "Attach to Running Container" hangs, the server inside the container is
 broken or half-copied, or your VS Code client updated and no longer matches.
 
@@ -66,7 +66,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-source bootstrap/lib.sh
+source bootstrap/project-common.sh
 
 if ! $DOCKER_COMPOSE exec -T frappe true >/dev/null 2>&1; then
   echo "The frappe container isn't running. Start it first (./startup.sh),"
@@ -181,7 +181,7 @@ if [ "$MODE" = "commit" ]; then
   fi
 fi
 
-# --- build the setup-vscode.sh invocation ----------------------------------
+# --- build the seed-vscode-server.sh invocation ----------------------------------
 ARGS=(--reseed)
 DESC=""
 case "$MODE" in
@@ -211,4 +211,4 @@ if [ "$ASSUME_YES" = false ] && [ -t 0 ]; then
 fi
 
 echo ""
-bash bootstrap/setup-vscode.sh "${ARGS[@]}"
+bash bootstrap/seed-vscode-server.sh "${ARGS[@]}"

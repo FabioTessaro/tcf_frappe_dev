@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 set -e
 
 cd "$(dirname "$0")"
@@ -31,6 +35,7 @@ esac
 # compose's own "up -d" is already idempotent (already-running containers are
 # left alone), so there's no need to pre-check state ourselves — that check
 # turned out to be unreliable across docker compose versions.
+log_step "Starting project containers"
 echo "Starting containers..."
 $DOCKER_COMPOSE up -d
 
@@ -38,6 +43,7 @@ echo ""
 bash bootstrap/seed-vscode-server.sh
 
 echo ""
+log_step "Waiting for MariaDB readiness"
 echo "Waiting for MariaDB..."
 load_env
 WAITED=0

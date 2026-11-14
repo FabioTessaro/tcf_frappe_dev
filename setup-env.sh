@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Set up the development pipeline inside the Frappe Dev Container.
 # This script never creates or modifies the project .env file.
 set -euo pipefail
@@ -20,4 +24,5 @@ if [[ ! -d "$BENCH_DIR" ]]; then
   exit 1
 fi
 
+log_step "Installing development pipeline tools"
 exec bash "$ROOT_DIR/bootstrap/install-development-pipeline.sh" "$@"

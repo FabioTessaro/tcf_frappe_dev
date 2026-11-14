@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Generate the workspace and install extensions when a VS Code Server CLI is available.
 set -euo pipefail
 

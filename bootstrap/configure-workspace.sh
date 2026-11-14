@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Generates the VS Code workspace for this project from what's actually in
 # .env / frappe-bench, and installs the extensions the workspace needs.
 #

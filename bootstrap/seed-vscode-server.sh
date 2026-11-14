@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Pre-seeds the VS Code Server build inside the frappe container so that
 # "Dev Containers: Attach to Running Container" doesn't have to stream the
 # ~200MB server tarball live through docker exec's stdin — a path that's

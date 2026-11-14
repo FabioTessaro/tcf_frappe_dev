@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Creates a brand-new Frappe app in the bench, installs it on the site, puts it
 # in its own git repo on your remote, and registers it in .env and in the
 # VS Code workspace. Run it AFTER install.sh has provisioned the bench.

@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Installs the Claude Code CLI (Architect) and OpenAI Codex CLI (Executor)
 # inside the frappe container. Both ship as self-contained native binaries,
 # so neither depends on the Node.js version frappe/bench:latest bundles for

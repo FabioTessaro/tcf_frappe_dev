@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Install Chromium and its Linux runtime dependencies for the core E2E suite.
 set -euo pipefail
 

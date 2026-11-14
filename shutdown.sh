@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 set -e
 
 cd "$(dirname "$0")"
@@ -93,6 +97,7 @@ if [ "$TIER" == "--all" ]; then
 fi
 
 echo ""
+log_step "Stopping project containers"
 echo "Stopping containers..."
 # shellcheck disable=SC2086
 $DOCKER_COMPOSE down $DOWN_FLAGS

@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 set -e
 # uv installs user tools here; bench provisioning can run in a non-login shell.
 export PATH="$HOME/.local/bin:$PATH"

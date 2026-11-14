@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 set -e
 
 # Work relative to this script's location, so it behaves the same regardless
@@ -56,6 +60,7 @@ for arg in "$@"; do
   esac
 done
 
+log_step "Preparing Git access"
 bash bootstrap/configure-git.sh
 
 if [ ! -f .env ]; then
@@ -69,11 +74,13 @@ fi
 
 # touch bootstrap/.bootstrap.log
 
+log_step "Configuring the Dev Container"
 bash bootstrap/configure-devcontainer.sh
 
 # Docker itself is a prerequisite for BOTH modes — "Reopen in Container"
 # still needs it on the VM to build/start anything — so this check and the
 # boot-enable below are not gated behind --attach/--reopen.
+log_step "Checking Docker prerequisites"
 if ! command -v docker &> /dev/null; then
   echo "Docker not found — installing..."
   curl -fsSL https://get.docker.com | sh

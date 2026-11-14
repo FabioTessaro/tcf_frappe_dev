@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # One entry point for installing the tools required by the Vue/Frappe pipeline.
 set -euo pipefail
 

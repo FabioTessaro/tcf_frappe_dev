@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Internal first-install helper: creates the repository's .env from a template.
 # This file is called by install.sh only. Do not use it for pipeline setup.
 set -euo pipefail

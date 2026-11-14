@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Consistent progress, warning and failure output.
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
+log_init "${BASH_SOURCE[0]}"
 # Read-only audit of the TCF Frappe/Vue development container.
 # This script reports missing prerequisites; it does not install or modify anything.
 
@@ -37,6 +41,7 @@ if [[ -s "$NVM_DIR/nvm.sh" ]]; then
   nvm use default --silent >/dev/null 2>&1 || true
 fi
 
+log_step "Auditing development environment"
 PASS_COUNT=0
 FAIL_COUNT=0
 WARN_COUNT=0

@@ -51,7 +51,7 @@ cd frappe-dev
 The installer:
 
 1. Checks Git identity and SSH access.
-2. Creates `.env` through the internal `bootstrap/setup-env.sh` helper if it does not already exist.
+2. Calls the private bootstrap helper `bootstrap/setup-env.sh` to create `.env` when it does not already exist.
 3. Generates the Dev Container configuration from the checked-in template.
 4. Installs Docker when required and starts the project services.
 5. Provisions the Frappe bench and configured apps.
@@ -79,63 +79,15 @@ Run:
 ./install.sh --reopen
 ```
 
-Then open the repository in VS Code over Remote - SSH and run **Dev Containers: Reopen in Container**. The Dev Container's `postCreateCommand` provisions the bench and common development tools. The pipeline can be checked or repaired from the container terminal with `./check-env.sh` and `./setup-env.sh`.
-
-## Root scripts: what they do and when to use them
-
-The scripts in the repository root are the supported commands for operating the development environment. Run them from a terminal in the repository; they resolve paths relative to their own location.
-
-### On the remote host
-
-| Script | What it does | When to use it |
-|---|---|---|
-| `./install.sh` | First-time setup and orchestration. Creates `.env` when needed, configures Docker and Compose, starts services, provisions the bench and prepares the development container. | Run once for a new environment, or again to repair/re-run setup. Defaults to `--attach`; use `--reopen` for the Reopen in Container workflow. Optional flags: `--with-agents`, `--no-default-apps` and `--with-ftp`. |
-| `./startup.sh` | Starts the Compose services and checks whether the bench is provisioned. It can offer to repair an incomplete bench. | Run when you want to start or resume development after shutting the environment down. |
-| `./shutdown.sh` | Stops and removes the project containers. | Run when finished working. By default, it preserves data volumes and images. |
-| `./reseed.sh` | Re-downloads and copies the matching VS Code Server build into the `frappe` container. | Use when VS Code **Attach to Running Container** hangs, the server installation is incomplete, or the VS Code client has updated. |
-| `./new-app.sh <app-name>` | Creates a Frappe app, optionally installs it, helps create and push its Git remote, and adds it to `TCF_APPS` after a successful push. It also updates the VS Code workspace when present. | Use after the bench has been provisioned when adding another custom app. `--no-install` skips site installation; `--no-push` skips the remote/push step and does not update `TCF_APPS`. It can be run on the host (with the containers running) or inside the `frappe` container. |
-
-Useful examples:
+Then open the repository in VS Code over Remote - SSH and run **Dev Containers: Reopen in Container**. The Dev Container's `postCreateCommand` provisions the bench and common development tools. When more than one custom app is installed, select the core app afterwards from the container terminal:
 
 ```bash
-./install.sh --reopen
-./startup.sh
-./shutdown.sh --clean
-./new-app.sh tcf_projects
-./reseed.sh --auto
-```
-
-`shutdown.sh` offers increasingly destructive cleanup options:
-
-- `--clean`: also prunes unused Docker resources and build cache; project data volumes are preserved.
-- `--volumes`: also deletes the MariaDB and SeaweedFS data volumes. **This deletes the development database and uploaded files.**
-- `--images`: also removes the project images; data volumes are preserved.
-- `--all`: removes containers, volumes, images and the local `frappe-bench/` directory, returning the environment to a fresh-install state.
-
-`reseed.sh` is interactive when run without options. For non-interactive use it supports `--auto`, `--latest`, `--commit <hash>`, `--platform <name>`, `--purge` and `--yes`. `--purge` removes other VS Code Server builds in the container and can interrupt windows attached with those builds.
-
-### Inside the Dev Container
-
-| Script | What it does | When to use it |
-|---|---|---|
-| `./setup-env.sh` | Installs or repairs the development pipeline: system prerequisites, Node.js, Corepack, pnpm, frontend dependencies, Playwright and development tooling. **It does not create or modify `.env`.** | Run from the `frappe` container terminal after provisioning, or whenever you need to repair/update the frontend toolchain. It is safe to re-run. |
-| `./check-env.sh` | Performs a read-only audit of the development environment and reports missing tools or configuration. | Run before or after `setup-env.sh` to diagnose the container. It does not install or change anything. |
-
-Typical container-side workflow:
-
-```bash
-./check-env.sh
 ./setup-env.sh
-./check-env.sh
 ```
-
-### `.env` ownership
-
-The internal `bootstrap/setup-env.sh` helper creates the project `.env` during `./install.sh` only. Do not run that helper directly. The root `./setup-env.sh` is unrelated to `.env`: it configures the development pipeline inside the container. After initial installation, `./new-app.sh` is the workflow that adds a newly created app to `TCF_APPS` in `.env`, and only after its push succeeds. Do not commit `.env`.
 
 ## Configuration
 
-The `.env` file contains credentials, service settings, app versions and custom-app configuration.
+`install.sh` creates `.env` on the first run by calling `bootstrap/setup-env.sh`. That helper is an internal part of initial installation; run `./install.sh` rather than invoking it manually. The root-level `./setup-env.sh` has a different responsibility: it installs and configures the development pipeline inside the Dev Container and never changes `.env`. After initial installation, `./new-app.sh` is the only workflow that updates `.env`: it adds the new app to `TCF_APPS` only after the app has been successfully pushed. The file contains credentials, service settings, app versions and custom-app configuration. **Do not commit `.env`.**
 
 Important settings:
 
@@ -145,7 +97,27 @@ Important settings:
 - `*_VERSION`: Git tags or branches for the Frappe and dependency apps.
 - `WEBRTC_ANNOUNCED_IP`: address advertised by the Meet SFU to WebRTC clients.
 
-Custom app folders are cloned into `frappe-bench/apps/`. Add apps with `./new-app.sh <app-name>`; successful pushes are added to `TCF_APPS` so future bench provisioning can restore them.
+Custom app folders are cloned into `frappe-bench/apps/`. Add or create apps with `./new-app.sh <app-name>`; successful pushes are added to `TCF_APPS` so future bench provisioning can restore them.
+
+## Common commands
+
+Run the root scripts from the repository directory. They resolve paths relative to their own location, so the current working directory does not otherwise matter.
+
+| Command | Purpose |
+|---|---|
+| `./install.sh` | Initial setup or repair; accepts `--attach` (default) or `--reopen`. |
+| `./setup-env.sh` | Set up or repair the development pipeline inside the Dev Container: Node.js, pnpm, frontend dependencies, Playwright and workspace tooling. Does not modify `.env`. |
+| `./startup.sh` | Start the services and offer to repair an incomplete bench. Safe to repeat. |
+| `./shutdown.sh` | Stop the services. Optional cleanup tiers: `--clean`, `--volumes`, `--images`, `--all`. |
+| `./reseed.sh` | Re-download and seed the VS Code Server build in the `frappe` container. |
+| `./new-app.sh <app-name>` | Create and optionally install a custom Frappe app, create its Git remote and add it to `TCF_APPS` in `.env` after a successful push. |
+| `./check-env.sh` | Read-only development-environment audit. Run inside the Dev Container. |
+
+The pipeline setup is separate from the read-only audit script and can be re-run when repairing or updating the container toolchain:
+
+```bash
+./setup-env.sh
+```
 
 ## Local access
 
@@ -168,13 +140,13 @@ MariaDB is exposed on port `3306` for local database tools such as DBeaver. The 
 │   ├── templates/       # Templates for generated configuration files
 │   └── *.sh             # Provisioning and configuration helpers
 ├── .devcontainer/       # Docker Compose development services
-├── install.sh           # First-time setup and orchestration (host)
-├── startup.sh           # Start services (host)
-├── shutdown.sh          # Stop services and optional cleanup (host)
-├── reseed.sh            # VS Code Server recovery (host)
-├── new-app.sh           # Create and register a custom Frappe app
-├── setup-env.sh         # Install/repair the pipeline toolchain (container)
-└── check-env.sh         # Read-only environment audit (container)
+├── install.sh           # Initial setup and orchestration
+├── setup-env.sh         # Development pipeline toolchain setup
+├── startup.sh           # Start services
+├── shutdown.sh          # Stop services and optional cleanup
+├── reseed.sh            # VS Code Server recovery
+├── new-app.sh           # Custom Frappe app scaffolding
+└── check-env.sh         # Read-only environment audit
 ```
 
 ## License

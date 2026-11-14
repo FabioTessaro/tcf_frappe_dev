@@ -328,15 +328,24 @@ CORE_PYTHON_DIR="$BENCH_DIR/apps/$CORE_APP/$CORE_APP"
 
 CORE_PACKAGE_JSON="$BENCH_DIR/apps/$CORE_APP/package.json"
 
+CORE_PACKAGE_JSON="$BENCH_DIR/apps/$CORE_APP/package.json"
+
 if [[ -f "$CORE_PACKAGE_JSON" ]]; then
   if node -e '
     const pkg = require(process.argv[1]);
-    process.exit(
-      pkg.scripts?.build === "pnpm --dir frontend build" &&
-      !pkg.packageManager?.startsWith("pnpm@") ? 0 : 1
-    );
+    const build = pkg.scripts?.build;
+
+    const delegatesToFrontend =
+      typeof build === "string" &&
+      /pnpm\s+--dir\s+frontend\s+build/.test(build);
+
+    const rootPinsPnpm =
+      typeof pkg.packageManager === "string" &&
+      pkg.packageManager.startsWith("pnpm@");
+
+    process.exit(delegatesToFrontend && !rootPinsPnpm ? 0 : 1);
   ' "$CORE_PACKAGE_JSON" >/dev/null 2>&1; then
-    ok "Frappe app build script delegates to frontend pnpm build"
+    ok "Core app build script delegates to frontend pnpm build"
   else
     fail "Core app root package.json has an incorrect build script or pnpm packageManager declaration"
   fi

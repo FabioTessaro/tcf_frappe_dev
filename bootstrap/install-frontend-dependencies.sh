@@ -64,6 +64,14 @@ if [[ ! -f "$FRONTEND_DIR/package.json" || ! -f "$APP_DIR/package.json" ]]; then
   exit 1
 fi
 
+PNPM_WORKSPACE_CONFIG="$FRONTEND_DIR/pnpm-workspace.yaml"
+
+if [[ ! -f "$PNPM_WORKSPACE_CONFIG" ]]; then
+  cp "$SCRIPT_DIR/templates/pnpm-workspace.yaml.template" \
+    "$PNPM_WORKSPACE_CONFIG"
+  echo "Created pnpm-workspace.yaml with approved dependency build scripts."
+fi
+
 command -v node >/dev/null 2>&1 || { echo "Node.js is not installed; run bootstrap/install-node-toolchain.sh first." >&2; exit 1; }
 command -v corepack >/dev/null 2>&1 || { echo "Corepack is not installed; run bootstrap/install-node-toolchain.sh first." >&2; exit 1; }
 

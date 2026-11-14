@@ -81,12 +81,12 @@ EXTENSIONS=(
 # Leave it empty if a new extension needs no settings.
 # Static settings only. Sass compilation for the Vue portal is handled by Vite.
 # ---------------------------------------------------------------------------
-IFS= read -r -d '' EXTENSION_SETTINGS << 'EOF'
+EXTENSION_SETTINGS=$(cat <<'EOF'
         "files.associations": {
             "*.html": "jinja-html"
         },
 EOF
-EXTENSION_SETTINGS=${EXTENSION_SETTINGS%$'\n'}   # (cosmetic: drop the trailing blank line)
+)
 
 # ---------------------------------------------------------------------------
 # Paths

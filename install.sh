@@ -160,11 +160,11 @@ $DOCKER_COMPOSE exec frappe bash ./bootstrap/install-system-dependencies.sh
 if [ "$WITHOUT_DEFAULT_APPS" = true ]; then
   echo ""
   echo "Running first-time bench provisioning inside the frappe container without default apps (this can take a while on a fresh install)..."
-  $DOCKER_COMPOSE exec frappe ./bootstrap/provision-bench.sh --no-default-apps -y
+  $DOCKER_COMPOSE exec frappe bash ./bootstrap/provision-bench.sh --no-default-apps -y
 else
   echo ""
   echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
-  $DOCKER_COMPOSE exec frappe ./bootstrap/provision-bench.sh -y
+  $DOCKER_COMPOSE exec frappe bash ./bootstrap/provision-bench.sh -y
 fi
 
 echo ""

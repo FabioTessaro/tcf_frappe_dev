@@ -59,7 +59,7 @@ done
 bash bootstrap/setup-git.sh
 
 if [ ! -f .env ]; then
-  bash bootstrap/setup-env.sh --with-agents="$WITH_AGENTS"
+  bash bootstrap/setup-env.sh
 fi
 
 if [ "$WITH_FTP" = true ]; then
@@ -96,6 +96,10 @@ sudo systemctl enable docker.service containerd.service > /dev/null 2>&1 || true
 source bootstrap/lib.sh
 
 if [ "$MODE" == "reopen" ]; then
+
+  # --- add this ---
+  bash bootstrap/setup-workspace.sh || true
+  
   cat << EOF
  
 =====================================================================
@@ -139,7 +143,7 @@ bash bootstrap/setup-vscode.sh
 
 if [ "$WITH_AGENTS" = true ]; then
   echo ""
-  bash bootstrap/setup-agents.sh
+  $DOCKER_COMPOSE exec frappe bash bootstrap/setup-agents.sh
 fi
 
 if [ "$WITHOUT_DEFAULT_APPS" = true ]; then
@@ -151,6 +155,11 @@ else
   echo "Running first-time bench provisioning inside the frappe container (this can take a while on a fresh install)..."
   $DOCKER_COMPOSE exec frappe ./bootstrap/setup-bench.sh -y
 fi
+
+# --- add this ---
+echo ""
+echo "Generating the VS Code workspace..."
+bash bootstrap/setup-workspace.sh || true
 
 cat << EOF
  

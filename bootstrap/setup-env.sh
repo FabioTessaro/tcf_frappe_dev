@@ -1,13 +1,6 @@
 #!/bin/bash
 set -e
 
-WITH_AGENTS=false
-for arg in "$@"; do
-  case "$arg" in
-    --with-agents=*) WITH_AGENTS="${arg#*=}" ;;
-  esac
-done
-
 # Default app versions (git tag or branch). Keep these in sync with the
 # DEFAULT_*_VERSION values in setup-bench.sh.
 DEFAULT_FRAPPE_VERSION="v16.55.0"
@@ -64,12 +57,6 @@ DRIVE_VERSION=$(prompt "DRIVE_VERSION" "$DEFAULT_DRIVE_VERSION")
 INSIGHTS_VERSION=$(prompt "INSIGHTS_VERSION" "$DEFAULT_INSIGHTS_VERSION")
 WIKI_VERSION=$(prompt "WIKI_VERSION" "$DEFAULT_WIKI_VERSION")
 
-if [ "$WITH_AGENTS" = true ]; then
-  ANTHROPIC_API_KEY=$(prompt "ANTHROPIC_API_KEY" "")
-else
-  ANTHROPIC_API_KEY=""
-fi
-
 TCF_APPS_GIT_PREFIX=$(prompt "TCF_APPS_GIT_PREFIX" "git@github.com:FabioTessaro")
 echo "Enter additional app names one at a time (blank to finish):"
 TCF_APPS=""
@@ -109,7 +96,6 @@ WIKI_VERSION=$WIKI_VERSION
 TCF_APPS_GIT_PREFIX=$TCF_APPS_GIT_PREFIX
 TCF_APPS=$TCF_APPS
 
-ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
 ENVEOF
 
 echo "Environment file .env created."

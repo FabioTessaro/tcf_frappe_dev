@@ -14,8 +14,5 @@ frappe-bench/
 
 # editor/OS noise
 .DS_Store
-.vscode/*
-!.vscode/extensions.json
-!.vscode/dev.code-workspace
-!.vscode/settings.json
+.vscode
 *.swp

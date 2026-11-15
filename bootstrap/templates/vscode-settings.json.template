@@ -20,5 +20,10 @@
         "reportUntypedFunctionDecorator": "none",
         "reportMissingParameterType": "none",
         "reportMissingTypeArgument": "none"
-    }
+    },
+    "stylelint.validate": [
+        "css",
+        "scss",
+        "vue"
+    ]
 }

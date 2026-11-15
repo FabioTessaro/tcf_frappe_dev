@@ -72,6 +72,7 @@ PASS_COUNT=0
 FAIL_COUNT=0
 WARN_COUNT=0
 SKIP_COUNT=0
+TODO_COUNT=0
 
 ok() {
   printf '  \033[32mOK\033[0m      %s\n' "$1"
@@ -91,6 +92,20 @@ warn() {
 skip() {
   printf '  \033[90mSKIP\033[0m    %s\n' "$1"
   SKIP_COUNT=$((SKIP_COUNT + 1))
+}
+
+# Work that is yours to do, not an environment problem: shown, counted, never a failure.
+todo() {
+  printf '  \033[36mTODO\033[0m    %s\n' "$1"
+  TODO_COUNT=$((TODO_COUNT + 1))
+}
+
+done_item() {
+  printf '  \033[32mDONE\033[0m    %s\n' "$1"
+}
+
+info() {
+  printf '  \033[90mINFO\033[0m    %s\n' "$1"
 }
 
 section() {
@@ -591,8 +606,14 @@ if [[ -d "$FRONTEND_DIR" && -f "$FRONTEND_DIR/package.json" ]] && command -v nod
   # Lockfile and manifest must agree. Frozen + lockfile-only + offline: nothing is
   # installed, downloaded or written.
   if command -v pnpm >/dev/null 2>&1; then
-    if (cd "$FRONTEND_DIR" && COREPACK_ENABLE_NETWORK=0 pnpm install --frozen-lockfile --lockfile-only --offline >/dev/null 2>&1); then
+    lock_output=$(cd "$FRONTEND_DIR" && COREPACK_ENABLE_NETWORK=0 pnpm install --frozen-lockfile --lockfile-only --offline 2>&1)
+    lock_status=$?
+    if (( lock_status == 0 )); then
       ok "pnpm-lock.yaml is in sync with package.json"
+    elif grep -qE 'NO_OFFLINE_META|META_FETCH_FAIL' <<<"$lock_output"; then
+      # pnpm re-checks the lockfile against registry metadata, which it can only read from its
+      # local cache while offline. That says nothing about the lockfile itself.
+      warn "pnpm-lock.yaml could not be verified offline (pnpm's metadata cache is incomplete); run 'pnpm install --frozen-lockfile' to verify it"
     else
       fail "pnpm-lock.yaml is out of sync with package.json (run: pnpm install --lockfile-only)"
     fi
@@ -637,11 +658,53 @@ scaffold_files=(
   src/styles/themes/_dark.scss src/styles/themes/_app-themable.scss
   tests/mocks/server.ts tests/mocks/handlers/index.ts
   tests/utils/render.ts tests/utils/fake-router.ts
-  tests/contract/manifest.test.ts tests/contract/tokens.test.ts
+  tests/contract/manifests.test.ts tests/contract/tokens.test.ts
   tests/contract/locales-parity.test.ts tests/contract/portal-path.test.ts
   tests/integration/login-wall.test.ts tests/plugins/discover-apps.test.ts
   tests/mocks/fixtures/index.ts tests/mocks/fixtures/users.ts tests/mocks/fixtures/apps.ts
-  index.html src/env.d.ts
+  index.html src/env.d.ts public/favicon.svg
+  eslint.boundaries.js eslint.boundaries.d.ts tsconfig.e2e.json
+  scripts/lint-apps.mjs scripts/generate-icon-names.mjs
+  plugins/icon-delivery.ts plugins/icon-set.ts
+  tests/contract/boundaries.test.ts tests/contract/icons.test.ts
+  tests/contract/typography.test.ts tests/contract/breakpoints.test.ts
+  tests/integration/session-expiry.test.ts tests/integration/role-guard.test.ts
+  tests/integration/registry.test.ts
+  tests/plugins/fixtures.ts tests/plugins/emit-shared-assets.test.ts
+  tests/utils/typography-contract.ts tests/utils/typography-contract.test.ts
+  tests/e2e/global-setup.ts tests/e2e/fixtures/index.ts tests/e2e/fixtures/users.ts
+  tests/e2e/pages/index.ts tests/e2e/pages/portal-page.ts tests/e2e/pages/login-page.ts
+  tests/e2e/pages/launcher-page.ts tests/e2e/pages/not-found-page.ts
+  tests/e2e/pages/app-shell-page.ts
+  tests/e2e/specs/login-wall.spec.ts tests/e2e/specs/launcher.spec.ts
+  tests/e2e/specs/session-expiry.spec.ts tests/e2e/specs/connection.spec.ts
+  tests/e2e/specs/chunk-reload.spec.ts tests/e2e/specs/public-site.spec.ts
+  src/styles/typography/_index.scss src/styles/typography/_roles.scss
+  src/styles/typography/_resolve.scss src/styles/typography/typefaces/_index.scss
+  src/styles/typography/scripts/_index.scss src/styles/typography/scripts/_latin.scss
+  src/styles/typography/scripts/_japanese.scss
+  src/styles/typography/scripts/_chinese-simplified.scss
+  src/styles/typography/scripts/_chinese-traditional.scss
+  src/styles/typography/devices/_index.scss src/styles/typography/devices/_desktop.scss
+  src/styles/typography/devices/_mobile.scss
+  src/styles/base/_reset.scss src/styles/base/_elements.scss
+  src/styles/vendor/_third-party-overrides.scss
+  src/shared/components/index.ts src/shared/components/primitives/Icon/icons.json
+  src/shared/constants/roles.ts src/shared/constants/limits.ts src/shared/constants/breakpoints.ts
+  src/shared/types/index.ts src/shared/types/common.types.ts
+  src/shared/utils/format.ts src/shared/utils/date.ts src/shared/utils/string.ts
+  src/shared/utils/validators.ts
+  src/shared/composables/index.ts src/shared/composables/useDebounce.ts
+  src/shared/composables/useMediaQuery.ts src/shared/composables/useOnlineStatus.ts
+  src/shared/composables/useLanguage.ts
+  src/shared/stores/index.ts src/shared/stores/ui.store.ts
+  src/shared/directives/index.ts src/shared/directives/click-outside.ts
+  src/shared/directives/focus.ts
+  src/shared/frappe/client.ts src/shared/frappe/call.ts src/shared/frappe/errors.ts
+  src/shared/frappe/resource.ts src/shared/frappe/realtime.ts src/shared/frappe/permissions.ts
+  src/shared/i18n/detect-language.ts
+  src/app/providers/directives.ts src/app/providers/theme.ts
+  src/app/providers/frappe-client.ts
   src/sdk/permissions.ts src/sdk/permissions.test.ts
   src/shared/index.ts
   src/shared/constants/index.ts src/shared/constants/portal.ts src/shared/constants/storage-keys.ts
@@ -680,6 +743,18 @@ done
 for scaffold_file in "${scaffold_files[@]}"; do
   check_file "Scaffold: $scaffold_file" "$FRONTEND_DIR/$scaffold_file"
 done
+for category in primitives forms overlays data feedback navigation layout; do
+  check_file "Scaffold: shared/components/$category barrel" "$FRONTEND_DIR/src/shared/components/$category/index.ts"
+done
+# The feature-slice folders of the platform features (guide, section 9.6), for you to fill.
+for slice_dir in platform/auth/api platform/auth/components platform/auth/composables \
+  platform/launcher/api platform/launcher/components platform/launcher/composables \
+  platform/launcher/stores platform/launcher/types src/assets/brand src/assets/images; do
+  check_dir "Scaffold: ${slice_dir#src/}" "$FRONTEND_DIR/${slice_dir/#platform/src/platform}"
+done
+for workflow in ci.yml bench.yml; do
+  check_file "Scaffold: .github/workflows/$workflow" "$CORE_APP_DIR/.github/workflows/$workflow"
+done
 for scaffold_dir in tests/e2e/fixtures tests/e2e/pages tests/e2e/specs tests/mocks/fixtures; do
   check_dir "Scaffold: $scaffold_dir" "$FRONTEND_DIR/$scaffold_dir"
 done
@@ -702,6 +777,105 @@ else
   fail "Core app .gitignore — $CORE_APP_DIR/.gitignore"
 fi
 
+# ------------------------------------------------------------------------------------
+# Your implementation work. Never an error: the scaffold is complete when everything above
+# passes; these lines show how much of the core app itself is still yours to build.
+# ------------------------------------------------------------------------------------
+section "Your implementation work (not errors)"
+STYLES_DIR="$FRONTEND_DIR/src/styles"
+SRC_DIR="$FRONTEND_DIR/src"
+
+# 1. Typography: at least one typeface forwarded in typefaces/_index.scss.
+typefaces_index="$STYLES_DIR/typography/typefaces/_index.scss"
+typeface_count=0
+if [[ -f "$typefaces_index" ]]; then
+  typeface_count=$(grep -v '^[[:space:]]*//' "$typefaces_index" | grep -c '@forward' || true)
+fi
+if (( typeface_count > 0 )); then
+  done_item "1. Typography: $typeface_count typeface(s) registered"
+else
+  todo "1. Typography: no typeface registered (src/styles/typography). Fonts go in src/assets/fonts first"
+fi
+
+# 2. Icons: files installed, delivery implemented, installed names listed.
+icon_files=0
+if [[ -d "$SRC_DIR/assets/icons" ]]; then
+  icon_files=$(find "$SRC_DIR/assets/icons" -type f ! -name '.gitkeep' | wc -l)
+fi
+if (( icon_files > 0 )); then
+  done_item "2. Icons: Material files installed in src/assets/icons"
+else
+  todo "2. Icons: no icon files in src/assets/icons yet"
+fi
+if grep -q 'export const iconDelivery: IconDelivery = notConfiguredIconDelivery' "$FRONTEND_DIR/plugins/icon-delivery.ts" 2>/dev/null; then
+  todo "2. Icons: delivery not configured (plugins/icon-delivery.ts)"
+else
+  done_item "2. Icons: delivery configured"
+fi
+if grep -Eq 'return null;' "$FRONTEND_DIR/plugins/icon-set.ts" 2>/dev/null; then
+  todo "2. Icons: installed icon names not listed (plugins/icon-set.ts), so the icons contract cannot check names"
+else
+  done_item "2. Icons: installed icon names listed"
+fi
+
+# 3. Theming: informational.
+token_count=$(cat "$STYLES_DIR"/themes/_*.scss 2>/dev/null | grep -oE '^[[:space:]]*--tcf-[a-z0-9-]+' | sort -u | wc -l)
+info "3. Theming: $token_count design tokens declared (expand tokens and palettes in src/styles/themes)"
+
+# 4. Shared components: component folders (with a .vue file) per category.
+component_total=0
+for category in primitives forms overlays data feedback navigation layout; do
+  category_dir="$SRC_DIR/shared/components/$category"
+  count=0
+  if [[ -d "$category_dir" ]]; then
+    count=$(find "$category_dir" -mindepth 2 -maxdepth 2 -name '*.vue' | wc -l)
+  fi
+  component_total=$((component_total + count))
+done
+if (( component_total > 0 )); then
+  done_item "4. Shared components: $component_total component(s) built"
+else
+  todo "4. Shared components: none built yet (primitives, forms, overlays, data, feedback, navigation, layout)"
+fi
+
+# 5. Shared layers: seeds exist; count what is there.
+count_units() {
+  find "$1" -maxdepth 1 -type f -name '*.ts' ! -name 'index.ts' ! -name '*.test.ts' 2>/dev/null | wc -l
+}
+info "5. Shared layers: $(count_units "$SRC_DIR/shared/composables") composable(s), $(count_units "$SRC_DIR/shared/stores") store(s), $(count_units "$SRC_DIR/shared/directives") directive(s), $(count_units "$SRC_DIR/shared/utils") util module(s), $(grep -c '{ code: "' "$SRC_DIR/shared/i18n/languages.ts" 2>/dev/null || echo 0) language(s) registered"
+
+# 6. Pages: platform views that still carry the stub marker.
+stub_pages=$(grep -rl 'TCF-STUB' "$SRC_DIR/platform" 2>/dev/null | wc -l)
+if (( stub_pages > 0 )); then
+  todo "6. Pages: $stub_pages platform page(s) are still stubs (search src/platform for TCF-STUB)"
+else
+  done_item "6. Pages: no stub pages left in src/platform"
+fi
+
+# 7. Backend: the API modules and doctypes.
+for api_module in session apps; do
+  if [[ -f "$CORE_PYTHON_DIR/api/$api_module.py" ]]; then
+    done_item "7. Backend: api/$api_module.py exists"
+  else
+    todo "7. Backend: api/$api_module.py not written yet"
+  fi
+done
+if [[ -n "$(find "$CORE_PYTHON_DIR" -type d -name doctype 2>/dev/null | head -n 1)" ]]; then
+  done_item "7. Backend: doctypes exist"
+else
+  todo "7. Backend: no doctypes yet"
+fi
+
+if [[ -f "$CORE_APP_DIR/.gitignore" ]]; then
+  for ignored in "frontend/src/icon-names.d.ts" "frontend/tests/e2e/.auth/"; do
+    if grep -qxF "$ignored" "$CORE_APP_DIR/.gitignore"; then
+      ok "Generated or local output is git-ignored: $ignored"
+    else
+      fail "Not git-ignored: $ignored (add it to $CORE_APP/.gitignore)"
+    fi
+  done
+fi
+
 section "Frontend package scripts"
 check_npm_script "Vite development server script" dev
 check_npm_script "Production build script" build
@@ -714,6 +888,9 @@ check_npm_script "Unit-test script" test:unit test
 check_npm_script "Integration-test script" test:integration
 check_npm_script "Contract-test script" test:contract
 check_npm_script "Playwright E2E script" test:e2e
+check_npm_script "Feature-app lint script" lint:apps
+check_npm_script "Icon-name generation script" generate:icons
+check_npm_script "Coverage script" test:coverage
 
 # New installs seed package.json from this template; drift means a fresh bench would
 # get different scripts than the core app actually uses.
@@ -889,11 +1066,13 @@ if [[ "$RUN_PIPELINE" == true ]]; then
     export TCF_SITE_NAME="$SITE"
     run_pipeline_step "Type check (pnpm typecheck)" "$FRONTEND_DIR" pnpm typecheck
     run_pipeline_step "ESLint (pnpm lint)" "$FRONTEND_DIR" pnpm lint
+    run_pipeline_step "Feature-app lint (pnpm lint:apps)" "$FRONTEND_DIR" pnpm lint:apps
     run_pipeline_step "Stylelint (pnpm lint:styles)" "$FRONTEND_DIR" pnpm lint:styles
     run_pipeline_step "Prettier (pnpm format:check)" "$FRONTEND_DIR" pnpm format:check
     run_pipeline_step "Unit tests (pnpm test:unit)" "$FRONTEND_DIR" pnpm test:unit
     run_pipeline_step "Integration tests (pnpm test:integration)" "$FRONTEND_DIR" pnpm test:integration
     run_pipeline_step "Contract tests (pnpm test:contract)" "$FRONTEND_DIR" pnpm test:contract
+    run_pipeline_step "Coverage thresholds (pnpm test:coverage)" "$FRONTEND_DIR" pnpm test:coverage
 
     if [[ "$RUN_BUILD" == true ]]; then
       if [[ -f "$FRONTEND_DIR/index.html" ]]; then
@@ -913,6 +1092,7 @@ printf '  Passed:  %d\n' "$PASS_COUNT"
 printf '  Missing: %d\n' "$FAIL_COUNT"
 printf '  Warnings: %d\n' "$WARN_COUNT"
 printf '  Skipped: %d\n' "$SKIP_COUNT"
+printf '  Your work left: %d item(s), listed under "Your implementation work"\n' "$TODO_COUNT"
 
 if (( FAIL_COUNT > 0 )); then
   printf '\nEnvironment audit found %d missing requirement(s).\n' "$FAIL_COUNT"

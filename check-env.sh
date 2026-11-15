@@ -419,7 +419,8 @@ check_dir "Core backend tests" "$CORE_PYTHON_DIR/tests"
 # Core Python scaffold (architecture guide, sections 9.16 and 14.6).
 # Extend this list as the scaffold grows; it is the definition of "scaffold complete".
 for scaffold_file in hooks.py modules.txt patches.txt config/__init__.py api/__init__.py \
-  tests/__init__.py tests/test_portal_page.py www/__init__.py www/portal.py; do
+  api/session.py api/apps.py tests/__init__.py tests/test_portal_page.py \
+  tests/test_session_api.py tests/test_apps_api.py www/__init__.py www/portal.py; do
   check_file "Core scaffold: $scaffold_file" "$CORE_PYTHON_DIR/$scaffold_file"
 done
 # The portal page controller only runs if Frappe routes /portal paths to it.

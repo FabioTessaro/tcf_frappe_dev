@@ -3,10 +3,32 @@
 # Consistent progress, warning and failure output.
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
 log_init "${BASH_SOURCE[0]}"
-# Read-only audit of the TCF Frappe/Vue development container.
-# This script reports missing prerequisites; it does not install or modify anything.
+# Audit of the TCF Frappe/Vue development container.
+#
+# Default mode is read-only: it reports missing prerequisites and scaffold gaps
+# and never installs or modifies anything.
+#
+#   ./check-env.sh            audit the environment, scaffold and configuration
+#   ./check-env.sh --run      also RUN the pipeline: typecheck, lint, style lint,
+#                             format check and the unit/integration/contract
+#                             tests. Writes only tool caches.
+#   ./check-env.sh --build    --run plus the production build of the core app.
+#                             Writes build output (public/frontend, www/portal.html,
+#                             public/shared-assets).
+#   -h, --help                show this help
 
 set -uo pipefail
+
+RUN_PIPELINE=false
+RUN_BUILD=false
+for arg in "$@"; do
+  case "$arg" in
+    --run) RUN_PIPELINE=true ;;
+    --build) RUN_PIPELINE=true; RUN_BUILD=true ;;
+    -h|--help) sed -n '/^# Audit of/,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
+  esac
+done
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_DIR="${WORKSPACE_DIR:-$SCRIPT_DIR}"
@@ -119,27 +141,6 @@ check_any_file() {
   fail "$label — expected one of: $*"
 }
 
-check_node_module() {
-  local module="$1"
-  if (cd "$FRONTEND_DIR" && node -e 'require.resolve(process.argv[1])' "$module" >/dev/null 2>&1); then
-    ok "Frontend dependency: $module"
-  else
-    fail "Frontend dependency: $module"
-  fi
-}
-
-check_any_node_module() {
-  local label="$1" module
-  shift
-  for module in "$@"; do
-    if (cd "$FRONTEND_DIR" && node -e 'require.resolve(process.argv[1])' "$module" >/dev/null 2>&1); then
-      ok "$label — $module"
-      return
-    fi
-  done
-  fail "$label — expected one of: $*"
-}
-
 check_npm_script() {
   local label="$1" package_file="$FRONTEND_DIR/package.json"
   shift
@@ -169,6 +170,54 @@ check_tcp() {
   else
     skip "$label — 'timeout' is unavailable, cannot safely test TCP connection"
   fi
+}
+
+# version_ge A B — success when version A >= version B (dotted numeric versions).
+version_ge() {
+  [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n 1)" == "$2" ]]
+}
+
+# min_version_of SPEC — extracts X.Y[.Z] from a ">=X.Y[.Z]" specifier; empty otherwise.
+min_version_of() {
+  local spec="${1//[[:space:]]/}"
+  if [[ "$spec" =~ ^\>=([0-9]+(\.[0-9]+)*)$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  fi
+}
+
+# json_field FILE JS_EXPRESSION — evaluates the expression against the parsed
+# JSON file (as `pkg`) with Node and prints the result; prints nothing on error.
+json_field() {
+  command -v node >/dev/null 2>&1 || return 0
+  node -e '
+    try {
+      const pkg = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      const value = eval(process.argv[2]);
+      if (value !== undefined && value !== null) process.stdout.write(String(value));
+    } catch {}
+  ' "$1" "$2" 2>/dev/null
+}
+
+# parse_installed_apps — reads `bench execute frappe.get_installed_apps` output
+# on stdin and prints one app name per line. Mirrors the frontend build's parser:
+# Bench may print warnings first, so the last JSON-array line is used.
+parse_installed_apps() {
+  node -e '
+    const lines = require("fs").readFileSync(0, "utf8").split(/\r?\n/).map((l) => l.trim());
+    const line = [...lines].reverse().find((l) => l.startsWith("[") && l.endsWith("]"));
+    try {
+      const apps = JSON.parse(line ?? "");
+      if (!Array.isArray(apps) || !apps.every((a) => typeof a === "string")) process.exit(1);
+      process.stdout.write(apps.join("\n") + "\n");
+    } catch { process.exit(1); }
+  '
+}
+
+# abs_hook_path DIR — absolute path of DIR's git pre-commit hook.
+abs_hook_path() {
+  local dir="$1" hook
+  hook=$(git -c safe.directory="$dir" -C "$dir" rev-parse --path-format=absolute --git-path hooks/pre-commit 2>/dev/null) || return 1
+  printf '%s' "$hook"
 }
 
 # Select the portal's core app from apps installed on the target site and
@@ -326,9 +375,8 @@ fi
 
 CORE_PYTHON_DIR="$BENCH_DIR/apps/$CORE_APP/$CORE_APP"
 
-CORE_PACKAGE_JSON="$BENCH_DIR/apps/$CORE_APP/package.json"
-
-CORE_PACKAGE_JSON="$BENCH_DIR/apps/$CORE_APP/package.json"
+CORE_APP_DIR="$BENCH_DIR/apps/$CORE_APP"
+CORE_PACKAGE_JSON="$CORE_APP_DIR/package.json"
 
 if [[ -f "$CORE_PACKAGE_JSON" ]]; then
   if node -e '
@@ -353,6 +401,12 @@ fi
 check_dir "Core Python package" "$CORE_PYTHON_DIR"
 check_dir "Core backend tests" "$CORE_PYTHON_DIR/tests"
 
+# Core Python scaffold (architecture guide, sections 9.16 and 14.6).
+# Extend this list as the scaffold grows; it is the definition of "scaffold complete".
+for scaffold_file in hooks.py modules.txt patches.txt config/__init__.py api/__init__.py tests/__init__.py; do
+  check_file "Core scaffold: $scaffold_file" "$CORE_PYTHON_DIR/$scaffold_file"
+done
+
 if [[ -n "${TCF_APPS:-}" ]]; then
   for app in $TCF_APPS; do
     [[ "$app" == "$CORE_APP" ]] && continue
@@ -362,6 +416,55 @@ if [[ -n "${TCF_APPS:-}" ]]; then
   done
 else
   warn "TCF_APPS is not set; skipping custom feature-app package checks"
+fi
+
+section "Python runtime and frontend app discovery"
+if [[ -f "$CORE_APP_DIR/pyproject.toml" && -x "$PYTHON" ]]; then
+  python_required=$(sed -nE 's/^requires-python[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$CORE_APP_DIR/pyproject.toml" | head -n 1)
+  python_min=$(min_version_of "$python_required")
+  python_actual=$("$PYTHON" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || true)
+  if [[ -z "$python_min" ]]; then
+    warn "Python requirement '$python_required' in pyproject.toml is not a simple '>=X.Y' specifier; version not checked"
+  elif [[ -z "$python_actual" ]]; then
+    fail "Cannot read the bench Python version from $PYTHON"
+  elif version_ge "$python_actual" "$python_min"; then
+    ok "Bench Python $python_actual satisfies requires-python $python_required"
+  else
+    fail "Bench Python $python_actual does not satisfy requires-python $python_required"
+  fi
+else
+  skip "Python version check — pyproject.toml or bench Python unavailable"
+fi
+
+# The frontend build, tests and e2e config all learn the installed apps from this
+# exact call, so it is audited directly rather than assumed.
+if command -v bench >/dev/null 2>&1 && command -v node >/dev/null 2>&1 && [[ -d "$SITE_DIR" ]]; then
+  if discovery_output=$(cd "$BENCH_DIR" && bench --site "$SITE" execute frappe.get_installed_apps 2>/dev/null); then
+    if discovered_apps=$(printf '%s\n' "$discovery_output" | parse_installed_apps); then
+      ok "Frontend app discovery: bench execute frappe.get_installed_apps returns a parseable app list"
+      if printf '%s\n' "$discovered_apps" | grep -Fxq "$CORE_APP"; then
+        ok "Discovery lists the core app ($CORE_APP)"
+      else
+        fail "Discovery does not list the core app ($CORE_APP)"
+      fi
+      frontend_apps=()
+      while IFS= read -r discovered_app; do
+        [[ -n "$discovered_app" && "$discovered_app" != "$CORE_APP" ]] || continue
+        [[ -f "$BENCH_DIR/apps/$discovered_app/frontend/manifest.ts" ]] && frontend_apps+=("$discovered_app")
+      done <<< "$discovered_apps"
+      if (( ${#frontend_apps[@]} > 0 )); then
+        ok "Feature apps with a frontend manifest: ${frontend_apps[*]}"
+      else
+        skip "No feature app has a frontend manifest yet (expected for a fresh scaffold)"
+      fi
+    else
+      fail "bench execute frappe.get_installed_apps did not return a JSON app list; the frontend build and tests would fail"
+    fi
+  else
+    fail "bench execute frappe.get_installed_apps failed on $SITE; the frontend build and tests would fail"
+  fi
+else
+  skip "Frontend app discovery — bench CLI, Node.js or site directory unavailable"
 fi
 
 section "Backend services"
@@ -407,10 +510,32 @@ check_tcp "Meet SFU signalling port" "${MEET_SFU_HOST:-meet-sfu}" "${MEET_SFU_PO
 
 section "Node and package manager"
 check_command "Node.js" node "--version"
+if command -v node >/dev/null 2>&1 && [[ -f "$FRONTEND_DIR/package.json" ]]; then
+  node_required=$(json_field "$FRONTEND_DIR/package.json" 'pkg.engines && pkg.engines.node')
+  node_min=$(min_version_of "$node_required")
+  node_actual=$(node --version 2>/dev/null | sed 's/^v//')
+  if [[ -z "$node_required" ]]; then
+    warn "Frontend package.json declares no engines.node requirement"
+  elif [[ -z "$node_min" ]]; then
+    warn "engines.node '$node_required' is not a simple '>=X.Y' specifier; version not checked"
+  elif version_ge "$node_actual" "$node_min"; then
+    ok "Node.js $node_actual satisfies engines.node $node_required"
+  else
+    fail "Node.js $node_actual does not satisfy engines.node $node_required"
+  fi
+fi
 check_command "Corepack" corepack "--version"
 if command -v pnpm >/dev/null 2>&1; then
   if output=$(COREPACK_ENABLE_NETWORK=0 pnpm --version 2>&1); then
     ok "pnpm — $(first_line "$output")"
+    pnpm_pin=$(json_field "$FRONTEND_DIR/package.json" 'pkg.packageManager')
+    if [[ "$pnpm_pin" == pnpm@* ]]; then
+      if [[ "${pnpm_pin#pnpm@}" == "$(first_line "$output")" ]]; then
+        ok "Active pnpm matches the frontend packageManager pin ($pnpm_pin)"
+      else
+        fail "Active pnpm $(first_line "$output") differs from the frontend pin $pnpm_pin (run ./setup-env.sh)"
+      fi
+    fi
   else
     fail "pnpm command exists but is not usable from the local Corepack cache — $(first_line "$output")"
   fi
@@ -432,47 +557,39 @@ fi
 check_dir "Frontend node_modules" "$FRONTEND_DIR/node_modules"
 
 if [[ -d "$FRONTEND_DIR" && -f "$FRONTEND_DIR/package.json" ]] && command -v node >/dev/null 2>&1; then
-  for module in \
-    vue \
-    typescript \
-    vite \
-    @vitejs/plugin-vue \
-    vue-tsc \
-    pinia \
-    vue-router \
-    vue-i18n \
-    sass \
-    tailwindcss \
-    vitest \
-    @vue/test-utils \
-    msw \
-    eslint \
-    eslint-plugin-vue \
-    eslint-plugin-boundaries \
-    @typescript-eslint/parser \
-    @typescript-eslint/eslint-plugin \
-    stylelint \
-    stylelint-config-standard-scss \
-    prettier \
-    @eslint/js \
-    globals \
-    eslint-config-prettier \
-    postcss \
-    autoprefixer \
-    @tailwindcss/forms \
-    prettier-plugin-tailwindcss \
-    stylelint-config-standard-vue \
-    stylelint-config-standard \
-    stylelint-config-html \
-    stylelint-config-recommended-vue \
-    postcss-html \
-    postcss-scss \
-    postcss-value-parser \
-    postcss-selector-parser; do
-    check_node_module "$module"
+  # Every dependency declared in package.json must be installed. The list comes
+  # from the manifest itself, so it can never drift from what the project needs.
+  declared_modules=()
+  while IFS= read -r module; do
+    [[ -n "$module" ]] && declared_modules+=("$module")
+  done < <(node -e '
+    const pkg = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+    const names = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).sort();
+    process.stdout.write(names.join("\n") + "\n");
+  ' "$FRONTEND_DIR/package.json" 2>/dev/null)
+
+  missing_modules=0
+  for module in "${declared_modules[@]}"; do
+    if [[ ! -f "$FRONTEND_DIR/node_modules/$module/package.json" ]]; then
+      fail "Frontend dependency not installed: $module"
+      missing_modules=$((missing_modules + 1))
+    fi
   done
-  check_any_node_module "DOM test environment" happy-dom jsdom
-  check_any_node_module "Playwright test package" @playwright/test playwright
+  if (( ${#declared_modules[@]} == 0 )); then
+    fail "No dependencies could be read from the frontend package.json"
+  elif (( missing_modules == 0 )); then
+    ok "All ${#declared_modules[@]} dependencies declared in package.json are installed"
+  fi
+
+  # Lockfile and manifest must agree. Frozen + lockfile-only + offline: nothing is
+  # installed, downloaded or written.
+  if command -v pnpm >/dev/null 2>&1; then
+    if (cd "$FRONTEND_DIR" && COREPACK_ENABLE_NETWORK=0 pnpm install --frozen-lockfile --lockfile-only --offline >/dev/null 2>&1); then
+      ok "pnpm-lock.yaml is in sync with package.json"
+    else
+      fail "pnpm-lock.yaml is out of sync with package.json (run: pnpm install --lockfile-only)"
+    fi
+  fi
 else
   skip "Frontend dependency resolution — frontend directory/package or Node.js missing"
 fi
@@ -496,6 +613,50 @@ check_dir "Integration tests directory" "$FRONTEND_DIR/tests/integration"
 check_dir "Contract tests directory" "$FRONTEND_DIR/tests/contract"
 check_dir "E2E tests directory" "$FRONTEND_DIR/tests/e2e"
 
+section "Core frontend scaffold"
+# Files and folders every core app must have to conform to the architecture guide.
+# Extend this list as the scaffold grows; it is the definition of "scaffold complete".
+scaffold_files=(
+  pnpm-workspace.yaml postcss.config.js
+  plugins/discover-apps.ts plugins/emit-shared-assets.ts plugins/copy-index-html.ts
+  plugins/find-frappe-package.ts plugins/workspace.ts
+  src/registry.d.ts
+  src/sdk/index.ts src/sdk/define-app.ts src/sdk/manifest.types.ts
+  src/sdk/nav.types.ts src/sdk/route-meta.types.ts
+  src/styles/main.scss src/styles/tailwind.css
+  src/styles/abstracts/_index.scss src/styles/abstracts/_variables.scss
+  src/styles/abstracts/_mixins.scss src/styles/abstracts/_functions.scss
+  src/styles/themes/_tokens.scss src/styles/themes/_light.scss
+  src/styles/themes/_dark.scss src/styles/themes/_app-themable.scss
+  tests/mocks/server.ts tests/mocks/handlers/index.ts
+  tests/utils/render.ts tests/utils/fake-router.ts
+  tests/contract/manifest.test.ts tests/contract/tokens.test.ts
+)
+for scaffold_file in "${scaffold_files[@]}"; do
+  check_file "Scaffold: $scaffold_file" "$FRONTEND_DIR/$scaffold_file"
+done
+for scaffold_dir in tests/e2e/fixtures tests/e2e/pages tests/e2e/specs tests/mocks/fixtures; do
+  check_dir "Scaffold: $scaffold_dir" "$FRONTEND_DIR/$scaffold_dir"
+done
+
+# Repository hygiene for the core app.
+if [[ -f "$CORE_APP_DIR/.eslintrc" ]]; then
+  warn "Legacy $CORE_APP/.eslintrc is present; ESLint 10 uses frontend/eslint.config.js only"
+else
+  ok "No legacy .eslintrc next to the flat ESLint config"
+fi
+if [[ -f "$CORE_APP_DIR/.gitignore" ]]; then
+  for ignored in "$CORE_APP/public/frontend/" "$CORE_APP/public/shared-assets/" "$CORE_APP/www/portal.html"; do
+    if grep -qxF "$ignored" "$CORE_APP_DIR/.gitignore"; then
+      ok "Generated output is git-ignored: $ignored"
+    else
+      fail "Generated output is not git-ignored: $ignored (add it to $CORE_APP/.gitignore)"
+    fi
+  done
+else
+  fail "Core app .gitignore — $CORE_APP_DIR/.gitignore"
+fi
+
 section "Frontend package scripts"
 check_npm_script "Vite development server script" dev
 check_npm_script "Production build script" build
@@ -508,6 +669,31 @@ check_npm_script "Unit-test script" test:unit test
 check_npm_script "Integration-test script" test:integration
 check_npm_script "Contract-test script" test:contract
 check_npm_script "Playwright E2E script" test:e2e
+
+# New installs seed package.json from this template; drift means a fresh bench would
+# get different scripts than the core app actually uses.
+SCRIPTS_TEMPLATE="$SCRIPT_DIR/bootstrap/templates/frontend.package.json.template"
+if [[ -f "$SCRIPTS_TEMPLATE" && -f "$FRONTEND_DIR/package.json" ]] && command -v node >/dev/null 2>&1; then
+  script_drift=$(node -e '
+    const fs = require("fs");
+    const template = JSON.parse(fs.readFileSync(process.argv[1], "utf8")).scripts ?? {};
+    const actual = JSON.parse(fs.readFileSync(process.argv[2], "utf8")).scripts ?? {};
+    const names = [...new Set([...Object.keys(template), ...Object.keys(actual)])].sort();
+    for (const name of names) {
+      if (template[name] !== actual[name]) {
+        const kind = template[name] === undefined ? "only in the app" : actual[name] === undefined ? "only in the template" : "different";
+        console.log(`${name} (${kind})`);
+      }
+    }
+  ' "$SCRIPTS_TEMPLATE" "$FRONTEND_DIR/package.json" 2>/dev/null)
+  if [[ -z "$script_drift" ]]; then
+    ok "Frontend scripts match the bootstrap template"
+  else
+    while IFS= read -r drifted; do
+      warn "Script differs from bootstrap/templates/frontend.package.json.template: $drifted"
+    done <<< "$script_drift"
+  fi
+fi
 
 section "Playwright browser"
 PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
@@ -579,16 +765,38 @@ if [[ -f "$WORKSPACE_DIR/.pre-commit-config.yaml" ]]; then
 else
   warn "No root .pre-commit-config.yaml; app-level hooks may still be configured separately"
 fi
-if command -v git >/dev/null 2>&1 && git -C "$WORKSPACE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-  hook_path=$(git -C "$WORKSPACE_DIR" rev-parse --git-path hooks/pre-commit 2>/dev/null || true)
+if command -v git >/dev/null 2>&1 && git -c safe.directory="$WORKSPACE_DIR" -C "$WORKSPACE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+  hook_path=$(abs_hook_path "$WORKSPACE_DIR" || true)
   if [[ -n "$hook_path" && -x "$hook_path" ]]; then
-    ok "Git pre-commit hook installed"
+    ok "Git pre-commit hook installed for the workspace repository"
   else
     warn "Git pre-commit hook not installed for the workspace repository"
   fi
 else
   skip "Git hook check — workspace is not a Git working tree"
 fi
+
+# Every custom app is its own repository with its own hook (new-app.sh installs it).
+hook_apps=("$CORE_APP")
+for app in ${TCF_APPS:-}; do
+  [[ "$app" == "$CORE_APP" ]] || hook_apps+=("$app")
+done
+for app in "${hook_apps[@]}"; do
+  app_dir="$BENCH_DIR/apps/$app"
+  [[ -d "$app_dir" ]] || continue
+  if ! command -v git >/dev/null 2>&1 || [[ "$(git -c safe.directory="$app_dir" -C "$app_dir" rev-parse --show-toplevel 2>/dev/null)" != "$(cd "$app_dir" && pwd -P)" ]]; then
+    skip "Pre-commit hook ($app) — not a Git repository of its own"
+  elif [[ ! -f "$app_dir/.pre-commit-config.yaml" ]]; then
+    warn "$app has no .pre-commit-config.yaml"
+  else
+    hook_path=$(abs_hook_path "$app_dir" || true)
+    if [[ -n "$hook_path" && -x "$hook_path" ]]; then
+      ok "Git pre-commit hook installed in $app"
+    else
+      warn "Git pre-commit hook not installed in $app (run: cd $app_dir && pre-commit install)"
+    fi
+  fi
+done
 
 section "Running processes (informational)"
 if command -v ss >/dev/null 2>&1; then
@@ -601,10 +809,64 @@ if command -v ss >/dev/null 2>&1; then
   done
 fi
 
+# Vite proxies API calls to this target; informational because the bench is often stopped.
+PROXY_TARGET="${FRAPPE_PROXY_TARGET:-$(read_env_value FRAPPE_PROXY_TARGET)}"
+PROXY_TARGET="${PROXY_TARGET:-http://frappe:8000}"
+if command -v curl >/dev/null 2>&1; then
+  ping_body=$(curl -sS --max-time 3 -H "Host: $SITE" "$PROXY_TARGET/api/method/ping" 2>/dev/null || true)
+  if [[ "$ping_body" == *pong* ]]; then
+    ok "Frappe answers at the Vite proxy target — $PROXY_TARGET (site $SITE)"
+  else
+    skip "Frappe is not answering at $PROXY_TARGET (normal while the bench is stopped)"
+  fi
+fi
+
+# Runs one pipeline command in DIR, reporting duration and the tail of its output on failure.
+run_pipeline_step() {
+  local label="$1" dir="$2" log started
+  shift 2
+  log=$(mktemp)
+  started=$SECONDS
+  if (cd "$dir" && COREPACK_ENABLE_NETWORK=0 "$@") >"$log" 2>&1; then
+    ok "$label ($((SECONDS - started))s)"
+  else
+    fail "$label — failed after $((SECONDS - started))s"
+    tail -n 15 "$log" | sed 's/^/           /'
+  fi
+  rm -f "$log"
+}
+
+if [[ "$RUN_PIPELINE" == true ]]; then
+  section "Pipeline run"
+  if ! command -v pnpm >/dev/null 2>&1 || [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
+    fail "Pipeline run — pnpm or the frontend dependencies are missing; fix the sections above first"
+  else
+    export TCF_SITE_NAME="$SITE"
+    run_pipeline_step "Type check (pnpm typecheck)" "$FRONTEND_DIR" pnpm typecheck
+    run_pipeline_step "ESLint (pnpm lint)" "$FRONTEND_DIR" pnpm lint
+    run_pipeline_step "Stylelint (pnpm lint:styles)" "$FRONTEND_DIR" pnpm lint:styles
+    run_pipeline_step "Prettier (pnpm format:check)" "$FRONTEND_DIR" pnpm format:check
+    run_pipeline_step "Unit tests (pnpm test:unit)" "$FRONTEND_DIR" pnpm test:unit
+    run_pipeline_step "Integration tests (pnpm test:integration)" "$FRONTEND_DIR" pnpm test:integration
+    run_pipeline_step "Contract tests (pnpm test:contract)" "$FRONTEND_DIR" pnpm test:contract
+
+    if [[ "$RUN_BUILD" == true ]]; then
+      if [[ -f "$FRONTEND_DIR/index.html" ]]; then
+        run_pipeline_step "Production build (pnpm build in $CORE_APP)" "$CORE_APP_DIR" pnpm build
+        check_file "Build output: public/frontend/index.html" "$CORE_PYTHON_DIR/public/frontend/index.html"
+        check_file "Build output: www/portal.html" "$CORE_PYTHON_DIR/www/portal.html"
+        check_file "Build output: public/shared-assets/icons.json" "$CORE_PYTHON_DIR/public/shared-assets/icons.json"
+      else
+        skip "Production build — frontend/index.html does not exist yet (portal shell not implemented)"
+      fi
+    fi
+  fi
+fi
+
 section "Summary"
 printf '  Passed:  %d\n' "$PASS_COUNT"
 printf '  Missing: %d\n' "$FAIL_COUNT"
-printf '  Warnings:%d\n' "$WARN_COUNT"
+printf '  Warnings: %d\n' "$WARN_COUNT"
 printf '  Skipped: %d\n' "$SKIP_COUNT"
 
 if (( FAIL_COUNT > 0 )); then
@@ -612,5 +874,12 @@ if (( FAIL_COUNT > 0 )); then
   exit 1
 fi
 
-printf '\nEnvironment audit passed. No installation or configuration changes were made.\n'
+if [[ "$RUN_BUILD" == true ]]; then
+  printf '\nEnvironment audit passed. The production build wrote its output files; nothing was installed.\n'
+elif [[ "$RUN_PIPELINE" == true ]]; then
+  printf '\nEnvironment audit and pipeline run passed. Only tool caches were written; nothing was installed.\n'
+else
+  printf '\nEnvironment audit passed. No installation or configuration changes were made.\n'
+  printf 'Run ./check-env.sh --run to also exercise the frontend pipeline.\n'
+fi
 exit 0

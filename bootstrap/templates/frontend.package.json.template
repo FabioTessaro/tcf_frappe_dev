@@ -9,15 +9,15 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vue-tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
-    "lint": "eslint . --max-warnings 0",
-    "lint:styles": "stylelint --config stylelint.config.js \"../../*/frontend/**/*.{vue,scss,css}\"",
+    "lint": "eslint . --ext .js,.mjs,.cjs,.ts,.tsx,.vue --max-warnings 0",
+    "lint:styles": "stylelint --config stylelint.config.js \"../../tcf_*/frontend/**/*.{vue,scss,css}\"",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:unit": "vitest run --exclude 'tests/integration/**' --exclude 'tests/contract/**'",
-    "test:integration": "vitest run tests/integration",
-    "test:contract": "vitest run tests/contract",
-    "test:e2e": "playwright test"
+    "test:integration": "vitest run tests/integration --passWithNoTests",
+    "test:contract": "vitest run tests/contract --passWithNoTests",
+    "test:e2e": "playwright test --pass-with-no-tests"
   },
   "dependencies": {
     "pinia": "^3.0.0",

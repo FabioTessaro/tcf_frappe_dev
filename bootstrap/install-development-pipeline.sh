@@ -50,24 +50,42 @@ export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 source "$NVM_DIR/nvm.sh"
 nvm use "$NODE_VERSION" --silent >/dev/null
 
-CORE_SELECTION_STATUS=0
-if pipeline_select_core_app "$SITE_NAME"; then
-  FRONTEND_DIR="$PIPELINE_BENCH_DIR/apps/$CORE_APP/frontend"
-  export FRONTEND_DIR
+# A bench may be provisioned without any custom apps (install.sh
+# --no-custom-apps, or CORE_APP=none at the .env prompt). Then there is no
+# core frontend to install: build the bench assets and skip the rest.
+CONFIGURED_CORE_APP="$(pipeline_config_value CORE_APP)"
+CONFIGURED_APPS="$(pipeline_config_value TCF_APPS)"
+CORE_APP_STATUS=""
 
-  bash "$SCRIPT_DIR/install-frontend-dependencies.sh" "$FRONTEND_DIR"
+if [[ -z "${CONFIGURED_CORE_APP// /}" && -z "${CONFIGURED_APPS// /}" ]]; then
+  echo "No custom apps configured (CORE_APP and TCF_APPS are empty) — skipping the core frontend setup."
+  CORE_APP_STATUS="none (no custom apps configured)"
 
   log_step "Building Frappe application assets"
   (
     cd "$PIPELINE_BENCH_DIR"
     bench build
   )
-
-  bash "$SCRIPT_DIR/install-playwright-browsers.sh" "$FRONTEND_DIR"
 else
-  CORE_SELECTION_STATUS=$?
-  echo "Core app selection failed. Check CORE_APP and TCF_APPS in .env." >&2
-  exit "$CORE_SELECTION_STATUS"
+  CORE_SELECTION_STATUS=0
+  if pipeline_select_core_app "$SITE_NAME"; then
+    FRONTEND_DIR="$PIPELINE_BENCH_DIR/apps/$CORE_APP/frontend"
+    export FRONTEND_DIR
+
+    bash "$SCRIPT_DIR/install-frontend-dependencies.sh" "$FRONTEND_DIR"
+
+    log_step "Building Frappe application assets"
+    (
+      cd "$PIPELINE_BENCH_DIR"
+      bench build
+    )
+
+    bash "$SCRIPT_DIR/install-playwright-browsers.sh" "$FRONTEND_DIR"
+  else
+    CORE_SELECTION_STATUS=$?
+    echo "Core app selection failed. Check CORE_APP and TCF_APPS in .env." >&2
+    exit "$CORE_SELECTION_STATUS"
+  fi
 fi
 
 if [[ "$SKIP_DEVTOOLS" == false ]]; then
@@ -79,5 +97,5 @@ cat <<SUMMARY
 Pipeline bootstrap complete.
   Node.js / Corepack / pnpm: installed
   System tools / uv / pre-commit: $([[ "$SKIP_SYSTEM_TOOLS" == true ]] && echo 'not changed (--skip-system-tools)' || echo 'checked and installed')
-  Core app: ${CORE_APP:-not selected yet}
+  Core app: ${CORE_APP_STATUS:-${CORE_APP:-not selected yet}}
 SUMMARY

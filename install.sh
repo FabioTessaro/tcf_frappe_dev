@@ -39,6 +39,13 @@ Flags:
                       effect in --attach mode since --reopen handles the
                       provision-bench.sh step itself and doesn't pass this flag
                       through.
+  --no-custom-apps    Don't install any custom (TCF) apps — not even the core
+                      app. Leaves CORE_APP and TCF_APPS empty in .env (also
+                      clears them in an existing .env), so bench provisioning
+                      fetches no custom app and the frontend pipeline skips
+                      the core-app setup. Works in both modes. Alternatively,
+                      answer "none" at the CORE_APP prompt on a fresh .env.
+                      Combine with --no-default-apps for a bare frappe bench.
   --with-ftp          Also set up and configure an FTP server (vsftpd)
                       using bootstrap/configure-ftp.sh. Off by default.
 EOF
@@ -48,6 +55,7 @@ MODE="attach"
 WITH_AGENTS=false
 WITH_FTP=false
 WITHOUT_DEFAULT_APPS=false
+WITHOUT_CUSTOM_APPS=false
 for arg in "$@"; do
   case "$arg" in
     --attach) MODE="attach" ;;
@@ -55,6 +63,7 @@ for arg in "$@"; do
     --with-agents) WITH_AGENTS=true ;;
     --with-ftp) WITH_FTP=true ;;
     --no-default-apps) WITHOUT_DEFAULT_APPS=true ;;
+    --no-custom-apps) WITHOUT_CUSTOM_APPS=true ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $arg"; usage; exit 1 ;;
   esac
@@ -65,7 +74,11 @@ bash bootstrap/configure-git.sh
 
 # Create .env on first installation, or migrate missing settings
 # in an existing environment file.
-TCF_INSTALL_INITIALIZING_ENV=1 bash ./bootstrap/setup-env.sh
+if [ "$WITHOUT_CUSTOM_APPS" = true ]; then
+  TCF_INSTALL_INITIALIZING_ENV=1 TCF_NO_CUSTOM_APPS=1 bash ./bootstrap/setup-env.sh
+else
+  TCF_INSTALL_INITIALIZING_ENV=1 bash ./bootstrap/setup-env.sh
+fi
 
 if [ "$WITH_FTP" = true ]; then
   echo ""
@@ -117,7 +130,8 @@ container itself.
 The generated postCreateCommand provisions the bench and the frontend
 pipeline automatically. The generated postCreateCommand automatically provisions the Bench,
 installs the frontend toolchain and dependencies, and builds all assets.
-The configured CORE_APP in .env is selected automatically.
+The configured CORE_APP in .env is selected automatically (if CORE_APP
+and TCF_APPS are empty, the core-app frontend setup is skipped).
 No manual provisioning commands are required after reopening.
 
 Next steps:

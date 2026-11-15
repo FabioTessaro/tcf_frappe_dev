@@ -40,6 +40,14 @@ for arg in "$@"; do
   esac
 done
 
+# CORE_APP / TCF_APPS: .env is authoritative. The container environment is
+# captured from .env when the container is created, so it can be stale after
+# .env changes (e.g. after ./install.sh --no-custom-apps). An empty TCF_APPS
+# means no custom apps are fetched or installed.
+source "$SCRIPT_DIR/pipeline-common.sh"
+TCF_APPS="$(pipeline_config_value TCF_APPS)"
+CORE_APP="$(pipeline_config_value CORE_APP)"
+
 # ---------------------------------------------------------------------------
 # App versions (git tag or branch) come from the environment only — normally
 # the .env written by ./bootstrap/setup-env.sh:

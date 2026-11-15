@@ -51,33 +51,47 @@ detect_lan_ip() {
 
 ENV_FILE="$ROOT_DIR/.env"
 
+# TCF_NO_CUSTOM_APPS=1 (install.sh --no-custom-apps) provisions a bench with no
+# custom apps at all — not even a core app. CORE_APP and TCF_APPS are left
+# empty, and the frontend pipeline is skipped until an app is added.
+NO_CUSTOM_APPS="${TCF_NO_CUSTOM_APPS:-0}"
+
+# Strip CR and surrounding quotes from a raw .env value.
+unquote_env_value() {
+  local value="$1"
+  value="${value%$'\r'}"
+  value="${value#\"}"; value="${value%\"}"
+  value="${value#\'}"; value="${value%\'}"
+  printf '%s' "$value"
+}
+
 if [[ -f "$ENV_FILE" ]]; then
   echo ".env already exists — checking core app configuration."
 
-  # Preserve the existing core app, or use tcf_core for older configurations.
-  EXISTING_CORE_APP="$(sed -n 's/^[[:space:]]*CORE_APP=//p' "$ENV_FILE" | tail -n 1)"
-  EXISTING_CORE_APP="${EXISTING_CORE_APP%$'\r'}"
-  EXISTING_CORE_APP="${EXISTING_CORE_APP#\"}"
-  EXISTING_CORE_APP="${EXISTING_CORE_APP%\"}"
-  EXISTING_CORE_APP="${EXISTING_CORE_APP#\'}"
-  EXISTING_CORE_APP="${EXISTING_CORE_APP%\'}"
+  if [[ "$NO_CUSTOM_APPS" == "1" ]]; then
+    EXISTING_CORE_APP=""
+    EXISTING_APPS=""
+  else
+    # Preserve the existing core app. Older configurations predate the
+    # CORE_APP key; only those fall back to tcf_core. A CORE_APP key that is
+    # present but empty means "no core app" and is kept that way.
+    if grep -qE '^[[:space:]]*CORE_APP=' "$ENV_FILE"; then
+      EXISTING_CORE_APP="$(unquote_env_value "$(sed -n 's/^[[:space:]]*CORE_APP=//p' "$ENV_FILE" | tail -n 1)")"
+    else
+      EXISTING_CORE_APP="tcf_core"
+    fi
 
-  EXISTING_CORE_APP="${EXISTING_CORE_APP:-tcf_core}"
+    if [[ -n "$EXISTING_CORE_APP" && ! "$EXISTING_CORE_APP" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
+      echo "Invalid CORE_APP value in .env: '$EXISTING_CORE_APP'." >&2
+      exit 1
+    fi
 
-  if [[ ! "$EXISTING_CORE_APP" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
-    echo "Invalid CORE_APP value in .env: '$EXISTING_CORE_APP'." >&2
-    exit 1
-  fi
+    EXISTING_APPS="$(unquote_env_value "$(sed -n 's/^[[:space:]]*TCF_APPS=//p' "$ENV_FILE" | tail -n 1)")"
 
-  # Ensure the core app is included in the authoritative custom-app list.
-  EXISTING_APPS="$(sed -n 's/^[[:space:]]*TCF_APPS=//p' "$ENV_FILE" | tail -n 1)"
-  EXISTING_APPS="${EXISTING_APPS#\"}"
-  EXISTING_APPS="${EXISTING_APPS%\"}"
-  EXISTING_APPS="${EXISTING_APPS#\'}"
-  EXISTING_APPS="${EXISTING_APPS%\'}"
-
-  if [[ " $EXISTING_APPS " != *" $EXISTING_CORE_APP "* ]]; then
-    EXISTING_APPS="${EXISTING_CORE_APP}${EXISTING_APPS:+ $EXISTING_APPS}"
+    # Ensure the core app (if any) is included in the authoritative custom-app list.
+    if [[ -n "$EXISTING_CORE_APP" && " $EXISTING_APPS " != *" $EXISTING_CORE_APP "* ]]; then
+      EXISTING_APPS="${EXISTING_CORE_APP}${EXISTING_APPS:+ $EXISTING_APPS}"
+    fi
   fi
 
   # Update both settings without disturbing the other environment values.
@@ -119,8 +133,12 @@ if [[ -f "$ENV_FILE" ]]; then
   mv "$TEMP_ENV_FILE" "$ENV_FILE"
   chmod 600 "$ENV_FILE"
 
-  echo "Core app configured: $EXISTING_CORE_APP"
-  echo "Updated TCF_APPS to include the core app."
+  if [[ -n "$EXISTING_CORE_APP" ]]; then
+    echo "Core app configured: $EXISTING_CORE_APP"
+  else
+    echo "No core app configured."
+  fi
+  echo "Custom apps (TCF_APPS): ${EXISTING_APPS:-none}"
   echo "Existing environment settings preserved."
   exit 0
 fi
@@ -146,37 +164,52 @@ INSIGHTS_VERSION=$(prompt "INSIGHTS_VERSION" "$DEFAULT_INSIGHTS_VERSION")
 WIKI_VERSION=$(prompt "WIKI_VERSION" "$DEFAULT_WIKI_VERSION")
 
 TCF_APPS_GIT_PREFIX=$(prompt "TCF_APPS_GIT_PREFIX" "git@github.com:FabioTessaro")
-CORE_APP=$(prompt "CORE_APP" "tcf_core")
+TCF_APPS=()
+CORE_APP=""
 
-if [[ ! "$CORE_APP" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
-  echo "Invalid core app name '$CORE_APP'." >&2
-  exit 1
+if [[ "$NO_CUSTOM_APPS" == "1" ]]; then
+  echo "Skipping custom apps (--no-custom-apps): no core app, no feature apps."
+else
+  echo "Enter the core app name, or 'none' to install without any custom apps."
+  CORE_APP=$(prompt "CORE_APP" "tcf_core")
+  case "${CORE_APP,,}" in
+    none|-) CORE_APP="" ;;
+  esac
+
+  if [[ -n "$CORE_APP" && ! "$CORE_APP" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
+    echo "Invalid core app name '$CORE_APP'." >&2
+    exit 1
+  fi
 fi
 
-# The core app is always part of the custom-app list.
-TCF_APPS=("$CORE_APP")
+if [[ -n "$CORE_APP" ]]; then
+  # The core app is always part of the custom-app list.
+  TCF_APPS=("$CORE_APP")
 
-echo "Core app: $CORE_APP"
-echo "Enter additional feature app names one at a time (blank to finish):"
+  echo "Core app: $CORE_APP"
+  echo "Enter additional feature app names one at a time (blank to finish):"
 
-while true; do
-  read -r -p "  app: " app || break
-  [[ -z "$app" ]] && break
+  while true; do
+    read -r -p "  app: " app || break
+    [[ -z "$app" ]] && break
 
-  if [[ ! "$app" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
-    echo "Invalid app name '$app'. Use letters, numbers and underscores; the first character must be a letter." >&2
-    continue
-  fi
+    if [[ ! "$app" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]]; then
+      echo "Invalid app name '$app'. Use letters, numbers and underscores; the first character must be a letter." >&2
+      continue
+    fi
 
-  if [[ " ${TCF_APPS[*]} " == *" $app "* ]]; then
-    echo "App '$app' is already included — skipping."
-    continue
-  fi
+    if [[ " ${TCF_APPS[*]} " == *" $app "* ]]; then
+      echo "App '$app' is already included — skipping."
+      continue
+    fi
 
-  TCF_APPS+=("$app")
-done
+    TCF_APPS+=("$app")
+  done
+else
+  echo "No custom apps will be installed."
+fi
 
-TCF_APPS_VALUE="${TCF_APPS[*]}"
+TCF_APPS_VALUE="${TCF_APPS[*]+"${TCF_APPS[*]}"}"
 
 render_template "$SCRIPT_DIR/templates/env.template" "$ENV_FILE" \
   "ADMIN_PASSWORD=$ADMIN_PASSWORD" \

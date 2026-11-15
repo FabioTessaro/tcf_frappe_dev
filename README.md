@@ -117,7 +117,9 @@ The file contains credentials, service settings, app versions and custom-app con
 
 `CORE_APP` must identify one of the apps included in `TCF_APPS`. The selected app must also be cloned into `frappe-bench/apps/` and installed on the configured Frappe site.
 
-For an existing `.env` without `CORE_APP`, `install.sh` adds the default `tcf_core` setting and ensures that the core app is included in `TCF_APPS`, preserving the other environment settings.
+`CORE_APP` and `TCF_APPS` may both be empty (answer `none` at the `CORE_APP` prompt, or pass `--no-custom-apps`): no custom app is fetched or installed and the pipeline only builds the Bench assets. Inside the container, `.env` is authoritative for these two keys, so a container created from an older `.env` doesn't bring stale values back.
+
+For an existing `.env` without a `CORE_APP` key, `install.sh` adds the default `tcf_core` setting and ensures that the core app is included in `TCF_APPS`, preserving the other environment settings.
 
 Custom app folders are cloned into `frappe-bench/apps/`. Add or create apps with `./new-app.sh <app-name>`. Successful pushes are added to `TCF_APPS` so future bench provisioning can restore them.
 
@@ -131,6 +133,7 @@ Run the root scripts from the repository directory. They resolve paths relative 
 | `./install.sh --attach` | Explicitly use Attach to Running Container mode. |
 | `./install.sh --reopen` | Prepare the Reopen in Container workflow. |
 | `./install.sh --no-default-apps` | Skip the default dependency apps during Attach-mode provisioning. |
+| `./install.sh --no-custom-apps` | Install without any custom (TCF) apps, not even the core app: empties `CORE_APP` and `TCF_APPS` in `.env` and skips the core-frontend setup. Combine with `--no-default-apps` for a bare Frappe bench. |
 | `./setup-env.sh` | Set up or repair the development pipeline inside the Dev Container: Node.js, pnpm, frontend dependencies, Bench assets, Playwright and workspace tooling. Does not modify `.env`. |
 | `./startup.sh` | Start the services and offer to repair an incomplete Bench. Safe to repeat. |
 | `./shutdown.sh` | Stop the services. Optional cleanup tiers: `--clean`, `--volumes`, `--images`, `--all`. |

@@ -18,6 +18,19 @@ pipeline_env_value() {
   printf '%s' "$value"
 }
 
+# CORE_APP / TCF_APPS: the .env file is authoritative. The container's own
+# environment is captured from .env when the container is created (compose
+# env_file), so it can be stale after .env changes; only fall back to it when
+# .env doesn't define the key at all.
+pipeline_config_value() {
+  local key="$1" file="$PIPELINE_ROOT/.env"
+  if [[ -f "$file" ]] && grep -qE "^[[:space:]]*${key}=" "$file"; then
+    pipeline_env_value "$key" "$file"
+  else
+    printf '%s' "${!key:-}"
+  fi
+}
+
 pipeline_site_name() {
   local site_name="${SITE:-${TCF_SITE_NAME:-}}"
   [[ -n "$site_name" ]] || site_name="$(pipeline_env_value TCF_SITE_NAME)"
@@ -55,7 +68,7 @@ pipeline_custom_apps() {
 
   # TCF_APPS is the authoritative custom-app list initialised by bootstrap/setup-env.sh and extended by new-app.sh.
   # Intersect it with the apps actually installed on the site.
-  allowed_apps="${TCF_APPS:-$(pipeline_env_value TCF_APPS)}"
+  allowed_apps="$(pipeline_config_value TCF_APPS)"
   if [[ -n "$allowed_apps" ]]; then
     for app in $allowed_apps; do
       [[ "$app" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] || continue
@@ -91,7 +104,8 @@ pipeline_custom_apps() {
 }
 
 pipeline_select_core_app() {
-  local site="$1" selected="${CORE_APP:-$(pipeline_env_value CORE_APP)}" item choice index=1
+  local site="$1" selected item choice index=1
+  selected="$(pipeline_config_value CORE_APP)"
   local -a candidates=()
 
   mapfile -t candidates < <(pipeline_custom_apps "$site")

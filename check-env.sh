@@ -433,11 +433,42 @@ check_dir "Frontend node_modules" "$FRONTEND_DIR/node_modules"
 
 if [[ -d "$FRONTEND_DIR" && -f "$FRONTEND_DIR/package.json" ]] && command -v node >/dev/null 2>&1; then
   for module in \
-    vue typescript vite @vitejs/plugin-vue vue-tsc pinia vue-router vue-i18n \
-    sass tailwindcss vitest @vue/test-utils msw eslint eslint-plugin-vue \
-    eslint-plugin-boundaries @typescript-eslint/parser @typescript-eslint/eslint-plugin \
-    stylelint stylelint-config-standard-scss prettier @eslint/js globals eslint-config-prettier \
-    postcss autoprefixer @tailwindcss/forms prettier-plugin-tailwindcss; do
+    vue \
+    typescript \
+    vite \
+    @vitejs/plugin-vue \
+    vue-tsc \
+    pinia \
+    vue-router \
+    vue-i18n \
+    sass \
+    tailwindcss \
+    vitest \
+    @vue/test-utils \
+    msw \
+    eslint \
+    eslint-plugin-vue \
+    eslint-plugin-boundaries \
+    @typescript-eslint/parser \
+    @typescript-eslint/eslint-plugin \
+    stylelint \
+    stylelint-config-standard-scss \
+    prettier \
+    @eslint/js \
+    globals \
+    eslint-config-prettier \
+    postcss \
+    autoprefixer \
+    @tailwindcss/forms \
+    prettier-plugin-tailwindcss \
+    stylelint-config-standard-vue \
+    stylelint-config-standard \
+    stylelint-config-html \
+    stylelint-config-recommended-vue \
+    postcss-html \
+    postcss-scss \
+    postcss-value-parser \
+    postcss-selector-parser; do
     check_node_module "$module"
   done
   check_any_node_module "DOM test environment" happy-dom jsdom
@@ -447,6 +478,7 @@ else
 fi
 
 section "Frontend build and test configuration"
+check_file "TCF Stylelint architecture plugin" "$FRONTEND_DIR/stylelint/tcf-architecture.js"
 check_file "Vite configuration" "$FRONTEND_DIR/vite.config.ts"
 check_file "Vitest configuration" "$FRONTEND_DIR/vitest.config.ts"
 check_file "Playwright configuration" "$FRONTEND_DIR/playwright.config.ts"

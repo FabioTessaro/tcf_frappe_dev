@@ -15,17 +15,30 @@ log_init "${BASH_SOURCE[0]}"
 # repo is bind-mounted into the container, so both sides see the same files.
 #   ./new-app.sh tcf_foo
 #
+# First it asks what kind of app this is, because .env is edited differently:
+#   - feature app: plugs into the existing core app (adds its own views and
+#     registers in core's launcher). Appended to the END of TCF_APPS;
+#     CORE_APP is left alone.
+#   - core app:    a new core app that owns the Vue portal/frontend pipeline.
+#     Written as CORE_APP and put at the FRONT of TCF_APPS. A previous core
+#     app stays in TCF_APPS (as a regular custom app).
+#
 # Steps:
+#   0. asks: feature app or new core app? (skipped with --feature / --core)
 #   1. bench new-app <name>          (asks its own questions: title, license, ...)
 #   2. bench --site <site> install-app <name>
 #   3. asks for the branch name (default: main) and renames the app's branch
 #   4. asks you to create an EMPTY repo on the remote, then pushes (plain git
 #      only, no GitHub CLI needed)
-#   5. appends <name> to the end of TCF_APPS in .env — only if the push succeeded
+#   5. updates .env — only if the push succeeded:
+#        feature app: appends <name> to the end of TCF_APPS
+#        core app:    sets CORE_APP=<name> and puts <name> first in TCF_APPS
 #   6. adds the app as a folder in .vscode/dev.code-workspace, if that file exists
 #   7. pre-commit install
 #
 # Options:
+#   --feature      create a feature app (don't ask)
+#   --core         create a new core app (don't ask)
 #   --no-install   skip `bench install-app` (app is created but not installed)
 #   --no-push      skip the remote/push step (.env is then NOT updated; .vscode still is)
 #   -h, --help     show this help
@@ -42,16 +55,19 @@ BENCH_DIR="$REPO_ROOT/frappe-bench"
 WORKSPACE_FILE="$REPO_ROOT/.vscode/dev.code-workspace"
 
 usage() {
-  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '/^# Creates a brand-new/,/^$/p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 DO_INSTALL=true
 DO_PUSH=true
 APP=""
+APP_KIND=""   # feature | core
 for arg in "$@"; do
   case "$arg" in
     --no-install) DO_INSTALL=false ;;
     --no-push) DO_PUSH=false ;;
+    --feature) [ "$APP_KIND" = core ] && { echo "--feature and --core are mutually exclusive."; exit 1; }; APP_KIND=feature ;;
+    --core) [ "$APP_KIND" = feature ] && { echo "--feature and --core are mutually exclusive."; exit 1; }; APP_KIND=core ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "Unknown option: $arg"; usage; exit 1 ;;
     *) if [ -z "$APP" ]; then APP="$arg"; else echo "Only one app name allowed."; exit 1; fi ;;
@@ -59,9 +75,12 @@ for arg in "$@"; do
 done
 
 # env_value KEY — container environment first (compose loads .env into it),
-# then .env itself. Parsed rather than sourced.
+# then .env itself. Parsed rather than sourced. CORE_APP and TCF_APPS always
+# come from .env: it's authoritative for them (see pipeline-common.sh), and the
+# container's copy can be stale after .env was edited.
 env_value() {
-  local val="${!1:-}" line
+  local val="" line
+  case "$1" in CORE_APP|TCF_APPS) ;; *) val="${!1:-}" ;; esac
   if [ -z "$val" ] && [ -f "$ENV_FILE" ]; then
     line=$(grep -E "^[[:space:]]*$1=" "$ENV_FILE" | tail -n 1) || true
     line=${line#*=}; line=${line%$'\r'}
@@ -141,9 +160,46 @@ fi
 for existing in $(env_value TCF_APPS); do
   [ "$existing" = "$APP" ] && die "$APP is already listed in TCF_APPS."
 done
+CURRENT_CORE=$(env_value CORE_APP)
+[ "$CURRENT_CORE" = "$APP" ] && die "$APP is already the CORE_APP in .env."
+
+# --- App kind: feature app or new core app ---------------------------------
+# Decides how .env is edited in step 5.
+if [ -z "$APP_KIND" ]; then
+  if [ -t 0 ]; then
+    echo ""
+    echo "What are you creating?"
+    echo "  1) A feature app  — plugs into the core app${CURRENT_CORE:+ ($CURRENT_CORE)}; appended to TCF_APPS"
+    echo "  2) A new core app — owns the Vue portal/frontend; becomes CORE_APP${CURRENT_CORE:+ (replacing $CURRENT_CORE)}"
+    while [ -z "$APP_KIND" ]; do
+      read -r -p "Choose 1 or 2: " reply
+      case "$reply" in
+        1|f|feature) APP_KIND=feature ;;
+        2|c|core) APP_KIND=core ;;
+        *) echo "Please answer 1 (feature app) or 2 (core app)." ;;
+      esac
+    done
+  else
+    echo "No TTY and neither --feature nor --core given — assuming a feature app."
+    APP_KIND=feature
+  fi
+fi
+
+if [ "$APP_KIND" = core ] && [ -n "$CURRENT_CORE" ]; then
+  echo "Note: CORE_APP is currently '$CURRENT_CORE'. It will be replaced by '$APP';"
+  echo "      '$CURRENT_CORE' stays in TCF_APPS as a regular custom app."
+  if [ -t 0 ]; then
+    read -r -p "Continue? [y/N]: " reply
+    case "$reply" in y|Y|yes|YES) ;; *) die "Aborted — nothing was created." ;; esac
+  fi
+fi
+if [ "$APP_KIND" = feature ] && [ -z "$CURRENT_CORE" ]; then
+  echo "Warning: no CORE_APP is configured in .env, so this feature app has no core"
+  echo "         app to plug into yet. Create one with: ./new-app.sh --core <name>"
+fi
 
 REMOTE_URL="${PREFIX}/${APP}.git"
-echo "App:     $APP"
+echo "App:     $APP ($APP_KIND app)"
 echo "Site:    $SITE"
 echo "Remote:  $REMOTE_URL"
 echo ""
@@ -220,26 +276,54 @@ if [ "$DO_PUSH" = true ]; then
   fi
 fi
 
-# --- 5. Append to TCF_APPS in .env (only once the push succeeded) ------------
+# --- 5. Update .env (only once the push succeeded) ---------------------------
 # A rebuild (provision-bench.sh) clones every app in TCF_APPS from the remote, so
 # an app that isn't there yet would break it.
+#   feature app: TCF_APPS="<existing...> <name>"         (CORE_APP untouched)
+#   core app:    TCF_APPS="<name> <existing...>", CORE_APP=<name>
+
+# set_env_key KEY VALUE QUOTED — replace KEY's line in .env (first occurrence;
+# later duplicates dropped) or append it. Other lines are kept as they are.
+set_env_key() {
+  local key="$1" value="$2" quoted="$3" tmp line
+  if [ "$quoted" = true ]; then line="${key}=\"${value}\""; else line="${key}=${value}"; fi
+  tmp=$(mktemp) || return 1
+  awk -v key="$key" -v line="$line" '
+    $0 ~ "^[[:space:]]*" key "=" { if (!done) { print line; done = 1 }; next }
+    { print }
+    END { if (!done) print line }
+  ' "$ENV_FILE" > "$tmp" && cat "$tmp" > "$ENV_FILE"   # cat keeps .env's mode/owner
+  rm -f "$tmp"
+}
+
 echo ""
 if [ "$PUSHED" = true ]; then
-  NEW_APPS=$(echo "$(env_value TCF_APPS) $APP" | xargs)
-  # Written QUOTED on purpose: an unquoted multi-word value (TCF_APPS=a b c)
-  # makes `source .env` (lib.sh's load_env) try to run "b" as a command and
-  # abort scripts that use set -e.
-  if grep -qE '^[[:space:]]*TCF_APPS=' "$ENV_FILE"; then
-    sed -i -E "s|^[[:space:]]*TCF_APPS=.*|TCF_APPS=\"${NEW_APPS}\"|" "$ENV_FILE"
+  if [ "$APP_KIND" = core ]; then
+    NEW_APPS=$(echo "$APP $(env_value TCF_APPS)" | xargs)
   else
-    printf 'TCF_APPS="%s"\n' "$NEW_APPS" >> "$ENV_FILE"
+    NEW_APPS=$(echo "$(env_value TCF_APPS) $APP" | xargs)
   fi
-  echo "Added $APP to the end of TCF_APPS in .env."
+  # TCF_APPS is written QUOTED on purpose: an unquoted multi-word value
+  # (TCF_APPS=a b c) makes `source .env` (lib.sh's load_env) try to run "b" as
+  # a command and abort scripts that use set -e.
+  set_env_key TCF_APPS "$NEW_APPS" true || die "Couldn't update TCF_APPS in .env."
+  if [ "$APP_KIND" = core ]; then
+    set_env_key CORE_APP "$APP" false || die "Couldn't update CORE_APP in .env."
+    echo "Set CORE_APP=$APP and added $APP to the front of TCF_APPS in .env."
+    echo "Next: set up the core frontend pipeline (inside the container): ./setup-env.sh"
+  else
+    echo "Added $APP to the end of TCF_APPS in .env."
+  fi
 else
-  echo "Nothing was pushed, so $APP was NOT added to TCF_APPS in .env."
-  echo "Push it, then add it to the end of the list by hand:"
+  echo "Nothing was pushed, so .env was NOT updated."
+  echo "Push it, then edit .env by hand:"
   echo "  git -C frappe-bench/apps/$APP push -u origin $BRANCH"
-  echo "  TCF_APPS=\"$(env_value TCF_APPS) $APP\""
+  if [ "$APP_KIND" = core ]; then
+    echo "  CORE_APP=$APP"
+    echo "  TCF_APPS=\"$(echo "$APP $(env_value TCF_APPS)" | xargs)\""
+  else
+    echo "  TCF_APPS=\"$(echo "$(env_value TCF_APPS) $APP" | xargs)\""
+  fi
 fi
 
 # --- 6. VS Code workspace (only if it already exists) -----------------------
@@ -279,4 +363,4 @@ precommit_install > /dev/null 2>&1 \
   || echo "Skipped pre-commit install (pre-commit not available, or no config)."
 
 echo ""
-echo "Done: $APP is at frappe-bench/apps/$APP"
+echo "Done: $APP ($APP_KIND app) is at frappe-bench/apps/$APP"

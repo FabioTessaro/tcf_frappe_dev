@@ -121,7 +121,7 @@ The file contains credentials, service settings, app versions and custom-app con
 
 For an existing `.env` without a `CORE_APP` key, `install.sh` adds the default `tcf_core` setting and ensures that the core app is included in `TCF_APPS`, preserving the other environment settings.
 
-Custom app folders are cloned into `frappe-bench/apps/`. Add or create apps with `./new-app.sh <app-name>`. Successful pushes are added to `TCF_APPS` so future bench provisioning can restore them.
+Custom app folders are cloned into `frappe-bench/apps/`. Add or create apps with `./new-app.sh <app-name>`. It first asks whether you are creating a **feature app** (appended to the end of `TCF_APPS`; `CORE_APP` is untouched) or a **new core app** (set as `CORE_APP` and placed first in `TCF_APPS`; any previous core app stays in `TCF_APPS`). Pass `--feature` or `--core` to skip the question. `.env` is only updated after a successful push, so future bench provisioning can restore the app.
 
 ## Common commands
 
@@ -138,7 +138,7 @@ Run the root scripts from the repository directory. They resolve paths relative 
 | `./startup.sh` | Start the services and offer to repair an incomplete Bench. Safe to repeat. |
 | `./shutdown.sh` | Stop the services. Optional cleanup tiers: `--clean`, `--volumes`, `--images`, `--all`. |
 | `./reseed.sh` | Re-download and seed the VS Code Server build in the `frappe` container. |
-| `./new-app.sh <app-name>` | Create and optionally install a custom Frappe app, create its Git remote and add it to `TCF_APPS` in `.env` after a successful push. |
+| `./new-app.sh [--feature\|--core] <app-name>` | Create and optionally install a custom Frappe app (feature app or new core app), create its Git remote and update `.env` after a successful push: a feature app is appended to `TCF_APPS`; a core app becomes `CORE_APP` and is put first in `TCF_APPS`. |
 | `./check-env.sh` | Read-only development-environment audit. Run inside the Dev Container. |
 
 The pipeline setup is separate from the read-only audit script. It can be re-run when repairing or updating the container toolchain:

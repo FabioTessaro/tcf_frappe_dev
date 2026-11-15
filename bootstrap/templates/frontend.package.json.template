@@ -11,6 +11,8 @@
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --max-warnings 0",
     "lint:styles": "stylelint --config stylelint.config.js \"../../*/frontend/**/*.{vue,scss,css}\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:unit": "vitest run --exclude 'tests/integration/**' --exclude 'tests/contract/**'",
     "test:integration": "vitest run tests/integration",

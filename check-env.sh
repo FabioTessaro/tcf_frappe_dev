@@ -478,7 +478,6 @@ else
 fi
 
 section "Frontend build and test configuration"
-check_file "TCF Stylelint architecture plugin" "$FRONTEND_DIR/stylelint/tcf-architecture.js"
 check_file "Vite configuration" "$FRONTEND_DIR/vite.config.ts"
 check_file "Vitest configuration" "$FRONTEND_DIR/vitest.config.ts"
 check_file "Playwright configuration" "$FRONTEND_DIR/playwright.config.ts"
@@ -489,6 +488,9 @@ check_any_file "ESLint flat configuration" \
   "$FRONTEND_DIR/eslint.config.js" "$FRONTEND_DIR/eslint.config.mjs" "$FRONTEND_DIR/eslint.config.cjs"
 check_any_file "Stylelint configuration" \
   "$FRONTEND_DIR/stylelint.config.js" "$FRONTEND_DIR/.stylelintrc" "$FRONTEND_DIR/.stylelintrc.json" "$FRONTEND_DIR/.stylelintrc.cjs"
+check_file "TCF Stylelint architecture plugin" "$FRONTEND_DIR/stylelint/tcf-architecture.js"
+check_file "Prettier configuration" "$FRONTEND_DIR/prettier.config.js"
+check_file "Prettier ignore file" "$FRONTEND_DIR/.prettierignore"
 check_file "Vitest global setup" "$FRONTEND_DIR/tests/setup.ts"
 check_dir "Integration tests directory" "$FRONTEND_DIR/tests/integration"
 check_dir "Contract tests directory" "$FRONTEND_DIR/tests/contract"
@@ -500,6 +502,8 @@ check_npm_script "Production build script" build
 check_npm_script "Type-check script" typecheck type-check
 check_npm_script "ESLint script" lint
 check_npm_script "Stylelint script" lint:styles stylelint
+check_npm_script "Prettier formatting script" format
+check_npm_script "Prettier formatting check script" format:check
 check_npm_script "Unit-test script" test:unit test
 check_npm_script "Integration-test script" test:integration
 check_npm_script "Contract-test script" test:contract

@@ -403,9 +403,16 @@ check_dir "Core backend tests" "$CORE_PYTHON_DIR/tests"
 
 # Core Python scaffold (architecture guide, sections 9.16 and 14.6).
 # Extend this list as the scaffold grows; it is the definition of "scaffold complete".
-for scaffold_file in hooks.py modules.txt patches.txt config/__init__.py api/__init__.py tests/__init__.py; do
+for scaffold_file in hooks.py modules.txt patches.txt config/__init__.py api/__init__.py \
+  tests/__init__.py tests/test_portal_page.py www/__init__.py www/portal.py; do
   check_file "Core scaffold: $scaffold_file" "$CORE_PYTHON_DIR/$scaffold_file"
 done
+# The portal page controller only runs if Frappe routes /portal paths to it.
+if grep -q '"to_route": "portal"' "$CORE_PYTHON_DIR/hooks.py" 2>/dev/null; then
+  ok "Core scaffold: hooks.py routes portal paths to the portal page"
+else
+  fail "Core scaffold: hooks.py has no website_route_rules entry with \"to_route\": \"portal\""
+fi
 
 if [[ -n "${TCF_APPS:-}" ]]; then
   for app in $TCF_APPS; do
@@ -631,7 +638,45 @@ scaffold_files=(
   tests/mocks/server.ts tests/mocks/handlers/index.ts
   tests/utils/render.ts tests/utils/fake-router.ts
   tests/contract/manifest.test.ts tests/contract/tokens.test.ts
+  tests/contract/locales-parity.test.ts tests/contract/portal-path.test.ts
+  tests/integration/login-wall.test.ts tests/plugins/discover-apps.test.ts
+  tests/mocks/fixtures/index.ts tests/mocks/fixtures/users.ts tests/mocks/fixtures/apps.ts
+  index.html src/env.d.ts
+  src/sdk/permissions.ts src/sdk/permissions.test.ts
+  src/shared/index.ts
+  src/shared/constants/index.ts src/shared/constants/portal.ts src/shared/constants/storage-keys.ts
+  src/shared/utils/index.ts src/shared/utils/portal-path.ts src/shared/utils/portal-path.test.ts
+  src/shared/frappe/index.ts src/shared/frappe/types.ts
+  src/shared/frappe/session.ts src/shared/frappe/session.test.ts
+  src/shared/i18n/index.ts src/shared/i18n/languages.ts src/shared/i18n/languages.test.ts
+  src/shared/i18n/merge-locales.ts src/shared/i18n/merge-locales.test.ts
+  src/shared/i18n/apply-language.ts src/shared/i18n/apply-language.test.ts
+  src/shared/i18n/locales/en.json
+  src/app/main.ts src/app/App.vue src/app/App.scss src/app/App.test.ts
+  src/app/layouts/index.ts
+  src/app/providers/index.ts src/app/providers/pinia.ts src/app/providers/i18n.ts
+  src/app/providers/i18n.test.ts src/app/providers/error-handler.ts
+  src/app/providers/error-handler.test.ts src/app/providers/app-registry.ts
+  src/app/router/index.ts src/app/router/routes.ts src/app/router/route-meta.d.ts
+  src/app/router/guards.ts src/app/router/guards.test.ts
+  src/app/router/register-apps.ts src/app/router/register-apps.test.ts
+  src/platform/auth/index.ts src/platform/auth/routes.ts src/platform/auth/locales/en.json
+  src/platform/auth/types/index.ts src/platform/auth/types/session.types.ts
+  src/platform/auth/stores/session.store.ts src/platform/auth/stores/session.store.test.ts
+  src/platform/launcher/index.ts src/platform/launcher/routes.ts
+  src/platform/launcher/locales/en.json
 )
+# Component folders follow the guide's pattern (9.7): template, own stylesheet, test, re-export.
+for component_folder in \
+  app/layouts/AuthLayout app/layouts/LauncherLayout app/layouts/AppShellLayout \
+  platform/auth/views/LoginView platform/auth/views/ForgotPasswordView \
+  platform/launcher/views/LauncherView platform/launcher/views/NotFoundView; do
+  component_name="${component_folder##*/}"
+  for suffix in vue scss test.ts; do
+    scaffold_files+=("src/$component_folder/$component_name.$suffix")
+  done
+  scaffold_files+=("src/$component_folder/index.ts")
+done
 for scaffold_file in "${scaffold_files[@]}"; do
   check_file "Scaffold: $scaffold_file" "$FRONTEND_DIR/$scaffold_file"
 done

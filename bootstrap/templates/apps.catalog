@@ -1,0 +1,29 @@
+# -----------------------------------------------------------------------------
+# Default Frappe apps offered by ./setup.sh
+# -----------------------------------------------------------------------------
+# One app per line:   name|repository|depends|features|description
+#
+#   name         Frappe app name (the folder in frappe-bench/apps). The .env key
+#                holding its version is the upper-cased name + _VERSION.
+#   repository   git URL used for `bench get-app` and for listing tags.
+#   depends      comma-separated apps that must also be installed (setup.sh
+#                selects them automatically; they are installed first).
+#   features     comma-separated flags understood by the scripts:
+#                  follows-frappe  version numbers track Frappe's major version
+#                                  (the picker shows matching tags first)
+#                  sfu             needs the Meet SFU: adds the meet-sfu
+#                                  container and the JWT/announced-IP settings
+#   description  shown in the setup.sh menu.
+#
+# The order of this file is the install order (dependencies are always moved
+# before the apps that need them). The "frappe" line is mandatory: it is the
+# framework itself and is always installed.
+# -----------------------------------------------------------------------------
+frappe|https://github.com/frappe/frappe|||Frappe Framework (always installed)
+erpnext|https://github.com/frappe/erpnext||follows-frappe|ERP: accounting, stock, selling, buying, manufacturing
+hrms|https://github.com/frappe/hrms|erpnext|follows-frappe|HR and payroll
+raven|https://github.com/frappe/raven|||Team chat
+meet|https://github.com/frappe/meet||sfu|Video meetings (adds the meet-sfu container)
+drive|https://github.com/frappe/drive|||File storage and sharing
+insights|https://github.com/frappe/insights|||Business intelligence and dashboards
+wiki|https://github.com/frappe/wiki|||Knowledge base

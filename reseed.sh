@@ -1,229 +1,85 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# reseed.sh — replace the VS Code Server inside the running frappe container.
+#
+# Usage: ./reseed.sh [options]
+#
+# Use it when your VS Code client updated (new commit), when "Attach to
+# Running Container" hangs, or when the server inside the container is broken.
+# The chosen build is downloaded on the host and copied into the container,
+# replacing any existing copy of the same build.
+#
+# Without options a menu is shown every time, with the commit detected on
+# this host (the client that last connected over Remote-SSH), the latest
+# stable release for your client platform, and a free commit field.
+#
+# Options:
+#   --detect             use the commit detected on this host
+#   --latest             use the latest stable release (see --platform)
+#   --commit HASH        use this 40-character commit (Help › About › Commit)
+#   --platform NAME      client platform for --latest: win32-x64-user,
+#                        win32-arm64-user, darwin-universal, linux-x64,
+#                        linux-arm64, server-linux-x64 (remembered)
+#   --purge              also delete every other build from the container
+#   --keep-others        keep the other builds (don't ask)
+#   -y, --yes            don't ask for confirmation
+#   --trace              also write a bash execution trace into the log
+#   -h, --help           show this help
+#
+# Requires running containers (start them with ./initialize.sh).
+# After reseeding, reload any attached VS Code window (Developer: Reload Window).
+set -o pipefail
+# shellcheck source=bootstrap/lib/common.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/lib/common.sh"
+# shellcheck source=bootstrap/lib/vscode.sh
+source "$LIB_DIR/vscode.sh"
 
-# Consistent progress, warning and failure output.
-source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/logging.sh"
-log_init "${BASH_SOURCE[0]}"
-set -e
-
-# Work relative to this script's location, so it behaves the same regardless
-# of the caller's current directory.
-cd "$(dirname "$0")/.." || exit
-
-usage() {
-  cat << EOF
-Usage: ./reseed.sh [options]
-
-Re-downloads the VS Code Server build and copies it into the frappe
-container again (see bootstrap/seed-vscode-server.sh for how this works). Use it
-when "Attach to Running Container" hangs, the server inside the container is
-broken or half-copied, or your VS Code client updated and no longer matches.
-
-With no options, shows an interactive menu. Options (for non-interactive use):
-
-  --auto              Re-seed using the commit auto-detected from the host
-                      (or the container's leftover folders), falling back to
-                      the latest stable. This is the menu's default.
-  --latest            Ignore detection, use the latest stable release for
-                      your client's platform (see --platform).
-  --commit <hash>     Re-seed this exact 40-character commit. Find it in
-                      VS Code: Help > About > "Commit".
-  --platform <name>   Local client platform for --latest. One of:
-                      win32-x64 win32-arm64 darwin-x64 darwin-arm64
-                      linux-x64 linux-arm64 server-linux-x64
-  --purge             Also delete every other VS Code Server build inside the
-                      container afterwards (frees disk; breaks any window
-                      currently attached using another build).
-  -y, --yes           Don't ask for confirmation.
-  -h, --help          Show this help.
-
-Examples:
-  ./reseed.sh
-  ./reseed.sh --commit 0123456789abcdef0123456789abcdef01234567 -y
-  ./reseed.sh --latest --platform darwin-arm64 --purge
-EOF
-}
-
-# --- parse flags -----------------------------------------------------------
-MODE=""            # auto | latest | commit  (empty = ask interactively)
-COMMIT=""
-PLATFORM=""
-PURGE=false
-ASSUME_YES=false
-
-while [ $# -gt 0 ]; do
+VS_WANT=""; VS_WANT_COMMIT=""; VS_PLATFORM=""; PURGE=""; ASSUME_YES=false
+for a in "$@"; do [[ "$a" == -h || "$a" == --help ]] && { usage_from_header "$0"; exit 0; }; done
+script_init reseed "$@"
+set -- "${SCRIPT_ARGS[@]}"
+while [[ $# -gt 0 ]]; do
   case "$1" in
-    --auto) MODE="auto" ;;
-    --latest) MODE="latest" ;;
-    --commit)
-      if [ $# -lt 2 ]; then echo "--commit needs a value"; exit 2; fi
-      MODE="commit"; COMMIT="$2"; shift ;;
-    --commit=*) MODE="commit"; COMMIT="${1#*=}" ;;
-    --platform)
-      if [ $# -lt 2 ]; then echo "--platform needs a value"; exit 2; fi
-      PLATFORM="$2"; shift ;;
-    --platform=*) PLATFORM="${1#*=}" ;;
+    --detect) VS_WANT=detect ;;
+    --latest) VS_WANT=latest ;;
+    --commit) VS_WANT=commit; VS_WANT_COMMIT="${2:-}"; shift ;;
+    --commit=*) VS_WANT=commit; VS_WANT_COMMIT="${1#*=}" ;;
+    --platform) VS_PLATFORM="${2:-}"; shift ;;
+    --platform=*) VS_PLATFORM="${1#*=}" ;;
     --purge) PURGE=true ;;
+    --keep-others) PURGE=false ;;
     -y|--yes) ASSUME_YES=true ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown option: $1"; usage; exit 1 ;;
+    *) ui_die "Unknown option: $1" "See ./reseed.sh --help" ;;
   esac
   shift
 done
 
-source bootstrap/project-common.sh
+ui_banner "frappe-dev · reseed" "VS Code Server in the container"
 
-if ! $DOCKER_COMPOSE exec -T frappe true >/dev/null 2>&1; then
-  echo "The frappe container isn't running. Start it first (./startup.sh),"
-  echo "then run ./reseed.sh again."
-  exit 1
-fi
+[[ -f "$COMPOSE_FILE" ]] || ui_die "docker-compose.yml not found." "Configure and start the environment first: ./setup.sh && ./initialize.sh"
+docker_require
+frappe_running || ui_die "The frappe container isn't running." "Start the environment with ./initialize.sh, then run ./reseed.sh again."
 
-# --- helpers ---------------------------------------------------------------
-normalize_commit() {
-  echo "$1" | tr -d '[:space:]' | tr 'A-F' 'a-f'
-}
+vscode_choose reseed || { ui_info "Cancelled — nothing changed."; exit 0; }
+[[ -n "$VS_COMMIT" ]] || { ui_info "Nothing to do."; exit 0; }
 
-is_valid_commit() {
-  [[ "$1" =~ ^[0-9a-f]{40}$ ]]
-}
-
-detect_host_commit() {
-  local h=""
-
-  if [ -d "$HOME/.vscode-server/cli/servers" ]; then
-    h=$(find "$HOME/.vscode-server/cli/servers" \
-      -mindepth 1 -maxdepth 1 -type d -name 'Stable-*' \
-      -printf '%T@ %f\n' 2>/dev/null |
-      sort -nr |
-      head -n 1 |
-      cut -d' ' -f2- |
-      sed 's/^Stable-//')
-  fi
-
-  if [ -z "$h" ] && [ -d "$HOME/.vscode-server/bin" ]; then
-    h=$(find "$HOME/.vscode-server/bin" \
-      -mindepth 1 -maxdepth 1 -type d \
-      -printf '%T@ %f\n' 2>/dev/null |
-      sort -nr |
-      awk 'length($2) == 40 && $2 ~ /^[0-9a-f]+$/ { print $2; exit }')
-  fi
-
-  echo "$h"
-}
-
-list_container_builds() {
-  $DOCKER_COMPOSE exec -T frappe sh -c \
-    "ls -1t /home/frappe/.vscode-server/bin/ 2>/dev/null" || true
-}
-
-pick_platform() {
-  echo ""
-  echo "Which platform does your LOCAL VS Code client run on?"
-  echo "  1) Windows x64"
-  echo "  2) Windows ARM64"
-  echo "  3) macOS Intel"
-  echo "  4) macOS Apple Silicon"
-  echo "  5) Linux x64"
-  echo "  6) Linux ARM64"
-  echo "  7) Not sure — use the Linux server build's own latest"
-  read -r -p "Choice [1-7, default 7]: " c
-  case "$c" in
-    1) PLATFORM="win32-x64" ;;
-    2) PLATFORM="win32-arm64" ;;
-    3) PLATFORM="darwin-x64" ;;
-    4) PLATFORM="darwin-arm64" ;;
-    5) PLATFORM="linux-x64" ;;
-    6) PLATFORM="linux-arm64" ;;
-    *) PLATFORM="server-linux-x64" ;;
-  esac
-}
-
-# --- interactive menu ------------------------------------------------------
-if [ -z "$MODE" ]; then
-  if [ ! -t 0 ]; then
-    # No TTY and no flags: don't hang on a prompt, just do the default.
-    MODE="auto"
+others=$(vscode_container_builds | grep -vx "$VS_COMMIT" | wc -l)
+if [[ -z "$PURGE" ]]; then
+  if (( others > 0 )); then
+    ui_select "The container has $others other build(s). Remove them?" \
+      "false::Keep them::windows attached with an older client keep working" \
+      "true::Delete them::frees disk space; windows using them must be reloaded" || exit 1
+    PURGE="$UI_VALUE"
   else
-    HOST_COMMIT=$(detect_host_commit)
-    echo "VS Code Server re-seed"
-    echo "----------------------"
-    echo "Host-detected commit:  ${HOST_COMMIT:-(none — no VS Code connection to this host yet)}"
-    echo "Builds in container:"
-    BUILDS=$(list_container_builds)
-    if [ -n "$BUILDS" ]; then
-      echo "$BUILDS" | sed 's/^/                       /'
-    else
-      echo "                       (none)"
-    fi
-    echo ""
-    echo "What do you want to do?"
-    echo "  1) Re-seed the auto-detected commit            [default]"
-    echo "  2) Re-seed the latest stable release (pick your client platform)"
-    echo "  3) Re-seed a specific commit (paste it)"
-    echo "  4) Cancel"
-    read -r -p "Choice [1-4, default 1]: " CHOICE
-    case "$CHOICE" in
-      ""|1) MODE="auto" ;;
-      2) MODE="latest" ;;
-      3) MODE="commit" ;;
-      *) echo "Cancelled."; exit 0 ;;
-    esac
-
-    if [ "$MODE" = "latest" ] && [ -z "$PLATFORM" ]; then
-      pick_platform
-    fi
-
-    if [ "$MODE" = "commit" ] && [ -z "$COMMIT" ]; then
-      echo ""
-      echo "Paste the 40-character commit hash (VS Code: Help > About > Commit)."
-      read -r -p "Commit: " COMMIT
-    fi
-
-    if [ "$PURGE" = false ]; then
-      echo ""
-      read -r -p "Also delete all OTHER builds in the container? [y/N]: " P
-      case "$P" in y|Y|yes|YES) PURGE=true ;; esac
-    fi
+    PURGE=false
   fi
 fi
 
-# --- validate --------------------------------------------------------------
-if [ "$MODE" = "commit" ]; then
-  COMMIT=$(normalize_commit "$COMMIT")
-  if ! is_valid_commit "$COMMIT"; then
-    echo "'$COMMIT' isn't a valid commit hash (expected 40 hex characters)."
-    exit 1
-  fi
-fi
+ui_section "Reseed"
+ui_kv "Commit" "$VS_COMMIT"
+ui_kv "Source" "${VS_SOURCE}${VS_VERSION:+ ($VS_VERSION)}${VS_PLATFORM:+, platform $VS_PLATFORM}"
+ui_kv "Other builds" "$([[ $PURGE == true ]] && echo "deleted ($others)" || echo "kept ($others)")"
+if [[ "$ASSUME_YES" != true ]]; then ui_confirm "Replace the VS Code Server build in the container?" || { ui_info "Cancelled."; exit 0; }; fi
 
-# --- build the seed-vscode-server.sh invocation ----------------------------------
-ARGS=(--reseed)
-DESC=""
-case "$MODE" in
-  auto)
-    DESC="auto-detected commit (falls back to latest stable)" ;;
-  latest)
-    ARGS+=(--latest)
-    [ -n "$PLATFORM" ] && ARGS+=(--platform "$PLATFORM")
-    DESC="latest stable${PLATFORM:+ for $PLATFORM}" ;;
-  commit)
-    ARGS+=(--commit "$COMMIT")
-    DESC="commit $COMMIT" ;;
-esac
-if [ "$PURGE" = true ]; then
-  ARGS+=(--purge)
-  DESC="$DESC, purging other builds"
-fi
-
-# --- confirm ---------------------------------------------------------------
-echo ""
-echo "About to re-seed the frappe container with: $DESC"
-echo "If a VS Code window is currently attached to the container, reload it"
-echo "afterwards (Developer: Reload Window)."
-if [ "$ASSUME_YES" = false ] && [ -t 0 ]; then
-  read -r -p "Continue? [Y/n]: " OK
-  case "$OK" in n|N|no|NO) echo "Cancelled."; exit 0 ;; esac
-fi
-
-echo ""
-bash bootstrap/seed-vscode-server.sh "${ARGS[@]}"
+args=(--force); [[ "$PURGE" == true ]] && args+=(--purge)
+vscode_seed "$VS_COMMIT" "${args[@]}" || ui_die "Reseeding failed." "See ${LOG_FILE_REL}"
+ui_ok "Done. Reload any attached VS Code window (Developer: Reload Window)."

@@ -1,183 +1,292 @@
 # TCF Frappe Development
 
-A Docker Compose-based development environment for Frappe Framework and custom TCF apps. It provisions a Frappe bench, supporting services, and a VS Code Dev Container so development can happen in a consistent environment on a remote Ubuntu server.
+A Docker Compose development environment for Frappe Framework and custom
+Frappe apps on a remote Ubuntu server. You connect to it with VS Code
+(Remote-SSH, then **Attach to Running Container**) and run `bench start`
+inside the container.
 
-The repository contains the environment and lifecycle scripts. **Custom Frappe app source code is cloned separately** and is not stored in this repository.
+The repository holds the environment and its lifecycle scripts only. Custom
+app source code lives in its own repositories; the scripts clone it into
+`frappe-bench/apps/`.
 
 ## Architecture
 
-The intended frontend architecture is documented in **[Frappe Multi-app Vue Architecture](./Frappe%20Multi-app%20Vue%20Architecture.md)**. It describes the division of responsibilities between:
-
-- **Core app:** Vue 3 portal shell, authentication pages, launcher, shared UI, design tokens, typography and frontend SDK.
-- **Feature apps:** independently owned feature slices, backend APIs and permissions, composed into the core portal at build time.
-- **Public website app:** a conventional Frappe website app, separate from the Vue portal.
-
-The document is an architecture reference; the scripts in this repository provision the development environment and do not generate the complete Vue application implementation.
-
-## What gets provisioned
-
-- Frappe bench and the apps configured in `.env`.
-- MariaDB, Redis, SeaweedFS and the Frappe Meet SFU through Docker Compose.
-- Node.js, Corepack, pnpm and the frontend development toolchain inside the Dev Container.
-- Frontend dependencies for the configured core app.
-- Bench application assets, compiled after the frontend toolchain is installed.
-- VS Code workspace settings and extension recommendations.
-- Playwright and Chromium for browser-based end-to-end tests.
+The intended frontend architecture is described in
+**[Frappe Multi-app Vue Architecture](./Frappe%20Multi-app%20Vue%20Architecture.md)**:
+a core app with the Vue 3 portal shell and shared UI, feature apps composed
+into it, and a separate public website app. The scripts here provision the
+development environment. They don't generate the application itself.
 
 ## Requirements
 
-On the remote development host:
+**Remote host:** Ubuntu or Debian with sudo rights. Everything else
+(Docker, git, locale, …) is installed by `./install.sh`. Run the scripts as
+your normal user (uid 1000 matches the container's `frappe` user best).
 
-- Ubuntu Server (the bootstrap scripts target Debian/Ubuntu).
-- Git, Python 3, curl, sudo privileges and an SSH key with access to the custom app repositories.
-- Docker Engine and the Docker Compose plugin. `install.sh` installs Docker when it is missing.
-
-On your local development machine:
-
-- Visual Studio Code.
-- **Remote - SSH** (`ms-vscode-remote.remote-ssh`).
-- **Dev Containers** (`ms-vscode-remote.remote-containers`).
-
-The extensions are also available together in the [Remote Development extension pack](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack).
+**Your machine:** Visual Studio Code with the **Remote - SSH** and
+**Dev Containers** extensions (or the *Remote Development* extension pack).
 
 ## Quick start
-
-Clone the repository on the remote host and run the installer:
 
 ```bash
 git clone https://github.com/FabioTessaro/tcf_frappe_dev.git frappe-dev
 cd frappe-dev
-./install.sh
+./install.sh      # 1. prepare the host: Docker, git identity + SSH key, FTP
+./setup.sh        # 2. choose apps, versions, secrets, site and custom apps
+./initialize.sh   # 3. build and start everything
 ```
 
-On the first run, the installer asks for the environment configuration, including:
+Then:
 
-- Frappe and dependency app versions.
-- Site and service credentials.
-- The core app that owns the Vue frontend (`CORE_APP`, default `tcf_core`).
-- Additional custom apps to clone and install.
+1. On the machine you browse from, add the sites to its hosts file:
+   `<server-ip>  <site> test.<site>`
+2. In VS Code: **Remote-SSH** into the server, then **Dev Containers: Attach
+   to Running Container…** and pick `tcf-frappe-dev-frappe-1`.
+3. Open `/workspace/.vscode/dev.code-workspace`.
+4. In a container terminal: `cd /workspace/frappe-bench && bench start`.
+5. Browse to `http://<site>:8000` (user `Administrator`, password
+   `ADMIN_PASSWORD` from `.env`).
 
-The core app is automatically included in `TCF_APPS`, so it does not need to be entered again as an additional app.
+Every script can be run again at any time. Each one checks the current state
+and only does what is missing.
 
-The installer then:
+## The scripts
 
-1. Checks Git identity and SSH access.
-2. Creates `.env` from the checked-in template, or migrates missing core-app configuration in an existing `.env`.
-3. Generates the Dev Container configuration from the checked-in template.
-4. Installs Docker when required and starts the project services in Attach mode.
-5. Provisions the Frappe bench and configured apps. Asset compilation is deferred at this stage.
-6. Installs the container-side development toolchain, including Node.js, Corepack and pnpm.
-7. Selects `CORE_APP`, installs its frontend dependencies and builds the Bench assets.
-8. Installs Playwright browsers and configures the development tools.
+All scripts share the same terminal UI: arrow-key menus, checklists, spinners
+with the live output line, colour-coded ✔ / ▲ / ✖ messages and a final
+summary of warnings and errors. All of them accept `-h/--help` (full option
+list) and `--trace` (adds a bash execution trace to the log).
 
-`install.sh` defaults to the **Attach to Running Container** workflow. Use `./install.sh --reopen` to prepare the **Reopen in Container** workflow instead.
+### `install.sh` — prepare the host
 
-## Connect with VS Code
+A checklist of components; each one fixes only what is missing or wrong.
 
-### Attach to Running Container (default)
+| Component | What it ensures |
+|---|---|
+| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …) and the `en_US.UTF-8` locale as system default |
+| `docker` | Docker Engine and the Compose plugin, Docker enabled at boot, your user in the `docker` group |
+| `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, and a check that GitHub / GitLab / Bitbucket / another server accepts the key |
+| `ftp` | vsftpd for one system user, configured from `bootstrap/templates/ftp.conf`, UFW rules when UFW is active |
 
-1. Connect to the remote host using Remote - SSH.
-2. Open the `frappe-dev` repository folder.
-3. Run **Dev Containers: Attach to Running Container...**.
-4. Select the `frappe` container.
-5. Open `.vscode/dev.code-workspace` from inside the container.
+| Option | Meaning |
+|---|---|
+| `--components base,docker,git,ftp` / `--all` | skip the menu |
+| `--git-name`, `--git-email` | git identity without prompting |
+| `--git-host HOST` | server to verify the SSH key against, or `skip` |
+| `--ssh-passphrase` / `--no-ssh-passphrase` | how a new key is generated. Custom-app clones inside the container need a key **without** passphrase |
+| `--ftp-user USER` | FTP user without prompting |
 
-The first attach can require VS Code Server to transfer a large server bundle. The installer attempts to pre-seed the matching server build in the container to avoid transfer hangs.
+### `setup.sh` — configure the project
 
-### Reopen in Container
+Writes `.env` (mode 600) and `docker-compose.yml`. The first run goes
+through five sections:
 
-Run:
+1. **Default apps and versions.** Pick the Frappe version, then the default
+   apps (`erpnext`, `hrms`, `raven`, `meet`, `drive`, `insights`, `wiki`).
+   Dependencies are added automatically (`hrms` → `erpnext`). Each version is
+   picked from the tags and branches of the app's git repository. For apps
+   that follow Frappe's numbering, tags of the same major version are shown
+   first.
+2. **Secrets.** Administrator password, MariaDB root user and password,
+   SeaweedFS keys and, only when Meet is selected, the SFU secret and the
+   announced address. Input is hidden. **Press enter to generate a random
+   value.**
+3. **Storage and services.** SeaweedFS buckets (pre-filled from
+   `bootstrap/templates/buckets.list`; untick or add any) and whether
+   MariaDB's port 3306 is published on the host.
+4. **Site.** The site name. The test site is always `test.<site>` and has
+   developer mode and `allow_tests` on (it's meant for Playwright). You choose
+   whether the main site has developer mode on.
+5. **Custom apps.** *Empty shell* (no custom apps: setup.sh writes `.env` and
+   exits) or *custom apps*: a git prefix (`git@github.com:my-org`), any
+   number of app names, an optional full git URL per app, and the
+   mandatory **core app** chosen from that list. Each repository is checked
+   with `git ls-remote` using your SSH key.
 
-```bash
-./install.sh --reopen
-```
+**On re-runs**, setup.sh shows the current configuration and a menu to edit
+single sections. Before saving it lists what changed and what
+`./initialize.sh` will have to do about it, compared with the last
+successful initialization. The levels are:
 
-Then open the repository in VS Code over Remote - SSH and run **Dev Containers: Reopen in Container**.
+- `●` applied automatically
+- `▲` initialize.sh asks first
+- `✖` needs a rebuild or manual action, for example a different Frappe
+  version or a different MariaDB root user
 
-The Dev Container's `postCreateCommand` automatically provisions the Bench, installs the Node.js and pnpm toolchain, prepares the core frontend, and builds the application assets.
+Running containers read `.env` when they start, so setup.sh offers to stop
+them first. It never changes `.env` while they run.
 
-The configured `CORE_APP` is read from `.env`, so no interactive core-app selection or manual provisioning command is required after reopening.
+| Option | Meaning |
+|---|---|
+| `--answers FILE` | take answers from a KEY=VALUE file (same keys as `.env`; secrets may be `@generate`). Missing keys are asked, or kept on a re-run. Example: `bootstrap/templates/answers.example.conf` |
+| `--section NAME` | edit one section and save: `apps`, `secrets`, `storage`, `site`, `custom` |
+| `--show` | print the configuration with secrets masked |
+| `-y, --yes` | no final confirmation; stop running containers without asking |
+
+### `initialize.sh` — build and start
+
+Requires `.env`; without it the script stops and tells you to run
+`./setup.sh`.
+
+| Step | What happens |
+|---|---|
+| VS Code Server | Menu: the commit **detected on this host** (the VS Code client that last connected over Remote-SSH, recommended), the **latest stable** for your client's platform, a commit typed by hand, or skip |
+| Containers | renders `docker-compose.yml`, pulls images, `docker compose up -d` |
+| VS Code Server | downloads the build on the host and copies it into the container (avoids attach hangs) |
+| Container tools | apt packages, uv, pre-commit; waits for MariaDB and SeaweedFS; checks the MariaDB root password |
+| Bench | `bench init` with `FRAPPE_VERSION` (external Redis, no Redis in the Procfile) |
+| Apps | fetches the default apps at their versions, clones the custom apps |
+| Sites | creates `<site>` and `test.<site>`, installs the apps in order (dependencies, then core app, then feature apps), merges `bootstrap/templates/site-config/*.json.template` into each `site_config.json` |
+| Buckets | creates missing SeaweedFS buckets. Buckets no longer listed are **never deleted**, only reported |
+| Assets | `bench build`, **one app at a time**. A failing app is reported and skipped, so Frappe and the other apps still work |
+| Extras | Claude Code CLI (optional, the choice is remembered), `.vscode/` workspace files, VS Code extensions installed into the container |
+
+A custom app that fails to clone, install or build is reported in red, and
+the run continues without it.
+
+**Reconcile.** When the bench differs from `.env`, initialize.sh explains the
+difference and asks before changing anything. The cases are: another app
+version (switch and migrate), an app removed from `.env` (uninstall and
+archive), a renamed site (create the new one, drop the old), a changed
+Administrator or MariaDB root password (apply it), a different Frappe version
+(full rebuild, which requires typing `REBUILD`).
+
+| Option | Meaning |
+|---|---|
+| `--vscode-detect` / `--vscode-latest` / `--vscode-commit HASH` / `--skip-vscode` | VS Code choice without the menu |
+| `--platform NAME` | client platform for `--vscode-latest` (`win32-x64-user`, `win32-arm64-user`, `darwin-universal`, `linux-x64`, `linux-arm64`, `server-linux-x64`) |
+| `--with-claude` / `--no-claude` | install the Claude Code CLI in the container (remembered) |
+| `--reconcile ask\|apply\|skip` | how differences are handled (`skip` without a terminal) |
+| `--no-build` | skip `bench build` |
+| `--no-extensions` | don't install VS Code extensions in the container |
+
+### `reseed.sh` — refresh the VS Code Server
+
+Run it when your VS Code client updated, when *Attach* hangs, or when the
+server in the container is broken. It shows the same menu as initialize.sh
+every time, replaces the chosen build in the running container, and offers
+to delete the other builds.
+
+| Option | Meaning |
+|---|---|
+| `--detect` / `--latest` / `--commit HASH` | build choice without the menu |
+| `--platform NAME` | platform for `--latest` (remembered) |
+| `--purge` / `--keep-others` | delete or keep the other builds |
+| `-y, --yes` | no confirmation |
+
+### `teardown.sh` — stop and clean
+
+A checklist, or flags. Running it with `--all` returns the folder to a fresh
+clone. Deleting data (database or files volumes, `frappe-bench/`, `.env`)
+requires typing `DELETE`. It warns about custom-app clones with uncommitted
+or unpushed work. Host setup from install.sh is never touched.
+
+| Target | Removes |
+|---|---|
+| `--stop` | nothing: only stops the containers (`./initialize.sh` restarts them) |
+| `--containers` | containers and network |
+| `--volumes[=mariadb,seaweedfs,vscode,claude]` | named volumes: all, or the listed ones |
+| `--images` | the project's images |
+| `--prune` | dangling images, unused networks, build cache (system-wide) |
+| `--bench` | `frappe-bench/` |
+| `--workspace` | the generated `.vscode/` files |
+| `--config` | `.env` and `docker-compose.yml` (a backup stays in `.state/backups` unless `--state`) |
+| `--state` | `.state/` |
+| `--logs` | `logs/` |
+| `--all` | all of the above |
+
+Options: `--dry-run` (show the plan only), `-y` (skip "continue?"),
+`--force` (also skip the typed confirmations; automation only).
 
 ## Configuration
 
-`install.sh` creates `.env` on the first run by calling `bootstrap/setup-env.sh`. That helper is an internal part of installation; run `./install.sh` rather than invoking it manually.
+`.env` is written by setup.sh from `bootstrap/templates/env.template`.
 
-The root-level `./setup-env.sh` has a different responsibility: it installs and configures the development pipeline inside the Dev Container. It does not create or modify `.env`.
-
-The file contains credentials, service settings, app versions and custom-app configuration. **Do not commit `.env`.**
-
-### Important settings
-
-- `TCF_SITE_NAME`: Frappe site name (default `tcf.local`).
-- `CORE_APP`: custom Frappe app that owns the Vue portal and its frontend development pipeline (default `tcf_core`).
-- `TCF_APPS`: space-separated custom app names to clone and install. The core app is included automatically.
-- `TCF_APPS_GIT_PREFIX`: Git URL prefix used to clone custom apps.
-- `*_VERSION`: Git tags or branches for the Frappe and dependency apps.
-- `WEBRTC_ANNOUNCED_IP`: address advertised by the Meet SFU to WebRTC clients.
-
-`CORE_APP` must identify one of the apps included in `TCF_APPS`. The selected app must also be cloned into `frappe-bench/apps/` and installed on the configured Frappe site.
-
-`CORE_APP` and `TCF_APPS` may both be empty (answer `none` at the `CORE_APP` prompt, or pass `--no-custom-apps`): no custom app is fetched or installed and the pipeline only builds the Bench assets. Inside the container, `.env` is authoritative for these two keys, so a container created from an older `.env` doesn't bring stale values back.
-
-For an existing `.env` without a `CORE_APP` key, `install.sh` adds the default `tcf_core` setting and ensures that the core app is included in `TCF_APPS`, preserving the other environment settings.
-
-Custom app folders are cloned into `frappe-bench/apps/`. Add or create apps with `./new-app.sh <app-name>`. It first asks whether you are creating a **feature app** (appended to the end of `TCF_APPS`; `CORE_APP` is untouched) or a **new core app** (set as `CORE_APP` and placed first in `TCF_APPS`; any previous core app stays in `TCF_APPS`). Pass `--feature` or `--core` to skip the question. `.env` is only updated after a successful push, so future bench provisioning can restore the app.
-
-## Common commands
-
-Run the root scripts from the repository directory. They resolve paths relative to their own location, so the current working directory does not otherwise matter.
-
-| Command | Purpose |
+| Key | Meaning |
 |---|---|
-| `./install.sh` | Initial setup using Attach to Running Container mode. |
-| `./install.sh --attach` | Explicitly use Attach to Running Container mode. |
-| `./install.sh --reopen` | Prepare the Reopen in Container workflow. |
-| `./install.sh --no-default-apps` | Skip the default dependency apps during Attach-mode provisioning. |
-| `./install.sh --no-custom-apps` | Install without any custom (TCF) apps, not even the core app: empties `CORE_APP` and `TCF_APPS` in `.env` and skips the core-frontend setup. Combine with `--no-default-apps` for a bare Frappe bench. |
-| `./setup-env.sh` | Set up or repair the development pipeline inside the Dev Container: Node.js, pnpm, frontend dependencies, Bench assets, Playwright and workspace tooling. Does not modify `.env`. |
-| `./startup.sh` | Start the services and offer to repair an incomplete Bench. Safe to repeat. |
-| `./shutdown.sh` | Stop the services. Optional cleanup tiers: `--clean`, `--volumes`, `--images`, `--all`. |
-| `./reseed.sh` | Re-download and seed the VS Code Server build in the `frappe` container. |
-| `./new-app.sh [--feature\|--core] <app-name>` | Create and optionally install a custom Frappe app (feature app or new core app), create its Git remote and update `.env` after a successful push: a feature app is appended to `TCF_APPS`; a core app becomes `CORE_APP` and is put first in `TCF_APPS`. |
-| `./check-env.sh` | Read-only development-environment audit. Run inside the Dev Container. |
+| `SITE_NAME`, `TEST_SITE_NAME` | main site and `test.<site>` |
+| `MAIN_SITE_DEVELOPER_MODE` | `1`/`0` |
+| `ADMIN_PASSWORD` | Administrator password of both sites |
+| `MARIADB_ROOT_USERNAME`, `MARIADB_ROOT_PASSWORD`, `MARIADB_EXPOSE_PORT` | database |
+| `SEAWEEDFS_ACCESS_KEY`, `SEAWEEDFS_SECRET_KEY`, `SEAWEEDFS_BUCKETS` | S3 storage |
+| `FRAPPE_VERSION`, `DEFAULT_APPS`, `<APP>_VERSION` | framework and default apps (tag or branch) |
+| `JWT_SECRET`, `WEBRTC_ANNOUNCED_IP`, `MEDIASOUP_ANNOUNCED_IP` | Meet SFU (only with Meet) |
+| `APPS_MODE` | `shell` or `custom` |
+| `CUSTOM_APPS_GIT_PREFIX`, `CUSTOM_APPS`, `CUSTOM_APP_URLS`, `CORE_APP` | custom apps; the core app is listed first |
 
-The pipeline setup is separate from the read-only audit script. It can be re-run when repairing or updating the container toolchain:
+## Customizing
 
-```bash
-./setup-env.sh
-```
+Every generated file comes from a template in `bootstrap/templates/`.
+Templates use `@@KEY@@` placeholders, `@@IF KEY@@ … @@ENDIF KEY@@` blocks
+and `@@# comment` lines (stripped).
 
-The frontend dependency installer maintains the core app's frontend package manifest and uses pnpm for frontend dependencies. The Frappe app root remains compatible with Bench's Yarn-based app installation.
+| Template | Generates / controls |
+|---|---|
+| `apps.catalog` | the default apps offered by setup.sh: repository, dependencies, flags (`follows-frappe`, `sfu`), description |
+| `env.template` | `.env` |
+| `docker-compose.yml.template` | `docker-compose.yml`: images, ports, volumes, services (meet-sfu and the MariaDB port are conditional) |
+| `site-config/main.json.template`, `site-config/test.json.template` | keys merged into each site's `site_config.json` on every initialize |
+| `buckets.list` | buckets suggested by setup.sh |
+| `answers.example.conf` | example for `setup.sh --answers` |
+| `vscode/extensions.list` | extensions installed in the container and recommended by the workspace |
+| `vscode/*.template` | `.vscode/dev.code-workspace`, `settings.json`, `extensions.json` |
+| `claude/*.template` | `frappe-bench/.claude/settings.json` and `frappe-bench/CLAUDE.md` |
+| `ftp.conf` | vsftpd settings applied by install.sh |
 
-## Local access
+Script-level knobs are in `bootstrap/settings.conf`: compose project name,
+log retention, service wait timeout, container user, and the number of tags
+shown by the version picker.
 
-Add the following entry to the hosts file of the machine from which you access the site, replacing `<remote-host-ip>` with the host's LAN address:
+## Logs and state
 
-```text
-<remote-host-ip>  tcf.local
-```
+- `logs/<script>-<timestamp>.log`: one verbose log per run. It records the
+  host, OS, Docker and git details, every question and answer, every command
+  with its full output, exit codes and timings. Known secrets are replaced
+  by `****`. The last 5 runs per script are kept (`LOG_KEEP`), and
+  `logs/<script>-latest.log` points to the newest one.
+- `.state/` holds runtime state:
+  - `initialized.env`: snapshot of the last successful initialize, used by
+    setup.sh's change warnings
+  - the cached VS Code Server tarballs, platform and commit
+  - `backups/`: the 10 most recent backups of each generated file
+  - initialize.sh preferences
+- `frappe-bench/.frappe-dev/state` records which apps and sites the scripts
+  manage. Reconcile only ever offers to remove those.
 
-Then open [http://tcf.local:8000](http://tcf.local:8000). The Administrator password is stored in `.env` as `ADMIN_PASSWORD`.
+## Local access and ports
 
-MariaDB is exposed on port `3306` for local database tools such as DBeaver. The Meet SFU uses TCP port `3000` and UDP ports `40000-40099`; make sure any intervening firewall allows the required traffic when testing calls from another machine.
+| Port | Service |
+|---|---|
+| 8000-8005 | bench web server (`http://<site>:8000`) |
+| 9000-9005 | socket.io |
+| 5173 | Vite dev server |
+| 3306 | MariaDB (only if published) |
+| 8333 / 8888 / 9333 / 8080 / 7333 | SeaweedFS S3 / filer / master / volume / WebDAV |
+| 3000 TCP, 40000-40099 UDP | Meet SFU (only with Meet) |
+| 21, 40000-50000 TCP | FTP (only with the ftp component) |
 
 ## Repository layout
 
 ```text
 .
+├── install.sh                 # host preparation
+├── setup.sh                   # configuration → .env, docker-compose.yml
+├── initialize.sh              # build & start
+├── reseed.sh                  # VS Code Server refresh
+├── teardown.sh                # stop & clean
 ├── bootstrap/
-│   ├── setup-env.sh       # Internal .env creation and migration helper
-│   ├── templates/         # Templates for generated configuration files
-│   └── *.sh               # Provisioning and configuration helpers
-├── .devcontainer/         # Docker Compose and Dev Container configuration
-├── install.sh             # Initial setup and orchestration
-├── setup-env.sh           # Development pipeline toolchain setup
-├── startup.sh             # Start services
-├── shutdown.sh            # Stop services and optional cleanup
-├── reseed.sh              # VS Code Server recovery
-├── new-app.sh             # Custom Frappe app scaffolding
-└── check-env.sh           # Read-only environment audit
+│   ├── settings.conf          # script-level settings
+│   ├── lib/                   # shared code: ui, log, common, apps, project, vscode, render.py
+│   ├── container/
+│   │   └── provision.sh       # runs inside the frappe container, step by step
+│   └── templates/             # every generated file starts here
+├── legacy/                    # previous scripts, reference only — not working
+└── Frappe Multi-app Vue Architecture.md
 ```
+
+`new-app.sh`, `check-env.sh` and the frontend toolchain setup (`setup-env.sh`)
+will be rebuilt on this structure. Until then, the old versions are in
+`legacy/` as a reference only.
 
 ## License
 

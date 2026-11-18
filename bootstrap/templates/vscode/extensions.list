@@ -1,0 +1,17 @@
+# -----------------------------------------------------------------------------
+# VS Code extensions — one "publisher.name" per line (# = comment).
+# ./initialize.sh installs them into the container's VS Code Server and lists
+# them as workspace recommendations in .vscode/.
+# Find an ID on the extension's page: "More Info" › "Identifier".
+# -----------------------------------------------------------------------------
+ms-python.python
+ms-python.vscode-pylance
+Vue.volar
+dbaeumer.vscode-eslint
+stylelint.vscode-stylelint
+bradlc.vscode-tailwindcss
+mrmlnc.vscode-scss
+wholroyd.jinja
+esbenp.prettier-vscode
+ms-playwright.playwright
+anthropic.claude-code

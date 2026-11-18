@@ -1,0 +1,36 @@
+@@# ---------------------------------------------------------------------------
+@@# Template for .vscode/dev.code-workspace — rendered by ./initialize.sh.
+@@#   @@FOLDERS_JSON@@        repo root + frappe-bench + one entry per custom app
+@@#   @@EXTENSIONS_JSON@@     from vscode/extensions.list
+@@# ---------------------------------------------------------------------------
+{
+    "folders": [
+@@FOLDERS_JSON@@
+    ],
+    "extensions": {
+        "recommendations": [
+@@EXTENSIONS_JSON@@
+        ]
+    },
+    "settings": {
+        "files.associations": {
+            "*.html": "jinja-html"
+        },
+        "python.defaultInterpreterPath": "/workspace/frappe-bench/env/bin/python",
+        "python.analysis.extraPaths": [
+            "/workspace/frappe-bench/apps/frappe"
+        ],
+        "files.watcherExclude": {
+            "**/node_modules/**": true,
+            "**/frappe-bench/env/**": true,
+            "**/frappe-bench/logs/**": true,
+            "**/frappe-bench/sites/*/private/**": true,
+            "**/frappe-bench/sites/*/public/files/**": true
+        },
+        "search.exclude": {
+            "**/frappe-bench/env": true,
+            "**/frappe-bench/logs": true,
+            "**/node_modules": true
+        }
+    }
+}

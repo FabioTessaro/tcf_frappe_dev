@@ -1,0 +1,38 @@
+@@# ---------------------------------------------------------------------------
+@@# Template for frappe-bench/.claude/settings.json — rendered by
+@@# ./initialize.sh when Claude Code is installed in the container.
+@@#   @@VENDORED_DENY_JSON@@  Edit/Write deny rules for frappe + every default app
+@@# ---------------------------------------------------------------------------
+{
+  "model": "sonnet",
+  "effortLevel": "medium",
+  "permissions": {
+    "deny": [
+@@VENDORED_DENY_JSON@@
+
+      "Read(env/**)",
+      "Edit(env/**)",
+      "Write(env/**)",
+
+      "Read(logs/**)",
+      "Edit(logs/**)",
+      "Write(logs/**)",
+
+      "Read(sites/**)",
+      "Edit(sites/**)",
+      "Write(sites/**)",
+
+      "Read(**/node_modules/**)",
+      "Edit(**/node_modules/**)",
+      "Write(**/node_modules/**)",
+
+      "Read(**/.git/**)",
+      "Edit(**/.git/**)",
+      "Write(**/.git/**)",
+
+      "Bash(cat env/*)",
+      "Bash(cat logs/*)",
+      "Bash(cat sites/*)"
+    ]
+  }
+}

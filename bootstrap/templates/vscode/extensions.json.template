@@ -1,0 +1,6 @@
+@@# Template for .vscode/extensions.json — rendered by ./initialize.sh.
+{
+    "recommendations": [
+@@EXTENSIONS_JSON@@
+    ]
+}

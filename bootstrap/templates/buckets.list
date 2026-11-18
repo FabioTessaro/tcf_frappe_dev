@@ -1,0 +1,9 @@
+# -----------------------------------------------------------------------------
+# SeaweedFS buckets suggested by ./setup.sh (one per line, # = comment).
+# The user can untick any of them and add others; the final list is saved in
+# .env as SEAWEEDFS_BUCKETS and created by ./initialize.sh.
+# Bucket names: 3-63 characters, lowercase letters, digits, dots and dashes.
+# -----------------------------------------------------------------------------
+cad-vault
+attachments-vault
+drive-vault

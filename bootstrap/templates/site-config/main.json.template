@@ -1,0 +1,19 @@
+@@# ---------------------------------------------------------------------------
+@@# Keys merged into the MAIN site's site_config.json by ./initialize.sh on
+@@# every run (existing keys not listed here are left alone).
+@@# Must render to a valid JSON object. Values come from .env:
+@@#   @@SITE_NAME@@ @@DEVELOPER_MODE@@ (0/1) @@SEAWEEDFS_ENDPOINT@@
+@@#   @@SEAWEEDFS_ACCESS_KEY@@ @@SEAWEEDFS_SECRET_KEY@@ @@MEET_ENABLED@@
+@@#   @@JWT_SECRET@@ @@MEET_ANNOUNCED_IP@@ (only meaningful with Meet)
+@@# ---------------------------------------------------------------------------
+{
+  "developer_mode": @@DEVELOPER_MODE@@,
+@@IF MEET_ENABLED@@
+  "sfu_secret": "@@JWT_SECRET@@",
+  "sfu_server_url": "http://@@MEET_ANNOUNCED_IP@@",
+  "sfu_server_port": 3000,
+@@ENDIF MEET_ENABLED@@
+  "seaweedfs_endpoint": "@@SEAWEEDFS_ENDPOINT@@",
+  "seaweedfs_access_key": "@@SEAWEEDFS_ACCESS_KEY@@",
+  "seaweedfs_secret_key": "@@SEAWEEDFS_SECRET_KEY@@"
+}

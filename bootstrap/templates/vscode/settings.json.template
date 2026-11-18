@@ -1,0 +1,23 @@
+@@# Template for .vscode/settings.json — rendered by ./initialize.sh.
+{
+    "python.defaultInterpreterPath": "/workspace/frappe-bench/env/bin/python",
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingTypeStubs": "none",
+        "reportUnknownArgumentType": "none",
+        "reportUnknownLambdaType": "none",
+        "reportUnknownMemberType": "none",
+        "reportUnknownParameterType": "none",
+        "reportUnknownVariableType": "none",
+        "reportUntypedBaseClass": "none",
+        "reportUntypedClassDecorator": "none",
+        "reportUntypedFunctionDecorator": "none",
+        "reportMissingParameterType": "none",
+        "reportMissingTypeArgument": "none"
+    },
+    "stylelint.validate": [
+        "css",
+        "scss",
+        "vue"
+    ]
+}

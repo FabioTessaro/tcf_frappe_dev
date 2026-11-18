@@ -29,7 +29,9 @@ log_quote_cmd() {
 
 log_add_secret() {
   local v="$1"
-  [[ ${#v} -ge 4 ]] || return 0
+  # Very short values (e.g. "admin") would also hide ordinary words such as
+  # "mariadb-admin" all over the log, so they aren't redacted (logs are mode 600).
+  [[ ${#v} -ge 6 ]] || { log_line "note: a secret shorter than 6 characters is not redacted in this log"; return 0; }
   local s; for s in "${_LOG_SECRETS[@]}"; do [[ "$s" == "$v" ]] && return 0; done
   _LOG_SECRETS+=("$v")
 }

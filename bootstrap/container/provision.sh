@@ -71,6 +71,10 @@ DB_PASS="${E[MARIADB_ROOT_PASSWORD]:-}"
 # the old mysql / mysqladmin names live in an optional "compat" package.
 DB_CLI="$(command -v mariadb || command -v mysql)"
 DB_ADMIN="$(command -v mariadb-admin || command -v mysqladmin)"
+# MariaDB >= 11.4 clients verify the server's TLS certificate by default; the
+# mariadb container only has a self-signed one. Traffic stays on the private
+# docker network, so verification is disabled (also globally, see system-root).
+DB_TLS=(--skip-ssl-verify-server-cert)
 
 in_bench() { cd "$BENCH" || die "frappe-bench is missing — run bench-init first."; }
 
@@ -124,6 +128,16 @@ system-root)
   else
     echo "all container packages already installed"
   fi
+  # Every MariaDB client in the container (bench backups, bench mariadb, …):
+  # don't verify the self-signed certificate of the mariadb container.
+  mkdir -p /etc/mysql/conf.d
+  cnf=/etc/mysql/conf.d/frappe-dev.cnf
+  want=$'# written by frappe-dev (bootstrap/container/provision.sh)\n[client]\nskip-ssl-verify-server-cert\n'
+  if [[ "$(cat "$cnf" 2>/dev/null)"$'\n' != "$want" ]]; then
+    printf '%s' "$want" > "$cnf"; chmod 644 "$cnf"; echo "wrote $cnf"
+  else
+    echo "$cnf already present"
+  fi
   ;;
 
 # -----------------------------------------------------------------------------
@@ -155,7 +169,17 @@ wait-services)
   echo "using $DB_ADMIN"
   # "ping" succeeds as soon as the server answers, even if the password is
   # wrong (the password is checked separately by db-auth).
-  until err=$("$DB_ADMIN" ping -h mariadb --connect-timeout=3 2>&1); do
+  strikes=0
+  until err=$("$DB_ADMIN" "${DB_TLS[@]}" ping -h mariadb --connect-timeout=3 2>&1); do
+    err="${err//$'\n'/ }"
+    # Only "not reachable yet" errors are worth waiting for; anything else
+    # (TLS, authentication, unknown option…) won't fix itself.
+    if [[ "$err" =~ Can.t\ connect|Connection\ refused|Unknown\ (server\ )?host|Lost\ connection|timed\ out|No\ route ]]; then
+      strikes=0
+    else
+      strikes=$((strikes + 1))
+      (( strikes >= 3 )) && die "MariaDB answers but the client fails: $err"
+    fi
     (( waited >= timeout )) && die "MariaDB didn't answer within ${timeout}s — last error: $err"
     (( waited % 10 == 0 )) && echo "waiting for MariaDB (${waited}s): ${err:-no answer}"
     sleep 2; waited=$((waited + 2))
@@ -172,7 +196,7 @@ wait-services)
 
 db-auth)
   [[ -n "$DB_CLI" ]] || die "no MariaDB client in the container (mariadb / mysql not found)"
-  if "$DB_CLI" -h mariadb -u "$DB_USER" -p"$DB_PASS" -e 'SELECT 1' >/dev/null 2>&1; then
+  if "$DB_CLI" "${DB_TLS[@]}" -h mariadb -u "$DB_USER" -p"$DB_PASS" -e 'SELECT 1' >/dev/null 2>&1; then
     echo "MariaDB accepts the root password from .env"; exit 0
   fi
   echo "MariaDB rejects the root password from .env"; exit 3
@@ -181,9 +205,9 @@ db-auth)
 db-root-password)
   IFS= read -r old || true
   [[ -n "$old" ]] || die "old password expected on stdin"
-  "$DB_CLI" -h mariadb -u "$DB_USER" -p"$old" -e 'SELECT 1' >/dev/null 2>&1 || die "the previous password is rejected too"
+  "$DB_CLI" "${DB_TLS[@]}" -h mariadb -u "$DB_USER" -p"$old" -e 'SELECT 1' >/dev/null 2>&1 || die "the previous password is rejected too"
   esc="${DB_PASS//\\/\\\\}"; esc="${esc//\'/\\\'}"
-  "$DB_CLI" -h mariadb -u "$DB_USER" -p"$old" -e \
+  "$DB_CLI" "${DB_TLS[@]}" -h mariadb -u "$DB_USER" -p"$old" -e \
     "ALTER USER IF EXISTS '$DB_USER'@'%' IDENTIFIED BY '$esc'; ALTER USER IF EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$esc'; FLUSH PRIVILEGES;" \
     || die "ALTER USER failed"
   echo "MariaDB root password updated"

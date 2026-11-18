@@ -56,12 +56,26 @@ source "$LIB_DIR/ui.sh"
 
 # --- script lifecycle -----------------------------------------------------------
 _SUDO_KEEPALIVE_PID=""
+_TTY_STATE=""
+
+# Terminal settings are saved at start and restored on every exit: menus and
+# password prompts switch the terminal to "no echo / single key" mode, and an
+# exit in the middle of such a read (Ctrl+C) would otherwise leave it there.
+_tty_save() {
+  [[ "$UI_TTY_IN" == true ]] || return 0
+  _TTY_STATE=$(stty -g < /dev/tty 2>/dev/null) || _TTY_STATE=""
+}
+_tty_restore() {
+  [[ -n "$_TTY_STATE" ]] && stty "$_TTY_STATE" < /dev/tty 2>/dev/null
+  _ui_cursor_show
+  return 0
+}
 
 _script_exit() {
   local rc=$?
   trap - EXIT
+  _tty_restore
   [[ -n "$_SUDO_KEEPALIVE_PID" ]] && kill "$_SUDO_KEEPALIVE_PID" 2>/dev/null
-  _ui_cursor_show
   [[ -n "$UI_LAST_OUTPUT" && -f "$UI_LAST_OUTPUT" ]] && rm -f "$UI_LAST_OUTPUT"
   [[ "$STATE_TMP_DIR" == "$STATE_DIR/tmp/run-"* ]] && rm -rf "$STATE_TMP_DIR"
   log_line "exit status $rc"
@@ -70,6 +84,7 @@ _script_exit() {
 }
 
 _script_interrupt() {
+  _tty_restore
   printf '\n'
   ui_warn "Interrupted by the user."
   exit 130
@@ -95,6 +110,7 @@ script_init() {
   mkdir -p "$STATE_DIR" "$STATE_TMP_DIR"
   chmod 700 "$STATE_DIR" 2>/dev/null || true
   log_init "$name" "$@"
+  _tty_save
   trap _script_exit EXIT
   trap _script_interrupt INT TERM
   [[ "$SCRIPT_TRACE" == true ]] && log_trace_on

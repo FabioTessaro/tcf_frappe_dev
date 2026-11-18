@@ -67,6 +67,10 @@ else
 fi
 DB_USER="${E[MARIADB_ROOT_USERNAME]:-root}"
 DB_PASS="${E[MARIADB_ROOT_PASSWORD]:-}"
+# MariaDB 11 clients (Debian 13 and later) only ship mariadb / mariadb-admin;
+# the old mysql / mysqladmin names live in an optional "compat" package.
+DB_CLI="$(command -v mariadb || command -v mysql)"
+DB_ADMIN="$(command -v mariadb-admin || command -v mysqladmin)"
 
 in_bench() { cd "$BENCH" || die "frappe-bench is missing — run bench-init first."; }
 
@@ -147,21 +151,28 @@ EOF
 # -----------------------------------------------------------------------------
 wait-services)
   timeout="${1:-300}"; waited=0
-  until mysqladmin ping -h mariadb --silent 2>/dev/null; do
-    (( waited >= timeout )) && die "MariaDB didn't answer within ${timeout}s"
+  [[ -n "$DB_ADMIN" ]] || die "no MariaDB client in the container (mariadb-admin / mysqladmin not found)"
+  echo "using $DB_ADMIN"
+  # "ping" succeeds as soon as the server answers, even if the password is
+  # wrong (the password is checked separately by db-auth).
+  until err=$("$DB_ADMIN" ping -h mariadb --connect-timeout=3 2>&1); do
+    (( waited >= timeout )) && die "MariaDB didn't answer within ${timeout}s — last error: $err"
+    (( waited % 10 == 0 )) && echo "waiting for MariaDB (${waited}s): ${err:-no answer}"
     sleep 2; waited=$((waited + 2))
   done
   echo "MariaDB answers (${waited}s)"
   waited=0
-  until curl -s -o /dev/null "http://seaweedfs:8333"; do
+  until code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://seaweedfs:8333") && [[ "$code" != 000 ]]; do
     (( waited >= timeout )) && die "SeaweedFS didn't answer within ${timeout}s"
+    (( waited % 10 == 0 )) && echo "waiting for SeaweedFS (${waited}s)"
     sleep 2; waited=$((waited + 2))
   done
-  echo "SeaweedFS answers (${waited}s)"
+  echo "SeaweedFS answers (${waited}s, HTTP $code)"
   ;;
 
 db-auth)
-  if mysql -h mariadb -u "$DB_USER" -p"$DB_PASS" -e 'SELECT 1' >/dev/null 2>&1; then
+  [[ -n "$DB_CLI" ]] || die "no MariaDB client in the container (mariadb / mysql not found)"
+  if "$DB_CLI" -h mariadb -u "$DB_USER" -p"$DB_PASS" -e 'SELECT 1' >/dev/null 2>&1; then
     echo "MariaDB accepts the root password from .env"; exit 0
   fi
   echo "MariaDB rejects the root password from .env"; exit 3
@@ -170,9 +181,9 @@ db-auth)
 db-root-password)
   IFS= read -r old || true
   [[ -n "$old" ]] || die "old password expected on stdin"
-  mysql -h mariadb -u "$DB_USER" -p"$old" -e 'SELECT 1' >/dev/null 2>&1 || die "the previous password is rejected too"
+  "$DB_CLI" -h mariadb -u "$DB_USER" -p"$old" -e 'SELECT 1' >/dev/null 2>&1 || die "the previous password is rejected too"
   esc="${DB_PASS//\\/\\\\}"; esc="${esc//\'/\\\'}"
-  mysql -h mariadb -u "$DB_USER" -p"$old" -e \
+  "$DB_CLI" -h mariadb -u "$DB_USER" -p"$old" -e \
     "ALTER USER IF EXISTS '$DB_USER'@'%' IDENTIFIED BY '$esc'; ALTER USER IF EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$esc'; FLUSH PRIVILEGES;" \
     || die "ALTER USER failed"
   echo "MariaDB root password updated"

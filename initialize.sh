@@ -175,7 +175,45 @@ esac
 ui_section "Containers"
 compose_render ENV || ui_die "Couldn't render docker-compose.yml."
 ui_ok "docker-compose.yml $RENDER_STATUS"
-ui_run "Pulling images" -- dc pull --quiet --ignore-pull-failures || ui_warn "Some images couldn't be pulled; using local copies if present."
+# pull_images — pulls every image of the compose file in parallel and prints
+# a status line whenever progress changes (the spinner shows the latest one):
+#   "2/5 images done · frappe/bench:latest 14/27 layers"
+pull_images() {
+  local dir="$STATE_TMP_DIR/pull" i names=() total ready line last="" nfail=0
+  mkdir -p "$dir"
+  mapfile -t names < <(dc config --images 2>/dev/null | sort -u)
+  total=${#names[@]}
+  (( total )) || { echo "no images found in docker-compose.yml"; return 1; }
+  echo "pulling $total images in parallel: ${names[*]}"
+  for i in "${!names[@]}"; do
+    ( dk pull "${names[i]}" > "$dir/$i.log" 2>&1; echo $? > "$dir/$i.rc" ) &
+  done
+  while true; do
+    ready=0; line=""
+    for i in "${!names[@]}"; do
+      if [[ -f "$dir/$i.rc" ]]; then ready=$((ready + 1)); continue; fi
+      local layers doneL
+      layers=$(grep -oE '^[0-9a-f]{12}: ' "$dir/$i.log" 2>/dev/null | sort -u | wc -l)
+      doneL=$(grep -E '^[0-9a-f]{12}: (Pull complete|Already exists)' "$dir/$i.log" 2>/dev/null | cut -d: -f1 | sort -u | wc -l)
+      if (( layers )); then line+=" · ${names[i]##*/} $doneL/$layers layers"; else line+=" · ${names[i]##*/} starting"; fi
+    done
+    line="$ready/$total images done$line"
+    [[ "$line" != "$last" ]] && { echo "$line"; last="$line"; }
+    (( ready == total )) && break
+    sleep 1
+  done
+  for i in "${!names[@]}"; do
+    if [[ "$(cat "$dir/$i.rc")" != 0 ]]; then
+      echo "FAILED  ${names[i]}: $(tail -n 1 "$dir/$i.log")"; nfail=$((nfail + 1))
+    elif grep -q 'Image is up to date' "$dir/$i.log"; then
+      echo "up to date  ${names[i]}"
+    else
+      echo "downloaded  ${names[i]}"
+    fi
+  done
+  return "$nfail"
+}
+ui_run "Pulling images" -- pull_images || ui_warn "Some images couldn't be pulled; local copies are used if present (see the log)."
 ui_run "Starting containers" -- dc up -d --remove-orphans || ui_die "docker compose up failed." "See ${LOG_FILE_REL}"
 running=$(project_running_services | paste -sd' ')
 ui_ok "Running: $running"

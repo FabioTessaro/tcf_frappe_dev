@@ -178,17 +178,23 @@ vscode_choose() {
   return 0
 }
 
-# vscode_download HASH — cached tarball path in VS_TARBALL.
+# _vscode_tarball HASH — path of the cached tarball. Derived from the hash
+# (not stored in a variable) because ui_run runs steps in a subshell.
+_vscode_tarball() { printf '%s/vscode-server-%s.tar.gz' "$VS_CACHE_DIR" "$1"; }
+
+# vscode_download HASH — downloads into the cache (kept between runs).
 vscode_download() {
-  local hash="$1"
+  local hash="$1" VS_TARBALL
   mkdir -p "$VS_CACHE_DIR"
-  VS_TARBALL="$VS_CACHE_DIR/vscode-server-$hash.tar.gz"
+  VS_TARBALL="$(_vscode_tarball "$hash")"
   if [[ -s "$VS_TARBALL" ]] && tar -tzf "$VS_TARBALL" >/dev/null 2>&1; then
     log_line "using cached $VS_TARBALL"; return 0
   fi
   rm -f "$VS_TARBALL"
-  curl -fSL --retry 3 --connect-timeout 20 -o "$VS_TARBALL.part" \
+  echo "downloading https://update.code.visualstudio.com/commit:$hash/server-linux-x64/stable"
+  curl -fsSL --show-error --retry 3 --connect-timeout 20 -o "$VS_TARBALL.part" \
     "https://update.code.visualstudio.com/commit:$hash/server-linux-x64/stable" || { rm -f "$VS_TARBALL.part"; return 1; }
+  echo "downloaded $(du -h "$VS_TARBALL.part" | cut -f1)"
   tar -tzf "$VS_TARBALL.part" >/dev/null || { echo "downloaded archive is corrupt"; rm -f "$VS_TARBALL.part"; return 1; }
   mv "$VS_TARBALL.part" "$VS_TARBALL"
   # Keep only the 3 most recent tarballs.
@@ -197,9 +203,12 @@ vscode_download() {
 
 # _vscode_copy HASH FORCE — extract the cached tarball into the container.
 _vscode_copy() {
-  local hash="$1" force="$2" target="$VS_CONTAINER_BIN/$1" tmp src entries
+  local hash="$1" force="$2" target="$VS_CONTAINER_BIN/$1" tmp src entries tarball
+  tarball="$(_vscode_tarball "$hash")"
+  [[ -s "$tarball" ]] || { echo "cached tarball missing: $tarball"; return 1; }
   tmp=$(mktemp -d "$STATE_TMP_DIR/vscode.XXXXXX")
-  tar -xzf "$VS_TARBALL" -C "$tmp" || return 1
+  echo "extracting $tarball"
+  tar -xzf "$tarball" -C "$tmp" || return 1
   src="$tmp"
   entries=$(find "$tmp" -mindepth 1 -maxdepth 1)
   if [[ $(printf '%s\n' "$entries" | wc -l) -eq 1 && -d "$entries" ]]; then src="$entries"; fi
@@ -208,6 +217,7 @@ _vscode_copy() {
     cx_root sh -c "rm -rf '$target' '$VS_CONTAINER_BIN/${hash}'_*" || return 1
   fi
   cx_root mkdir -p "$target" || return 1
+  echo "copying into frappe:$target"
   dc cp "$src/." "frappe:$target/" || return 1
   cx_root chown -R "$CONTAINER_USER:$CONTAINER_USER" "${CONTAINER_HOME}/.vscode-server" || return 1
   rm -rf "$tmp"

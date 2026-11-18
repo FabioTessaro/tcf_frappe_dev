@@ -128,6 +128,19 @@ system-root)
   else
     echo "all container packages already installed"
   fi
+  # Named volumes mounted in the bench user's home (claude-config, …) are
+  # created owned by root: hand them to the bench user.
+  bench_user="$(stat -c %U "$WS" 2>/dev/null)"; [[ -z "$bench_user" || "$bench_user" == UNKNOWN || "$bench_user" == root ]] && bench_user=frappe
+  bench_home="$(getent passwd "$bench_user" | cut -d: -f6)"
+  owned_dirs=("$bench_home/.claude")
+  for d in "${owned_dirs[@]}"; do
+    mkdir -p "$d"
+    if [[ "$(stat -c %U "$d")" != "$bench_user" ]]; then
+      chown -R "$bench_user:$bench_user" "$d"; echo "fixed ownership of $d → $bench_user"
+    else
+      echo "$d already owned by $bench_user"
+    fi
+  done
   # Every MariaDB client in the container (bench backups, bench mariadb, …):
   # don't verify the self-signed certificate of the mariadb container.
   mkdir -p /etc/mysql/conf.d

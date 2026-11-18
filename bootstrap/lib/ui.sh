@@ -42,12 +42,12 @@ fi
 if [[ "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" =~ [Uu][Tt][Ff]-?8 ]]; then
   G_OK='✔'; G_FAIL='✖'; G_WARN='▲'; G_INFO='●'; G_ARROW='➜'; G_DOT='·'
   G_ON='◉'; G_OFF='○'; G_BOX_ON='■'; G_BOX_OFF='□'; G_PTR='❯'; G_RULE='─'
-  G_UP='▲'; G_DOWN='▼'
+  G_UP='▲'; G_DOWN='▼'; G_ELL='…'
   UI_SPIN=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 else
   G_OK='OK'; G_FAIL='XX'; G_WARN='!!'; G_INFO='--'; G_ARROW='->'; G_DOT='.'
   G_ON='(*)'; G_OFF='( )'; G_BOX_ON='[x]'; G_BOX_OFF='[ ]'; G_PTR='>'; G_RULE='-'
-  G_UP='^'; G_DOWN='v'
+  G_UP='^'; G_DOWN='v'; G_ELL='~'
   UI_SPIN=('|' '/' '-' '\')
 fi
 
@@ -63,21 +63,69 @@ UI_SELECTED=()
 # Set by ui_run: the file holding the last command's (redacted) output.
 UI_LAST_OUTPUT=""
 
-_ui_cols() {
-  local c="${COLUMNS:-}"
-  if [[ -z "$c" ]] && [[ "$UI_TTY_OUT" == true ]]; then
-    c=$(tput cols 2>/dev/null || echo 80)
+# _ui_term_size — current terminal size into _UI_COLS / _UI_ROWS. Asks the
+# terminal itself (stty on /dev/tty): inside $(…) stdout is a pipe, so tput
+# would silently fall back to 80 columns.
+_UI_COLS=80; _UI_ROWS=24
+_ui_term_size() {
+  local s=""
+  [[ "$UI_TTY_OUT" == true || "$UI_TTY_IN" == true ]] && s=$(stty size < /dev/tty 2>/dev/null)
+  if [[ "$s" =~ ^([0-9]+)\ ([0-9]+)$ ]] && (( BASH_REMATCH[2] > 0 )); then
+    _UI_ROWS=${BASH_REMATCH[1]}; _UI_COLS=${BASH_REMATCH[2]}
+  else
+    _UI_COLS=$(tput cols 2>/dev/null || echo 80); _UI_ROWS=$(tput lines 2>/dev/null || echo 24)
+    [[ "$_UI_COLS" =~ ^[0-9]+$ ]] || _UI_COLS=80
+    [[ "$_UI_ROWS" =~ ^[0-9]+$ ]] || _UI_ROWS=24
   fi
-  [[ "$c" =~ ^[0-9]+$ ]] || c=80
-  (( c > 100 )) && c=100
+  (( _UI_COLS < 20 )) && _UI_COLS=20
+  (( _UI_ROWS < 8 )) && _UI_ROWS=8
+  return 0
+}
+
+# _ui_cols — width for rules and wrapping (terminal width, at most 100).
+_ui_cols() {
+  _ui_term_size
+  local c=$_UI_COLS; (( c > 100 )) && c=100
   printf '%s' "$c"
 }
 
-_ui_rows() {
-  local r=""
-  [[ "$UI_TTY_OUT" == true ]] && r=$(tput lines 2>/dev/null || echo 24)
-  [[ "$r" =~ ^[0-9]+$ ]] || r=24
-  printf '%s' "$r"
+_ui_rows() { _ui_term_size; printf '%s' "$_UI_ROWS"; }
+
+# _ui_trunc TEXT MAX — TEXT cut to MAX visible characters (ANSI colour codes
+# don't count) with an ellipsis. Result in _UI_T (no subshell: used per frame).
+_ui_trunc() {
+  local s="$1" max="$2" plain="$1" re=$'\e''\[[0-9;?]*[A-Za-z]'
+  while [[ "$plain" =~ $re ]]; do plain="${plain/"${BASH_REMATCH[0]}"/}"; done
+  if (( ${#plain} <= max )); then _UI_T="$s"; return 0; fi
+  local out="" vis=0 i=0 len=${#s} keep=$((max - 1)) c esc
+  (( keep < 0 )) && keep=0
+  while (( i < len )); do
+    c="${s:i:1}"
+    if [[ "$c" == $'\e' ]]; then
+      esc="$c"; i=$((i + 1))
+      while (( i < len )); do c="${s:i:1}"; esc+="$c"; i=$((i + 1)); [[ "$c" == [A-Za-z] ]] && break; done
+      out+="$esc"; continue
+    fi
+    if (( vis < keep )); then out+="$c"; vis=$((vis + 1)); fi
+    i=$((i + 1))
+  done
+  _UI_T="${out}${G_ELL}${C_RESET}"
+}
+
+# _ui_wrapped FIRST CONT WIDTH SUFFIX TEXT — prints TEXT wrapped to the
+# terminal: the first line after the (coloured) prefix FIRST, following lines
+# after CONT; both prefixes are WIDTH characters wide. SUFFIX ends every line.
+# Without a terminal the text is printed on one line.
+_ui_wrapped() {
+  local first="$1" cont="$2" pw="$3" suffix="$4" text="$5" w line n=0
+  if [[ "$UI_TTY_OUT" != true ]]; then printf '%s%s%s\n' "$first" "$text" "$suffix"; return 0; fi
+  w=$(( $(_ui_cols) - pw - 1 )); (( w < 10 )) && w=10
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if (( n == 0 )); then printf '%s%s%s\n' "$first" "$line" "$suffix"; else printf '%s%s%s\n' "$cont" "$line" "$suffix"; fi
+    n=$((n + 1))
+  done < <(printf '%s\n' "$text" | fold -s -w "$w" | sed 's/[[:space:]]*$//')
+  (( n == 0 )) && printf '%s%s\n' "$first" "$suffix"
+  return 0
 }
 
 _ui_repeat() { local s="" i; for ((i = 0; i < $2; i++)); do s+="$1"; done; printf '%s' "$s"; }
@@ -115,16 +163,16 @@ ui_section() {
   log_line "### ${counter}${title}"
 }
 
-ui_info()  { printf '  %s%s%s %s\n' "$C_BLUE" "$G_INFO" "$C_RESET" "$*"; log_line "[info] $*"; }
-ui_ok()    { printf '  %s%s%s %s\n' "$C_GREEN" "$G_OK" "$C_RESET" "$*"; log_line "[ ok ] $*"; }
-ui_note()  { printf '    %s%s%s\n' "$C_DIM" "$*" "$C_RESET"; log_line "       $*"; }
+ui_info()  { _ui_wrapped "  $C_BLUE$G_INFO$C_RESET " "    " 4 "" "$*"; log_line "[info] $*"; }
+ui_ok()    { _ui_wrapped "  $C_GREEN$G_OK$C_RESET " "    " 4 "" "$*"; log_line "[ ok ] $*"; }
+ui_note()  { _ui_wrapped "    $C_DIM" "    $C_DIM" 4 "$C_RESET" "$*"; log_line "       $*"; }
 ui_warn()  {
-  printf '  %s%s %s%s\n' "$C_YELLOW" "$G_WARN" "$*" "$C_RESET" >&2
+  _ui_wrapped "  $C_YELLOW$G_WARN " "  $C_YELLOW  " 4 "$C_RESET" "$*" >&2
   log_line "[WARN] $*"
   UI_WARNINGS+=("$*")
 }
 ui_error() {
-  printf '  %s%s%s %s%s\n' "$C_RED" "$C_BOLD" "$G_FAIL" "$*" "$C_RESET" >&2
+  _ui_wrapped "  $C_RED$C_BOLD$G_FAIL$C_RESET $C_RED" "    $C_RED" 4 "$C_RESET" "$*" >&2
   log_line "[FAIL] $*"
   UI_ERRORS+=("$*")
 }
@@ -136,11 +184,17 @@ ui_die() {
   exit 1
 }
 
-# ui_kv KEY VALUE [WIDTH] — aligned "key  value" line.
+# ui_kv KEY VALUE [WIDTH] — aligned "key  value" line (value wraps under itself;
+# on narrow terminals the value moves below the key).
 ui_kv() {
-  local w="${3:-22}"
-  printf '    %s%-*s%s %s\n' "$C_GREY" "$w" "$1" "$C_RESET" "$2"
-  log_line "    $(printf '%-*s' "$w" "$1") $2"
+  local w="${3:-22}" k="$1" pad
+  log_line "    $(printf '%-*s' "$w" "$k") $2"
+  if [[ "$UI_TTY_OUT" == true ]] && (( $(_ui_cols) - w - 6 < 20 )); then
+    printf '    %s%s%s\n' "$C_GREY" "$k" "$C_RESET"
+    _ui_wrapped "      " "      " 6 "" "$2"; return 0
+  fi
+  pad=$(printf '%*s' $((w + 5)) '')
+  _ui_wrapped "$(printf '    %s%-*s%s ' "$C_GREY" "$w" "$k" "$C_RESET")" "$pad" $((w + 5)) "" "$2"
 }
 
 # ui_box LINE... — highlighted block for important instructions.
@@ -148,7 +202,7 @@ ui_box() {
   local line
   printf '\n'
   for line in "$@"; do
-    printf '  %s┃%s %s\n' "$C_CYAN" "$C_RESET" "$line"
+    _ui_wrapped "  $C_CYAN┃$C_RESET " "  $C_CYAN┃$C_RESET   " 4 "" "$line"
     log_line "  | $line"
   done
   printf '\n'
@@ -195,18 +249,15 @@ ui_run() {
   pid=$!
 
   if [[ "$UI_FANCY" == true ]]; then
-    local i=0 cols last elapsed lw
-    cols=$(_ui_cols)
+    local i=0 last elapsed frame
     _ui_cursor_hide
     while kill -0 "$pid" 2>/dev/null; do
+      (( i % 8 == 0 )) && _ui_term_size          # follow terminal resizes
       elapsed=$(_ui_fmt_duration $((SECONDS - start)))
-      last=$(tail -n 1 "$UI_LAST_OUTPUT" 2>/dev/null | tr -d '\r' | tr '\t' ' ' | sed 's/\x1b\[[0-9;]*[A-Za-z]//g')
-      lw=$((cols - ${#label} - ${#elapsed} - 12))
-      (( lw < 0 )) && lw=0
-      (( ${#last} > lw )) && last="${last:0:lw}"
-      printf '\r\033[K  %s%s%s %s %s%s%s  %s%s%s' \
-        "$C_CYAN" "${UI_SPIN[i % ${#UI_SPIN[@]}]}" "$C_RESET" "$label" \
-        "$C_GREY" "$elapsed" "$C_RESET" "$C_DIM" "$last" "$C_RESET"
+      last=$(tail -n 1 "$UI_LAST_OUTPUT" 2>/dev/null | tr -d '\r' | tr '\t' ' ' | sed 's/\x1b\[[0-9;?]*[A-Za-z]//g')
+      frame="  $C_CYAN${UI_SPIN[i % ${#UI_SPIN[@]}]}$C_RESET $label $C_GREY$elapsed$C_RESET  $C_DIM$last$C_RESET"
+      _ui_trunc "$frame" $((_UI_COLS - 1))
+      printf '\r\033[K%s' "$_UI_T"
       i=$((i + 1))
       sleep 0.12
     done
@@ -221,9 +272,9 @@ ui_run() {
   local took; took=$(_ui_fmt_duration $((SECONDS - start)))
   log_line "<<< exit=$rc duration=$took"
   if (( rc == 0 )); then
-    printf '  %s%s%s %s %s(%s)%s\n' "$C_GREEN" "$G_OK" "$C_RESET" "$label" "$C_GREY" "$took" "$C_RESET"
+    _ui_wrapped "  $C_GREEN$G_OK$C_RESET " "    " 4 "" "$label $C_GREY($took)$C_RESET"
   else
-    printf '  %s%s%s %s %s(exit %s after %s)%s\n' "$C_RED" "$G_FAIL" "$C_RESET" "$label" "$C_GREY" "$rc" "$took" "$C_RESET"
+    _ui_wrapped "  $C_RED$G_FAIL$C_RESET " "    " 4 "" "$label $C_GREY(exit $rc after $took)$C_RESET"
     if [[ "$quiet_fail" == false ]]; then
       printf '    %slast output:%s\n' "$C_GREY" "$C_RESET"
       tail -n "$tail_n" "$UI_LAST_OUTPUT" | sed "s/^/    ${C_DIM}│${C_RESET} /"
@@ -260,9 +311,16 @@ ui_require_tty() {
 }
 
 _ui_read_key() {
-  # Sets _UI_KEY to: up down left right enter space esc or the character.
-  local k rest
-  IFS= read -rsn1 k || { _UI_KEY="eof"; return; }
+  # _ui_read_key [TIMEOUT] — sets _UI_KEY to: up down left right pgup pgdown
+  # enter space esc eof, "tick" when TIMEOUT expired, or the character.
+  local k rest rc=0
+  if [[ -n "${1:-}" ]]; then
+    IFS= read -rsn1 -t "$1" k || rc=$?
+    if (( rc > 128 )); then _UI_KEY="tick"; return 0; fi
+    (( rc != 0 )) && { _UI_KEY="eof"; return 0; }
+  else
+    IFS= read -rsn1 k || { _UI_KEY="eof"; return 0; }
+  fi
   if [[ "$k" == $'\e' ]]; then
     IFS= read -rsn2 -t 0.02 rest || true
     case "$rest" in
@@ -300,22 +358,135 @@ _ui_question() {
   printf '  %s?%s %s%s%s' "$C_MAGENTA" "$C_RESET" "$C_BOLD" "$1" "$C_RESET"
 }
 
+# _ui_answer PROMPT ANSWER_COLOURED — final "? prompt answer" line (wraps).
+_ui_answer() {
+  _ui_wrapped "  $C_MAGENTA?$C_RESET " "    " 4 "" "$C_BOLD$1$C_RESET $2$C_RESET"
+}
+
+# --- shared menu engine ----------------------------------------------------------
+# Uses the caller's locals (bash dynamic scoping): _mkind (select|check),
+# _mprompt, n, cur, top, max, drawn, on[] and msg (checklist only).
+# Every row is truncated to the terminal width so it occupies exactly one
+# screen line; that keeps the "move up N lines and redraw" arithmetic exact.
+_ui_menu_header() {
+  local hint
+  if [[ "$_mkind" == select ]]; then
+    if (( _UI_COLS >= 72 )); then hint="(↑↓ move · enter select · q cancel)"; else hint="(↑↓ · enter · q)"; fi
+  else
+    if (( _UI_COLS >= 104 )); then hint="(↑↓ move · space toggle · a all · n none · enter confirm · q cancel)"
+    else hint="(↑↓ · space · a/n · enter · q)"; fi
+  fi
+  _ui_trunc "  $C_MAGENTA?$C_RESET $C_BOLD$_mprompt$C_RESET  $C_GREY$hint$C_RESET" $((_UI_COLS - 1))
+  printf '\r\033[K%s\n' "$_UI_T"
+}
+
+_ui_menu_max() {
+  local reserve=6; [[ "$_mkind" == check ]] && reserve=7
+  max=$((_UI_ROWS - reserve)); (( max > 15 )) && max=15; (( max < 3 )) && max=3
+  return 0
+}
+
+_ui_menu_render() {
+  local i line box w=$((_UI_COLS - 1))
+  (( cur < top )) && top=$cur
+  (( cur >= top + max )) && top=$((cur - max + 1))
+  (( drawn > 0 )) && printf '\033[%dA' "$drawn"
+  drawn=0
+  line=""; (( top > 0 )) && line="    $C_GREY$G_UP more$C_RESET"
+  printf '\033[K%s\n' "$line"; drawn=$((drawn + 1))
+  for ((i = top; i < top + max && i < n; i++)); do
+    box=""
+    if [[ "$_mkind" == check ]]; then
+      if (( on[i] )); then box="$C_GREEN$G_BOX_ON$C_RESET "; else box="$C_GREY$G_BOX_OFF$C_RESET "; fi
+    fi
+    if (( i == cur )); then
+      line="  $C_CYAN$G_PTR$C_RESET $box$C_CYAN$C_BOLD${_UI_L[i]}$C_RESET"
+      [[ -n "${_UI_H[i]}" ]] && line+="  $C_DIM${_UI_H[i]}$C_RESET"
+    else
+      line="    $box${_UI_L[i]}"
+      [[ -n "${_UI_H[i]}" ]] && line+="  $C_GREY${_UI_H[i]}$C_RESET"
+    fi
+    _ui_trunc "$line" "$w"
+    printf '\033[K%s\n' "$_UI_T"; drawn=$((drawn + 1))
+  done
+  line=""; (( top + max < n )) && line="    $C_GREY$G_DOWN more$C_RESET"
+  [[ -n "${msg:-}" ]] && line+="  $C_YELLOW$msg$C_RESET"
+  _ui_trunc "$line" "$w"
+  printf '\033[K%s\n' "$_UI_T"; drawn=$((drawn + 1))
+}
+
+# _ui_menu_clear — removes the menu and its header line.
+_ui_menu_clear() { printf '\033[%dA\033[J\033[1A\r\033[K' "$drawn"; }
+
+# _ui_menu_loop — runs the key loop; returns 0 on enter, 1 on cancel.
+_ui_menu_loop() {
+  local sc sr redraw=1 cnt j
+  _ui_term_size; sc=$_UI_COLS; sr=$_UI_ROWS
+  _ui_menu_max
+  _ui_cursor_hide
+  _ui_menu_header
+  while true; do
+    (( redraw )) && _ui_menu_render
+    redraw=1
+    _ui_read_key 0.25
+    case "$_UI_KEY" in
+      tick)
+        _ui_term_size
+        if (( _UI_COLS != sc || _UI_ROWS != sr )); then
+          # Resized: wrapped/reflowed lines make relative moves unreliable,
+          # so start from a clean screen.
+          sc=$_UI_COLS; sr=$_UI_ROWS
+          printf '\033[2J\033[H'; drawn=0
+          _ui_menu_max; _ui_menu_header
+        else
+          redraw=0
+        fi ;;
+      up|k) (( cur > 0 )) && cur=$((cur - 1)) || cur=$((n - 1)) ;;
+      down|j) (( cur < n - 1 )) && cur=$((cur + 1)) || cur=0 ;;
+      pgup) cur=$((cur - max)); (( cur < 0 )) && cur=0 ;;
+      pgdown) cur=$((cur + max)); (( cur >= n )) && cur=$((n - 1)) ;;
+      enter)
+        if [[ "$_mkind" == check ]]; then
+          cnt=0; for ((j = 0; j < n; j++)); do cnt=$((cnt + on[j])); done
+          (( cnt >= min )) && return 0
+          msg="select at least $min item(s)"
+        else
+          return 0
+        fi ;;
+      q|esc|eof) return 1 ;;
+      *)
+        if [[ "$_mkind" == check ]]; then
+          case "$_UI_KEY" in
+            space|x|right) on[cur]=$((1 - on[cur])); msg="" ;;
+            a) for ((j = 0; j < n; j++)); do on[j]=1; done; msg="" ;;
+            n) for ((j = 0; j < n; j++)); do on[j]=0; done; msg="" ;;
+            *) redraw=0 ;;
+          esac
+        elif [[ "$_UI_KEY" == [1-9] ]] && (( _UI_KEY <= n )); then
+          cur=$((_UI_KEY - 1))
+        else
+          redraw=0
+        fi ;;
+    esac
+  done
+}
+
 # ui_select [--initial VALUE] PROMPT ITEM... — single choice.
 # Sets UI_VALUE (item value) and UI_INDEX. ESC / q cancels → returns 1.
 ui_select() {
   local initial=""
   [[ "${1:-}" == "--initial" ]] && { initial="$2"; shift 2; }
-  local prompt="$1"; shift
+  local _mprompt="$1" _mkind=select; shift
   _ui_parse_items "$@"
-  local n=${#_UI_V[@]} cur=0 i
-  (( n == 0 )) && { ui_error "ui_select: no options for '$prompt'"; return 1; }
+  local n=${#_UI_V[@]} cur=0 i top=0 max=3 drawn=0
+  (( n == 0 )) && { ui_error "ui_select: no options for '$_mprompt'"; return 1; }
   if [[ -n "$initial" ]]; then
     for ((i = 0; i < n; i++)); do [[ "${_UI_V[i]}" == "$initial" ]] && cur=$i; done
   fi
-  ui_require_tty "\"$prompt\""
+  ui_require_tty "\"$_mprompt\""
 
   if [[ "$UI_FANCY" != true ]]; then
-    _ui_question "$prompt"; printf '\n'
+    _ui_question "$_mprompt"; printf '\n'
     for ((i = 0; i < n; i++)); do
       printf '    %2d) %s%s\n' $((i + 1)) "${_UI_L[i]}" "${_UI_H[i]:+  — ${_UI_H[i]}}"
     done
@@ -325,52 +496,16 @@ ui_select() {
       if [[ "$ans" =~ ^[0-9]+$ ]] && (( ans >= 1 && ans <= n )); then cur=$((ans - 1)); break; fi
     done
   else
-    local rows max top=0 drawn=0 line
-    rows=$(_ui_rows); max=$((rows - 6)); (( max > 15 )) && max=15; (( max < 3 )) && max=3
-    _ui_cursor_hide
-    _ui_question "$prompt"
-    printf '  %s(↑↓ move · enter select · q cancel)%s\n' "$C_GREY" "$C_RESET"
-    while true; do
-      (( cur < top )) && top=$cur
-      (( cur >= top + max )) && top=$((cur - max + 1))
-      (( drawn > 0 )) && printf '\033[%dA' "$drawn"
-      drawn=0
-      if (( top > 0 )); then printf '\033[K    %s%s more%s\n' "$C_GREY" "$G_UP" "$C_RESET"; else printf '\033[K\n'; fi
-      drawn=$((drawn + 1))
-      for ((i = top; i < top + max && i < n; i++)); do
-        if (( i == cur )); then
-          line=$(printf '  %s%s %s%s' "$C_CYAN" "$G_PTR" "${_UI_L[i]}" "$C_RESET")
-          [[ -n "${_UI_H[i]}" ]] && line+=$(printf '  %s%s%s' "$C_DIM" "${_UI_H[i]}" "$C_RESET")
-        else
-          line=$(printf '    %s' "${_UI_L[i]}")
-          [[ -n "${_UI_H[i]}" ]] && line+=$(printf '  %s%s%s' "$C_GREY" "${_UI_H[i]}" "$C_RESET")
-        fi
-        printf '\033[K%s\n' "$line"
-        drawn=$((drawn + 1))
-      done
-      if (( top + max < n )); then printf '\033[K    %s%s more%s\n' "$C_GREY" "$G_DOWN" "$C_RESET"; else printf '\033[K\n'; fi
-      drawn=$((drawn + 1))
-      _ui_read_key
-      case "$_UI_KEY" in
-        up|k) (( cur > 0 )) && cur=$((cur - 1)) || cur=$((n - 1)) ;;
-        down|j) (( cur < n - 1 )) && cur=$((cur + 1)) || cur=0 ;;
-        pgup) cur=$((cur - max)); (( cur < 0 )) && cur=0 ;;
-        pgdown) cur=$((cur + max)); (( cur >= n )) && cur=$((n - 1)) ;;
-        enter) break ;;
-        q|esc|eof)
-          printf '\033[%dA\033[J\033[1A\r\033[K' "$drawn"
-          _ui_question "$prompt"; printf ' %scancelled%s\n' "$C_GREY" "$C_RESET"
-          _ui_cursor_show; log_line "[ask ] $prompt -> (cancelled)"; return 1 ;;
-        [1-9]) (( _UI_KEY <= n )) && cur=$((_UI_KEY - 1)) ;;
-      esac
-    done
-    printf '\033[%dA\033[J\033[1A\r\033[K' "$drawn"
-    _ui_question "$prompt"; printf ' %s%s%s\n' "$C_CYAN" "${_UI_L[cur]}" "$C_RESET"
+    if ! _ui_menu_loop; then
+      _ui_menu_clear; _ui_answer "$_mprompt" "${C_GREY}cancelled"
+      _ui_cursor_show; log_line "[ask ] $_mprompt -> (cancelled)"; return 1
+    fi
+    _ui_menu_clear; _ui_answer "$_mprompt" "$C_CYAN${_UI_L[cur]}"
     _ui_cursor_show
   fi
   UI_INDEX=$cur
   UI_VALUE="${_UI_V[cur]}"
-  log_line "[ask ] $prompt -> ${_UI_L[cur]}"
+  log_line "[ask ] $_mprompt -> ${_UI_L[cur]}"
   return 0
 }
 
@@ -385,17 +520,17 @@ ui_checklist() {
       *) break ;;
     esac
   done
-  local prompt="$1"; shift
+  local _mprompt="$1" _mkind=check msg=""; shift
   _ui_parse_items "$@"
-  local n=${#_UI_V[@]} cur=0 i
+  local n=${#_UI_V[@]} cur=0 i top=0 max=3 drawn=0
   local -a on=()
   for ((i = 0; i < n; i++)); do
     if [[ " $preset " == *" ${_UI_V[i]} "* ]]; then on[i]=1; else on[i]=0; fi
   done
-  ui_require_tty "\"$prompt\""
+  ui_require_tty "\"$_mprompt\""
 
   if [[ "$UI_FANCY" != true ]]; then
-    _ui_question "$prompt"; printf '\n'
+    _ui_question "$_mprompt"; printf '\n'
     for ((i = 0; i < n; i++)); do
       printf '    %2d) %s%s\n' $((i + 1)) "${_UI_L[i]}" "${_UI_H[i]:+  — ${_UI_H[i]}}"
     done
@@ -411,54 +546,11 @@ ui_checklist() {
       [[ "$ok" == true ]] && (( cnt >= min )) && break
       printf '    %sinvalid selection (minimum %s)%s\n' "$C_YELLOW" "$min" "$C_RESET"
     done
+  elif ! _ui_menu_loop; then
+    _ui_menu_clear; _ui_answer "$_mprompt" "${C_GREY}cancelled"
+    _ui_cursor_show; log_line "[ask ] $_mprompt -> (cancelled)"; return 1
   else
-    local rows max top=0 drawn=0 line box msg=""
-    rows=$(_ui_rows); max=$((rows - 7)); (( max > 15 )) && max=15; (( max < 3 )) && max=3
-    _ui_cursor_hide
-    _ui_question "$prompt"
-    printf '  %s(↑↓ move · space toggle · a all · n none · enter confirm · q cancel)%s\n' "$C_GREY" "$C_RESET"
-    while true; do
-      (( cur < top )) && top=$cur
-      (( cur >= top + max )) && top=$((cur - max + 1))
-      (( drawn > 0 )) && printf '\033[%dA' "$drawn"
-      drawn=0
-      if (( top > 0 )); then printf '\033[K    %s%s more%s\n' "$C_GREY" "$G_UP" "$C_RESET"; else printf '\033[K\n'; fi
-      drawn=$((drawn + 1))
-      for ((i = top; i < top + max && i < n; i++)); do
-        if (( on[i] )); then box="${C_GREEN}${G_BOX_ON}${C_RESET}"; else box="${C_GREY}${G_BOX_OFF}${C_RESET}"; fi
-        if (( i == cur )); then
-          line=$(printf '  %s%s%s %s %s%s%s' "$C_CYAN" "$G_PTR" "$C_RESET" "$box" "$C_BOLD" "${_UI_L[i]}" "$C_RESET")
-          [[ -n "${_UI_H[i]}" ]] && line+=$(printf '  %s%s%s' "$C_DIM" "${_UI_H[i]}" "$C_RESET")
-        else
-          line=$(printf '    %s %s' "$box" "${_UI_L[i]}")
-          [[ -n "${_UI_H[i]}" ]] && line+=$(printf '  %s%s%s' "$C_GREY" "${_UI_H[i]}" "$C_RESET")
-        fi
-        printf '\033[K%s\n' "$line"
-        drawn=$((drawn + 1))
-      done
-      if (( top + max < n )); then printf '\033[K    %s%s more%s' "$C_GREY" "$G_DOWN" "$C_RESET"; fi
-      printf '\033[K  %s%s%s\n' "$C_YELLOW" "$msg" "$C_RESET"
-      drawn=$((drawn + 1)); msg=""
-      _ui_read_key
-      case "$_UI_KEY" in
-        up|k) (( cur > 0 )) && cur=$((cur - 1)) || cur=$((n - 1)) ;;
-        down|j) (( cur < n - 1 )) && cur=$((cur + 1)) || cur=0 ;;
-        pgup) cur=$((cur - max)); (( cur < 0 )) && cur=0 ;;
-        pgdown) cur=$((cur + max)); (( cur >= n )) && cur=$((n - 1)) ;;
-        space|x|right) on[cur]=$((1 - on[cur])) ;;
-        a) for ((i = 0; i < n; i++)); do on[i]=1; done ;;
-        n) for ((i = 0; i < n; i++)); do on[i]=0; done ;;
-        enter)
-          local cnt=0; for ((i = 0; i < n; i++)); do cnt=$((cnt + on[i])); done
-          (( cnt >= min )) && break
-          msg="select at least $min item(s)" ;;
-        q|esc|eof)
-          printf '\033[%dA\033[J\033[1A\r\033[K' "$drawn"
-          _ui_question "$prompt"; printf ' %scancelled%s\n' "$C_GREY" "$C_RESET"
-          _ui_cursor_show; log_line "[ask ] $prompt -> (cancelled)"; return 1 ;;
-      esac
-    done
-    printf '\033[%dA\033[J\033[1A\r\033[K' "$drawn"
+    _ui_menu_clear
   fi
 
   UI_SELECTED=()
@@ -467,15 +559,14 @@ ui_checklist() {
     if (( on[i] )); then UI_SELECTED+=("${_UI_V[i]}"); labels+=("${_UI_L[i]}"); fi
   done
   if [[ "$UI_FANCY" == true ]]; then
-    _ui_question "$prompt"
     if (( ${#labels[@]} )); then
-      printf ' %s%s%s\n' "$C_CYAN" "$(IFS=,; printf '%s' "${labels[*]}" | sed 's/,/, /g')" "$C_RESET"
+      _ui_answer "$_mprompt" "$C_CYAN$(join , "${labels[@]}" | sed 's/,/, /g')"
     else
-      printf ' %snone%s\n' "$C_GREY" "$C_RESET"
+      _ui_answer "$_mprompt" "${C_GREY}none"
     fi
     _ui_cursor_show
   fi
-  log_line "[ask ] $prompt -> ${labels[*]:-(none)}"
+  log_line "[ask ] $_mprompt -> ${labels[*]:-(none)}"
   return 0
 }
 

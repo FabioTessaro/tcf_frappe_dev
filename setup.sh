@@ -250,15 +250,17 @@ _secret() {
     if [[ "${ANS[$key]}" == @generate && -n "${CFG[$key]:-}" ]]; then
       ui_ok "$label: kept (already generated)"; return 0
     elif [[ "${ANS[$key]}" == @generate ]]; then CFG[$key]="$(gen_password)"; log_add_secret "${CFG[$key]}"
-    else valid_secret "${ANS[$key]}" || ui_die "$key in the answers file: at least 8 characters, no spaces, quotes or backslashes."
+    else valid_secret "${ANS[$key]}" || ui_die "$key in the answers file can't contain a single quote (') or a line break."
       CFG[$key]="${ANS[$key]}"
+      local weakness; weakness="$(secret_weakness "${ANS[$key]}")"
+      [[ -n "$weakness" ]] && ui_warn "$key: $weakness"
     fi
     ui_ok "$label: from the answers file"; return 0
   fi
   if [[ -n "$ANSWERS_FILE" && -n "${CFG[$key]:-}" ]]; then return 0; fi
   need_tty_for "$key" "$label"
-  ui_secret --generate gen_password --validate valid_secret \
-    --error "at least 8 characters; no spaces, quotes (' \") or backslashes" "$label"
+  ui_secret --generate gen_password --validate valid_secret --weak secret_weakness \
+    --error "a single quote (') or line break can't be stored in .env" "$label"
   CFG[$key]="$UI_VALUE"
 }
 

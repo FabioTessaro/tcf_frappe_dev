@@ -329,11 +329,13 @@ site-config)
   done
   dev="${E[MAIN_SITE_DEVELOPER_MODE]:-0}"; [[ "$dev" == 1 ]] || dev=0
   fragment=$(mktemp)
+  # Values land inside JSON strings: escape quotes and backslashes.
+  jesc() { local v="${1//\\/\\\\}"; printf '%s' "${v//\"/\\\"}"; }
   printf '%s\0' \
     "SITE_NAME=$site" "DEVELOPER_MODE=$dev" "MEET_ENABLED=$meet" \
-    "SEAWEEDFS_ENDPOINT=${E[SEAWEEDFS_ENDPOINT]:-http://seaweedfs:8333}" \
-    "SEAWEEDFS_ACCESS_KEY=${E[SEAWEEDFS_ACCESS_KEY]:-}" "SEAWEEDFS_SECRET_KEY=${E[SEAWEEDFS_SECRET_KEY]:-}" \
-    "JWT_SECRET=${E[JWT_SECRET]:-}" "MEET_ANNOUNCED_IP=${E[WEBRTC_ANNOUNCED_IP]:-}" \
+    "SEAWEEDFS_ENDPOINT=$(jesc "${E[SEAWEEDFS_ENDPOINT]:-http://seaweedfs:8333}")" \
+    "SEAWEEDFS_ACCESS_KEY=$(jesc "${E[SEAWEEDFS_ACCESS_KEY]:-}")" "SEAWEEDFS_SECRET_KEY=$(jesc "${E[SEAWEEDFS_SECRET_KEY]:-}")" \
+    "JWT_SECRET=$(jesc "${E[JWT_SECRET]:-}")" "MEET_ANNOUNCED_IP=$(jesc "${E[WEBRTC_ANNOUNCED_IP]:-}")" \
     | python3 "$RENDER" "$TEMPLATES/site-config/$kind.json.template" "$fragment" >/dev/null || exit 1
   python3 - "sites/$site/site_config.json" "$fragment" <<'PY' || exit 1
 import json, sys, os

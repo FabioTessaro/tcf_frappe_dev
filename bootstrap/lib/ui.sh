@@ -513,23 +513,45 @@ ui_input() {
   log_line "[ask ] $prompt -> $ans"
 }
 
-# ui_secret [--generate CMD] [--keep] [--validate FUNC] [--error MSG] PROMPT
-# Hidden input, typed twice. With --generate, an empty answer runs CMD and
-# uses its output; with --keep, an empty answer returns UI_VALUE="" and
-# UI_SECRET_KEPT=true. Sets UI_VALUE; the value is registered for redaction.
+# _ui_read_masked — reads a line echoing "*" per character (backspace works).
+# Result in _UI_MASKED. Falls back to a silent read without a full terminal.
+_ui_read_masked() {
+  _UI_MASKED=""
+  if [[ "$UI_FANCY" != true ]]; then IFS= read -rs _UI_MASKED || true; printf '\n'; return 0; fi
+  local c rest
+  while IFS= read -rsn1 c; do
+    if [[ -z "$c" ]]; then break                                  # enter
+    elif [[ "$c" == $'\x7f' || "$c" == $'\b' ]]; then             # backspace
+      if (( ${#_UI_MASKED} )); then _UI_MASKED="${_UI_MASKED%?}"; printf '\b \b'; fi
+    elif [[ "$c" == $'\x15' ]]; then                              # ctrl-u: clear
+      while (( ${#_UI_MASKED} )); do _UI_MASKED="${_UI_MASKED%?}"; printf '\b \b'; done
+    elif [[ "$c" == $'\e' ]]; then IFS= read -rsn2 -t 0.02 rest || true   # ignore arrows
+    else _UI_MASKED+="$c"; printf '*'
+    fi
+  done
+  printf '\n'
+}
+
+# ui_secret [--generate CMD] [--keep] [--validate FUNC] [--error MSG] [--weak FUNC] PROMPT
+# Input shown as "*", typed twice. With --generate, an empty answer runs CMD
+# and uses its output; with --keep, an empty answer returns UI_VALUE="" and
+# UI_SECRET_KEPT=true. --validate is a hard rule (value refused); --weak FUNC
+# prints a reason when the value is weak, and the user may keep it anyway.
+# Sets UI_VALUE; the value is registered for redaction in the logs.
 UI_SECRET_KEPT=false
 ui_secret() {
-  local gen="" keep=false validate="" err="invalid value"
+  local gen="" keep=false validate="" err="invalid value" weak=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --generate) gen="$2"; shift 2 ;;
       --keep) keep=true; shift ;;
       --validate) validate="$2"; shift 2 ;;
       --error) err="$2"; shift 2 ;;
+      --weak) weak="$2"; shift 2 ;;
       *) break ;;
     esac
   done
-  local prompt="$1" a b hint=""
+  local prompt="$1" a b hint="" reason
   UI_SECRET_KEPT=false
   ui_require_tty "\"$prompt\""
   if [[ "$keep" == true ]]; then hint="enter = keep current"
@@ -538,7 +560,7 @@ ui_secret() {
     _ui_question "$prompt"
     [[ -n "$hint" ]] && printf ' %s[%s]%s' "$C_GREY" "$hint" "$C_RESET"
     printf ' '
-    IFS= read -rs a || a=""; printf '\n'
+    _ui_read_masked; a="$_UI_MASKED"
     if [[ -z "$a" ]]; then
       if [[ "$keep" == true ]]; then
         UI_VALUE=""; UI_SECRET_KEPT=true
@@ -556,15 +578,23 @@ ui_secret() {
       printf '    %s%s%s\n' "$C_YELLOW" "$err" "$C_RESET"; continue
     fi
     _ui_question "Repeat to confirm"; printf ' '
-    IFS= read -rs b || b=""; printf '\n'
+    _ui_read_masked; b="$_UI_MASKED"
     if [[ "$a" != "$b" ]]; then
       printf '    %sthe two values differ — try again%s\n' "$C_YELLOW" "$C_RESET"; continue
+    fi
+    if [[ -n "$weak" ]]; then
+      reason="$("$weak" "$a")"
+      if [[ -n "$reason" ]]; then
+        printf '    %s%s %s%s\n' "$C_YELLOW" "$G_WARN" "$reason" "$C_RESET"
+        ui_confirm "Use it anyway?" || continue
+        log_line "[ask ] $prompt -> weak value accepted ($reason)"
+      fi
     fi
     break
   done
   UI_VALUE="$a"
   log_add_secret "$UI_VALUE"
-  log_line "[ask ] $prompt -> (typed, hidden)"
+  log_line "[ask ] $prompt -> (typed, ${#a} characters)"
 }
 
 # ui_confirm QUESTION [y|n] — yes/no. Without a default an explicit answer is

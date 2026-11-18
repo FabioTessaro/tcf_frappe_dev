@@ -129,11 +129,16 @@ valid_commit()     { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 valid_ipv4()       { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; }
 valid_ip_or_host() { valid_ipv4 "$1" || valid_hostname "$1"; }
 valid_env_value()  { [[ "$1" != *"'"* && "$1" != *$'\n'* && "$1" != *$'\r'* ]]; }
-# Secrets also end up in JSON site configs: no quotes, backslashes or spaces.
-valid_secret() {
-  valid_env_value "$1" || return 1
-  (( ${#1} >= 8 )) || return 1
-  case "$1" in *[[:space:]]* | *'"'* | *\\*) return 1 ;; esac
+# Secrets: the only hard rule is what .env can store (values are written
+# inside single quotes): no single quote, no line breaks.
+valid_secret() { [[ -n "$1" ]] && valid_env_value "$1"; }
+# secret_weakness VALUE — prints why VALUE is weak (empty when fine).
+secret_weakness() {
+  local r=()
+  (( ${#1} < 8 )) && r+=("shorter than 8 characters")
+  [[ "$1" == *[[:space:]]* ]] && r+=("contains spaces")
+  if (( ${#r[@]} == 2 )); then printf 'This value is %s and %s.' "${r[0]}" "${r[1]}"
+  elif (( ${#r[@]} == 1 )); then printf 'This value is %s.' "${r[0]}"; fi
   return 0
 }
 valid_git_url()    { [[ "$1" =~ ^(git@[^:]+:.+|ssh://.+|https://.+|file://.+)$ ]] && [[ "$1" != *[[:space:]]* ]]; }

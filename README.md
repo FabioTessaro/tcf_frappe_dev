@@ -89,8 +89,10 @@ through five sections:
    first.
 2. **Secrets.** Administrator password, MariaDB root user and password,
    SeaweedFS keys and, only when Meet is selected, the SFU secret and the
-   announced address. Input is hidden. **Press enter to generate a random
-   value.**
+   announced address. Typing shows `*` per character and every value is
+   asked twice. **Press enter to generate a random value.** Short values or
+   values with spaces get a warning you can override; only a single quote
+   `'` and line breaks are refused (`.env` can't store them).
 3. **Storage and services.** SeaweedFS buckets (pre-filled from
    `bootstrap/templates/buckets.list`; untick or add any) and whether
    MariaDB's port 3306 is published on the host.

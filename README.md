@@ -302,9 +302,7 @@ shown by the version picker.
 │   ├── container/
 │   │   └── provision.sh       # runs inside the frappe container, step by step
 │   └── templates/             # every generated file starts here
-├── legacy/                    # previous scripts, reference only — not working
 ├── architecture/              # Platform Architecture Guide (authoritative)
-└── Frappe Multi-app Vue Architecture.md   # superseded by architecture/, kept for history
 ```
 
 `new-app.sh`, `check-env.sh` and the frontend toolchain setup (`setup-env.sh`)

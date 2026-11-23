@@ -13,7 +13,7 @@
   definitions shipped as defaults, print formats. Business data MUST NOT be a fixture.
 - `BE-DATA-005` Each feature MAY provide `seed.py` with synthetic data. Seeds MUST be idempotent,
   MUST refuse to run on a site without `developer_mode` or `allow_tests`, and are the single
-  source of data for development, the reseed script and e2e tests.
+  source of synthetic data for development sites, test sites and e2e tests.
 - `BE-DATA-006` Seed data MUST be synthetic; real personal or customer data MUST NOT be used in
   dev, test or staging.
 

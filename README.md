@@ -81,7 +81,7 @@ A checklist of components; each one fixes only what is missing or wrong.
 
 | Component | What it ensures |
 |---|---|
-| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks** and **lychee** (latest releases, in `/usr/local/bin`) and this repository's git hooks (see [Git hooks](#git-hooks)) |
+| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks**, **lychee** and **just** (latest releases, in `/usr/local/bin`) and this repository's git hooks (see [Git hooks](#git-hooks)) |
 | `docker` | Docker Engine and the Compose plugin, Docker enabled at boot, your user in the `docker` group |
 | `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, and a check that GitHub / GitLab / Bitbucket / another server accepts the key |
 | `ftp` | vsftpd for one system user, configured from `bootstrap/templates/ftp.conf`, UFW rules when UFW is active |
@@ -277,7 +277,26 @@ host (base component) and `./initialize.sh` in the frappe container.
 | lychee | links between Markdown files and to their headings (offline) |
 | guide consistency | architecture guide: rule IDs unique and defined, links valid |
 
-Run every check by hand with `pre-commit run --all-files`.
+Run every check by hand with `pre-commit run --all-files` (or `just lint`).
+
+## Common tasks
+
+The `justfile` holds the repository's tasks (`just` lists them). `just` is
+installed on the host by `./install.sh` and in the container by
+`./initialize.sh`.
+
+| Command | Does |
+|---|---|
+| `just setup` | installs the git hooks and their environments (not `./setup.sh`) |
+| `just fmt` | formats Python and fixes whitespace and end of files |
+| `just lint` | every git-hook check on every file |
+| `just scan` | secret scan of the whole git history |
+| `just check-guide` | architecture guide: rule IDs and links |
+| `just book` | builds the guide as PDF and EPUB (host only: needs Docker) |
+| `just ci` | `lint` + `scan` |
+
+Decisions about this repository are recorded in [`docs/adr/`](docs/adr/README.md);
+how to report a vulnerability is in [`SECURITY.md`](SECURITY.md).
 
 ## Logs and state
 
@@ -324,14 +343,16 @@ Run every check by hand with `pre-commit run --all-files`.
 │   │   └── provision.sh       # runs inside the frappe container, step by step
 │   └── templates/             # every generated file starts here
 ├── architecture/              # Platform Architecture Guide (authoritative)
+├── docs/adr/                  # decisions about this repository (ADRs)
+├── justfile                   # common tasks (see Common tasks)
+├── SECURITY.md                # how to report a vulnerability
 ├── .pre-commit-config.yaml    # git hooks (see Git hooks)
 ├── .markdownlint-cli2.yaml    # Markdown style settings
 └── ruff.toml                  # Python lint/format settings
 ```
 
 `new-app.sh`, `check-env.sh` and the frontend toolchain setup (`setup-env.sh`)
-will be rebuilt on this structure. Until then, the old versions are in
-`legacy/` as a reference only.
+of the previous scripts will be rebuilt on this structure.
 
 ## License
 

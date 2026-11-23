@@ -5,7 +5,7 @@
 #
 # Components (choose in the menu, or with --components):
 #   base     apt prerequisites (curl, git, python3, openssl, pre-commit, …),
-#            the en_US.UTF-8 locale, gitleaks and lychee (latest releases, in
+#            the en_US.UTF-8 locale, gitleaks, lychee and just (latest releases, in
 #            /usr/local/bin) and this repository's git hooks (pre-commit:
 #            secret scanning, Markdown and Python checks, commit messages)
 #   docker   Docker Engine + Compose plugin, enabled at boot, your user in
@@ -43,8 +43,8 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/lib/common
 source "$LIB_DIR/tools.sh"
 
 ALL_COMPONENTS=(base docker git ftp)
-# Binary tools the git hooks of this repository need on the host.
-HOST_TOOLS=(gitleaks lychee)
+# Binary tools the git hooks and the justfile of this repository need on the host.
+HOST_TOOLS=(gitleaks lychee just)
 COMPONENTS=""
 GIT_NAME=""; GIT_EMAIL=""; GIT_HOST=""; SSH_PASSPHRASE=""; FTP_USER=""
 
@@ -161,7 +161,8 @@ component_base() {
   fi
 
   # gitleaks (secret scanning) and lychee (link checking) are called by the git
-  # hooks of this repository; the frappe container gets its own copies.
+  # hooks of this repository, just runs its justfile; the frappe container gets
+  # its own copies.
   local t tmp
   for t in "${HOST_TOOLS[@]}"; do
     if command -v "$t" >/dev/null 2>&1; then

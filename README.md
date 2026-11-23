@@ -11,11 +11,31 @@ app source code lives in its own repositories; the scripts clone it into
 
 ## Architecture
 
-The intended frontend architecture is described in
-**[Frappe Multi-app Vue Architecture](./Frappe%20Multi-app%20Vue%20Architecture.md)**:
-a core app with the Vue 3 portal shell and shared UI, feature apps composed
-into it, and a separate public website app. The scripts here provision the
-development environment. They don't generate the application itself.
+The platform architecture is defined by the
+**[Platform Architecture Guide](./architecture/README.md)**, the authoritative
+source of truth for every app built on this environment. It covers:
+
+- the system and its app kinds (core app, feature apps, public website app) and
+  the dependency rules between them
+- the domain foundations (Party model, capabilities, classification, settings)
+- the contracts between frontend and backend
+- the Vue frontend and the Python backend
+- security and compliance, testing, delivery (CI/CD and the decided
+  toolchain) and operations
+- the compliance framework for the targeted norms
+- playbooks for common changes
+
+Start with [How to read this guide](./architecture/00-foundations/00-how-to-read.md).
+AI agents must follow the rules in the guide's
+[Read this first](./architecture/README.md#read-this-first-humans-and-ai-agents)
+section.
+
+The older
+[Frappe Multi-app Vue Architecture](./Frappe%20Multi-app%20Vue%20Architecture.md)
+document is superseded by the guide and kept for history only.
+
+The scripts here provision the development environment. They don't generate
+the application itself.
 
 ## Requirements
 
@@ -283,7 +303,8 @@ shown by the version picker.
 │   │   └── provision.sh       # runs inside the frappe container, step by step
 │   └── templates/             # every generated file starts here
 ├── legacy/                    # previous scripts, reference only — not working
-└── Frappe Multi-app Vue Architecture.md
+├── architecture/              # Platform Architecture Guide (authoritative)
+└── Frappe Multi-app Vue Architecture.md   # superseded by architecture/, kept for history
 ```
 
 `new-app.sh`, `check-env.sh` and the frontend toolchain setup (`setup-env.sh`)

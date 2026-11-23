@@ -14,3 +14,5 @@ Closing a decision is a guide change (minor version).
 | 6 | Hosting of this guide | [500](../50-delivery/500-repositories.md) | Lives in the dev-environment repository until the `platform` repository exists | Move to `platform` and publish with MkDocs |
 | 7 | Migration of repositories to Forgejo | [500](../50-delivery/500-repositories.md) | Forgejo is the target host (DEL-REPO-006) | Timing; this dev-environment repository currently lives on GitHub |
 | 8 | Recovery objectives | [601](../60-operations/601-backup-and-restore.md) | Defaults RPO ≤ 15 min, RTO ≤ 8 h | Confirm through a business impact analysis |
+| 9 | Semantic search: model and rollout | [210](../20-backend/210-search.md) | Qdrant, self-hosted embeddings, hybrid ranking, audit stream as change feed, two-stage permissions, app/doctype filters, keyword fallback, same engine for Desk record search | Embedding model (candidate BGE-M3), hardware for bulk embedding (CPU vs GPU), chunking of long documents, rollout timing |
+| 10 | Semantic search: export-controlled data | [210](../20-backend/210-search.md) | BE-SRCH-051 default | Separate restricted collection or exclusion from semantic search |

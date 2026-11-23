@@ -1,14 +1,14 @@
 # Platform Architecture Guide
 
-**Status:** authoritative · **Guide version:** 1.0.0 · **Applies to:** Frappe 16, Python 3.14, Node ≥ 24
+**Status:** authoritative · **Guide version:** 1.1.0 · **Applies to:** Frappe 16, Python 3.14, Node ≥ 24
 
 This guide is the **single source of truth** for the architecture of the multi-app
 Frappe platform: the core app, every feature app, the public website app, the
 shared contracts between frontend and backend, security and compliance, testing,
 delivery and operations.
 
-It supersedes [`Frappe Multi-app Vue Architecture.md`](../Frappe%20Multi-app%20Vue%20Architecture.md).
-Where the two differ, this guide wins. The older document is kept for history only.
+It supersedes the former `Frappe Multi-app Vue Architecture.md` document, whose content it
+includes (removed from the repository; available in git history).
 
 ---
 
@@ -50,9 +50,9 @@ Where the two differ, this guide wins. The older document is kept for history on
 | 0 | [00-foundations](00-foundations/) | How to read, glossary, governance, conformance |
 | 1 | [01-system](01-system/) | App kinds, dependency tiers, access model, request lifecycle |
 | 2 | [02-domain-foundations](02-domain-foundations/) | Core primitives, Party model, capabilities, classification, settings |
-| 3 | [03-contracts](03-contracts/) | What frontend and backend agree on: errors, generated artifacts, boot data, registry, realtime |
+| 3 | [03-contracts](03-contracts/) | What frontend and backend agree on: errors, generated artifacts, boot data, registry, realtime, search API |
 | 10 | [10-frontend](10-frontend/) | Vue portal: composition, structure, shell, sdk, client, styling, typography, fonts, icons, i18n, caching |
-| 20 | [20-backend](20-backend/) | Python apps: slices, layers, sdk, inter-app rules, API surfaces, i18n, data, async, files, workflows |
+| 20 | [20-backend](20-backend/) | Python apps: slices, layers, sdk, inter-app rules, API surfaces, i18n, data, async, files, workflows, search |
 | 30 | [30-security-and-compliance](30-security-and-compliance/) | Security model, baseline, audit, e-signatures, records, privacy, observability, rate limits, SBOM, incidents |
 | 40 | [40-testing](40-testing/) | Strategy, frontend, backend, contract and e2e tests, test data |
 | 50 | [50-delivery](50-delivery/) | Repositories, CI, releases, CD, toolchain |
@@ -66,6 +66,19 @@ Where the two differ, this guide wins. The older document is kept for history on
 `00` → `01` → `02` → `03` → then `20` (backend) or `10` (frontend), depending on the task →
 `30` → `40` → `50`. Playbooks (`80`) are the entry point for routine changes; each step links
 back to the rules it applies.
+
+## Book version (PDF and EPUB)
+
+The guide can be built as a book: an A4 PDF for screens and printing, and an EPUB for Kindle
+(via *Send to Kindle*) and other e-readers.
+
+```bash
+architecture/book/build.sh     # → architecture/book/dist/Platform-Architecture-Guide.{pdf,epub}
+```
+
+It needs only `python3` and Docker (pandoc and LaTeX run in the `pandoc/extra` image). The book
+is generated from these Markdown files, which remain the source of truth; `dist/` is not
+committed.
 
 ## Rule ID prefixes
 

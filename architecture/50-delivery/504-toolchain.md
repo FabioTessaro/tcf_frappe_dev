@@ -92,6 +92,8 @@ exactly as in CI.
 | Object storage | **SeaweedFS** (S3 API), pinned version |
 | Antivirus | **ClamAV** (provides the `virus_scanner` capability) |
 | Reverse proxy and TLS | **Caddy** or **nginx** (deployment choice; must satisfy SEC-BASE-004/007, SEC-RATE-005) |
+| Semantic search index (planned, [210-search](../20-backend/210-search.md)) | **Qdrant**, pinned version |
+| Embedding service (planned) | **Hugging Face Text Embeddings Inference** (self-hosted); model pending (candidate BGE-M3) |
 
 ## Explicitly not used
 
@@ -111,6 +113,9 @@ Do not introduce these (or other tools for the same purposes) without changing t
 | Husky, lefthook | pre-commit chosen |
 | Semgrep | Not adopted now; Ruff `S` rules and eslint-plugin-security cover the baseline |
 | SaaS scanners or monitoring (Snyk, Sentry SaaS, Crowdin, ...) | Self-hosted only |
+| MariaDB native `VECTOR` columns, sqlite-vec | Qdrant chosen as the only vector index |
+| Frappe Flow knowledge store (`frappe.flow.knowledge`) | No per-user permission checks; Qdrant chosen for search |
+| External embedding or AI APIs for record content (OpenAI, Cohere, ...) | Record content stays on self-hosted infrastructure |
 
 ## Rules
 
@@ -120,3 +125,6 @@ Do not introduce these (or other tools for the same purposes) without changing t
   Stylelint, markdownlint, pre-commit hooks) MUST come from the `platform` repository's shared
   configuration; repositories MAY only add stricter settings.
 - `DEL-TOOL-004` Every tool MUST be runnable locally through `just` with the same result as in CI.
+- `DEL-TOOL-005` Frappe Flow (`frappe.flow`, Frappe's AI-agent framework) MUST NOT be used for
+  search and SHOULD NOT be used anywhere else on the platform; any other use requires an ADR that
+  addresses per-user permissions, classification and where data is sent.

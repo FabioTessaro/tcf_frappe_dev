@@ -40,3 +40,4 @@ How this guide is versioned, changed and how deviations are recorded.
 | Version | Date | Change |
 |---|---|---|
 | 1.0.0 | 2026-11-23 | First release: frontend guide migrated, backend, contracts, security, testing, delivery, operations and compliance framework added |
+| 1.1.0 | 2026-11-23 | Planned semantic search: new chapters 210-search and 35-search (Qdrant, audit stream as change feed, two-stage permissions, app/doctype filters, Desk record search on the same engine); `semantic_search` capability; `record_routes` in manifests (CT-REG-005); file text extraction (BE-FILE-012); search declarations per doctype; excluded vector technologies; Frappe Flow MUST NOT be used for search and SHOULD NOT be used elsewhere (DEL-TOOL-005) |

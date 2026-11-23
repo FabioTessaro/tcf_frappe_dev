@@ -28,11 +28,9 @@ source of truth for every app built on this environment. It covers:
 Start with [How to read this guide](./architecture/00-foundations/00-how-to-read.md).
 AI agents must follow the rules in the guide's
 [Read this first](./architecture/README.md#read-this-first-humans-and-ai-agents)
-section.
-
-The older
-[Frappe Multi-app Vue Architecture](./Frappe%20Multi-app%20Vue%20Architecture.md)
-document is superseded by the guide and kept for history only.
+section. The guide can also be built as a PDF and an EPUB (for Kindle) with
+`architecture/book/build.sh`; see
+[Book version](./architecture/README.md#book-version-pdf-and-epub).
 
 The scripts here provision the development environment. They don't generate
 the application itself.

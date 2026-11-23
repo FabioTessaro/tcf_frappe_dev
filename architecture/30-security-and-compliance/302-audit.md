@@ -25,7 +25,9 @@ Frappe's Version doctype is kept for Desk history but is **not** the audit trail
 
 - `SEC-AUD-001` All categories above MUST be captured. Configuration changes are always audited.
 - `SEC-AUD-002` Every doctype holding business data MUST be audited unless explicitly excluded in
-  its `constants.py` with a reason (e.g. caches, transient queues).
+  its `constants.py` with a reason (e.g. caches, transient queues). The audit stream is also the
+  change feed of search, so an excluded doctype is not searchable
+  ([BE-SRCH-011, BE-SRCH-012](../20-backend/210-search.md)).
 - `SEC-AUD-003` Audit Events for data changes and business actions MUST be written in the **same
   database transaction** as the change.
 - `SEC-AUD-004` Each Audit Event MUST store the hash of the previous event of its stream

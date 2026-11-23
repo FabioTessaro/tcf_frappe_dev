@@ -39,6 +39,7 @@ dependencies with a fallback.
 | `approver_resolver` | Resolve approvers for a document (e.g. reporting line) | Users holding a configured role |
 | `document_control` | Link records to controlled documents and their revisions | Not available |
 | `virus_scanner` | Scan a stored object | Not available ⇒ policies requiring a scan block access |
+| `semantic_search` | Platform search across all readable records ([20-backend/210-search](../20-backend/210-search.md)) | Keyword search over Frappe's global search index, with the same permission checks |
 
 New capabilities are added to this table with the sdk change.
 

@@ -69,6 +69,11 @@ S3-compatible object store (reference: SeaweedFS).
   classification and permissions.
 - `BE-FILE-011` Downloads of private files MUST NOT use permanent public URLs; presigned URLs live
   at most 5 minutes.
+- `BE-FILE-012` For file types with extractable text (PDF, office documents, plain text; more as
+  extractors are added), a job MUST extract the text after the file is clean and store it as a
+  derived object next to the original (`<key>.txt`), with the same classification, permissions and
+  retention. Extracted text serves search ([210-search](210-search.md)) and is never shown to users
+  who cannot read the file.
 
 ## Extension points
 

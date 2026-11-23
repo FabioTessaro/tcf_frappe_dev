@@ -16,6 +16,8 @@ chapters; this appendix shows one way to satisfy them.
 | Redis (cache, queue) | Pinned version | |
 | SeaweedFS | Pinned version (never `latest`) | S3 API; buckets per storage class |
 | ClamAV | Pinned version | `virus_scanner` capability provider |
+| Qdrant (planned) | Pinned version | Semantic search index; internal network only |
+| Text Embeddings Inference (planned) | Pinned version | Self-hosted embedding service; GPU optional for bulk indexing |
 
 ## CI/CD host (separate machine)
 

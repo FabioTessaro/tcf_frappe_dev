@@ -25,7 +25,9 @@ roles, party types and active capabilities, and returns the result.
 ## Frontend: `manifest.ts`
 
 Declared with the sdk `defineApp` helper: id, title key, icon, base path, navigation, routes
-(aggregated from features) with role metadata, optional locale and style entries.
+(aggregated from features) with role metadata, optional locale and style entries, and
+`record_routes` (doctype → portal route pattern used to open search results and links, e.g.
+`Leave Request` → `/hr/leave-requests/:name`).
 
 ## Rules
 
@@ -36,3 +38,6 @@ Declared with the sdk `defineApp` helper: id, title key, icon, base path, naviga
   app.
 - `CT-REG-004` Being listed does not grant access: every API MUST still check roles, permissions
   and party scoping.
+- `CT-REG-005` Every searchable doctype owned by an app with a portal view MUST have an entry in
+  that app's `record_routes`; the route MUST exist in the manifest's routes. Core exposes the merged
+  map to the backend (for search results) through the build registry.

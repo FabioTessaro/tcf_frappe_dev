@@ -21,5 +21,8 @@ frappe-bench/
 .vscode
 *.swp
 
+# generated book (PDF/EPUB) of the architecture guide — rebuild with architecture/book/build.sh
+architecture/book/dist/
+
 # python bytecode
 __pycache__/

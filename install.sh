@@ -4,8 +4,10 @@
 # Usage: ./install.sh [options]
 #
 # Components (choose in the menu, or with --components):
-#   base     apt prerequisites (curl, git, python3, openssl, pre-commit, …)
-#            and the en_US.UTF-8 locale
+#   base     apt prerequisites (curl, git, python3, openssl, pre-commit, …),
+#            the en_US.UTF-8 locale, gitleaks and lychee (latest releases, in
+#            /usr/local/bin) and this repository's git hooks (pre-commit:
+#            secret scanning, Markdown and Python checks, commit messages)
 #   docker   Docker Engine + Compose plugin, enabled at boot, your user in
 #            the "docker" group
 #   git      git identity (user.name / user.email), an ed25519 SSH key and a
@@ -37,8 +39,12 @@
 set -o pipefail
 # shellcheck source=bootstrap/lib/common.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/lib/common.sh"
+# shellcheck source=bootstrap/lib/tools.sh
+source "$LIB_DIR/tools.sh"
 
 ALL_COMPONENTS=(base docker git ftp)
+# Binary tools the git hooks of this repository need on the host.
+HOST_TOOLS=(gitleaks lychee)
 COMPONENTS=""
 GIT_NAME=""; GIT_EMAIL=""; GIT_HOST=""; SSH_PASSPHRASE=""; FTP_USER=""
 
@@ -78,7 +84,9 @@ status_base() {
   for p in ca-certificates curl git python3 openssl locales pre-commit iproute2; do
     [[ "$(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null)" == installed ]] || missing=$((missing + 1))
   done
-  if (( missing )); then printf '%d package(s) missing' "$missing"; else printf 'installed'; fi
+  for p in "${HOST_TOOLS[@]}"; do command -v "$p" >/dev/null 2>&1 || missing=$((missing + 1)); done
+  [[ -f "$REPO_ROOT/.git/hooks/commit-msg" ]] || missing=$((missing + 1))
+  if (( missing )); then printf '%d item(s) missing' "$missing"; else printf 'installed'; fi
 }
 status_docker() {
   if ! command -v docker >/dev/null 2>&1; then printf 'not installed'
@@ -150,6 +158,31 @@ component_base() {
     ui_run "Setting the system default locale to en_US.UTF-8 (was: ${current:-unset})" -- \
       "${SUDO[@]}" update-locale LANG=en_US.UTF-8 || ui_die "update-locale failed."
     ui_note "Applies to new login sessions."
+  fi
+
+  # gitleaks (secret scanning) and lychee (link checking) are called by the git
+  # hooks of this repository; the frappe container gets its own copies.
+  local t tmp
+  for t in "${HOST_TOOLS[@]}"; do
+    if command -v "$t" >/dev/null 2>&1; then
+      ui_ok "$t is installed ($("$t" --version 2>/dev/null | head -n 1))"
+      continue
+    fi
+    tmp=$(mktemp -d)
+    ui_run "Downloading $t (latest release)" -- tool_fetch "$t" "$tmp" \
+      && ui_run "Installing $t into /usr/local/bin" -- "${SUDO[@]}" install -m 755 "$tmp/$t" "/usr/local/bin/$t" \
+      || { rm -rf "$tmp"; ui_die "Couldn't install $t."; }
+    rm -rf "$tmp"
+  done
+
+  # Git hooks of this repository (types from .pre-commit-config.yaml:
+  # pre-commit and commit-msg). Hook environments are built on first use.
+  if [[ -f "$REPO_ROOT/.git/hooks/pre-commit" && -f "$REPO_ROOT/.git/hooks/commit-msg" ]]; then
+    ui_ok "Git hooks are installed in this repository"
+  else
+    _install_hooks() { cd "$REPO_ROOT" && pre-commit install; }
+    ui_run "Installing the git hooks of this repository" -- _install_hooks \
+      || ui_die "pre-commit install failed."
   fi
 }
 

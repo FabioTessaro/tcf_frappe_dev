@@ -1,6 +1,6 @@
 # Playbook · New feature (vertical slice)
 
-**Backend**
+## Backend
 
 1. Add the module to `modules.txt` and create `<app>/<feature>/` (`BE-STR-001`).
 2. Doctypes in `doctype/` with explicit role permissions (`SEC-MOD-001`); declare default
@@ -17,15 +17,15 @@
 8. Seeds in `seed.py` (`BE-DATA-005`); tests `test_api.py`, `test_service.py`,
    `test_permissions.py` (`TST-BE-*`).
 
-**Frontend**
+## Frontend
 
-9. Create `frontend/features/<feature>/` with the slice layout (`FE-STR-002`).
-10. `just generate` to produce API types and error translations (`CT-GEN-005`).
-11. `api/` module using the client (`FE-STR-008`, `FE-CLI-001`), composables, stores, components,
-    views, routes with roles (`FE-SHELL-001`), locales in every language (`FE-I18N-004`); add the
-    doctype's detail route to the manifest's `record_routes` (`CT-REG-005`).
-12. Unit tests next to units; integration tests for non-trivial flows.
+1. Create `frontend/features/<feature>/` with the slice layout (`FE-STR-002`).
+2. `just generate` to produce API types and error translations (`CT-GEN-005`).
+3. `api/` module using the client (`FE-STR-008`, `FE-CLI-001`), composables, stores, components,
+   views, routes with roles (`FE-SHELL-001`), locales in every language (`FE-I18N-004`); add the
+   doctype's detail route to the manifest's `record_routes` (`CT-REG-005`).
+4. Unit tests next to units; integration tests for non-trivial flows.
 
-**Finish**
+## Finish
 
-13. `just ci` green locally; pull request citing rule IDs (`TST-STR-002`, `DEL-REL-001`).
+1. `just ci` green locally; pull request citing rule IDs (`TST-STR-002`, `DEL-REL-001`).

@@ -1,0 +1,17 @@
+# markdownlint-cli2 settings (pre-commit hook and `markdownlint-cli2` by hand).
+# Rules: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+config:
+  default: true
+  # Prose and tables are not wrapped at a fixed width.
+  MD013: false
+  # Repeated headings ("Rules", "Defaults", …) are fine in different sections.
+  MD024:
+    siblings_only: true
+  # Tables use the compact `|---|` style; pipes are not aligned in columns.
+  MD060: false
+ignores:
+  - "frappe-bench/**"
+  - "logs/**"
+  - ".state/**"
+  - "architecture/book/dist/**"
+  - "**/node_modules/**"

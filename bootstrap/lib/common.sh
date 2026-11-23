@@ -139,7 +139,7 @@ SUDO=(sudo)
 # --- validators (return 0 when valid) -------------------------------------------
 valid_app_name()   { [[ "$1" =~ ^[a-z][a-z0-9_]*$ ]]; }
 valid_hostname()   { [[ ${#1} -le 253 && "$1" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$ ]]; }
-valid_site_name()  { valid_hostname "$1" && [[ "$1" != test.* ]]; }
+valid_site_name()  { valid_hostname "$1" && [[ "$1" != test.* && "$1" != test-minimal.* ]]; }
 valid_bucket()     { [[ "$1" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; }
 valid_commit()     { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
 valid_ipv4()       { [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; }

@@ -44,7 +44,8 @@ compose_render() {
     "MEET_ENABLED=$meet" \
     "MARIADB_EXPOSE_PORT=$expose" \
     "SITE_NAME=${_cc[SITE_NAME]:-localhost}" \
-    "TEST_SITE_NAME=${_cc[TEST_SITE_NAME]:-test.localhost}"
+    "TEST_SITE_NAME=${_cc[TEST_SITE_NAME]:-test.localhost}" \
+    "TEST_MINIMAL_SITE_NAME=${_cc[TEST_MINIMAL_SITE_NAME]:-test-minimal.${_cc[SITE_NAME]:-localhost}}"
 }
 
 # cfg_impact OLD NEW — compares two configurations and fills:
@@ -104,7 +105,7 @@ cfg_impact() {
   # Sites
   if [[ "${_o[SITE_NAME]:-}" != "${_n[SITE_NAME]:-}" ]]; then
     _imp reconcile "Site ${_o[SITE_NAME]:-?} → ${_n[SITE_NAME]:-?}" \
-      "initialize.sh creates ${_n[SITE_NAME]} and ${_n[TEST_SITE_NAME]}, then offers to drop the old sites; update your hosts file"
+      "initialize.sh creates ${_n[SITE_NAME]}, ${_n[TEST_SITE_NAME]} and ${_n[TEST_MINIMAL_SITE_NAME]:-test-minimal.${_n[SITE_NAME]:-}}, then offers to drop the old sites; update your hosts file"
   fi
   if [[ "${_o[MAIN_SITE_DEVELOPER_MODE]:-}" != "${_n[MAIN_SITE_DEVELOPER_MODE]:-}" ]]; then
     _imp info "Main site developer mode → ${_n[MAIN_SITE_DEVELOPER_MODE]}" "applied to site_config.json by initialize.sh"

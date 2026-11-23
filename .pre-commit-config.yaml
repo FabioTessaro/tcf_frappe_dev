@@ -1,5 +1,11 @@
 
+# Git hooks of this repository. Installed by ./install.sh (base component) on
+# the host and by ./initialize.sh in the frappe container (`pre-commit install`
+# installs both hook types below). Run everything by hand:
+#   pre-commit run --all-files
+# Tools: architecture/50-delivery/504-toolchain.md
 exclude: '(^|/)(\.git|node_modules)(/|$)'
+default_install_hook_types: [pre-commit, commit-msg]
 default_stages: [pre-commit]
 fail_fast: false
 
@@ -18,9 +24,56 @@ repos:
       - id: check-executables-have-shebangs
       - id: check-case-conflict
 
+  # Secret scanning of the staged changes (SEC-VULN-006). Uses the gitleaks
+  # binary installed by install.sh (host) and initialize.sh (container).
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks-system
+        # gitleaks reads the staged diff itself; it doesn't take file names.
+        pass_filenames: false
+
+  # Commit messages follow Conventional Commits (DEL-REL-001):
+  # feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert[(scope)][!]: summary
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.5.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
   # Bash script static analysis
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
         args: [--severity=warning]
+
+  # Python: lint (incl. security rules) and format; settings in ruff.toml
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+
+  # Markdown style; settings in .markdownlint-cli2.yaml
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.24.2
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: local
+    hooks:
+      # Links between Markdown files and to their headings, checked offline
+      # (lychee binary installed by install.sh and initialize.sh).
+      - id: lychee-offline
+        name: lychee (Markdown links, offline)
+        entry: lychee --offline --no-progress --include-fragments
+        language: system
+        types: [markdown]
+      # Architecture guide: rule IDs unique and defined, links valid (FND-READ-001)
+      - id: guide-consistency
+        name: architecture guide consistency
+        entry: python3 architecture/tools/check_guide.py
+        language: system
+        pass_filenames: false
+        files: ^(architecture/.*\.md|README\.md|architecture/tools/check_guide\.py)$

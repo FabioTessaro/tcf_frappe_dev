@@ -15,3 +15,9 @@ wholroyd.jinja
 esbenp.prettier-vscode
 ms-playwright.playwright
 anthropic.claude-code
+# Toolchain of architecture/50-delivery/504-toolchain.md
+charliermarsh.ruff
+ms-python.mypy-type-checker
+DavidAnson.vscode-markdownlint
+timonwong.shellcheck
+nefrob.vscode-just-syntax

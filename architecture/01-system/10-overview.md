@@ -11,7 +11,7 @@ capabilities and the portal shell; feature apps (QMS, HR, PLM, ERP, MES, ...) ar
 time and **progressively cover the target norms** listed in
 [70-compliance-framework/700-norms-register](../70-compliance-framework/700-norms-register.md).
 
-```
+```text
                 ┌─────────────────────── one Frappe site ───────────────────────┐
  Browser ──────►│  Portal (Vue, served by <core-app>)   Desk (Frappe)   Website  │
                 │        │ session + CSRF                    │            (<site-app>)

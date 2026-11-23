@@ -7,7 +7,7 @@ frontend feature folder.
 
 ## Layout
 
-```
+```text
 <app>/                                   repository root
 ├── <app>/                               Python package
 │   ├── __init__.py

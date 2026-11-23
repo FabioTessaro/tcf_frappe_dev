@@ -12,6 +12,8 @@
   "sfu_server_url": "http://@@MEET_ANNOUNCED_IP@@",
   "sfu_server_port": 3000,
 @@ENDIF MEET_ENABLED@@
+  "clamav_host": "@@CLAMAV_HOST@@",
+  "clamav_port": @@CLAMAV_PORT@@,
   "seaweedfs_endpoint": "@@SEAWEEDFS_ENDPOINT@@",
   "seaweedfs_access_key": "@@SEAWEEDFS_ACCESS_KEY@@",
   "seaweedfs_secret_key": "@@SEAWEEDFS_SECRET_KEY@@"

@@ -10,7 +10,7 @@ Folder layout, the feature slice and the component folder, with responsibilities
 
 ## Core frontend tree
 
-```
+```text
 <core-app>/frontend/
 ├── public/                     favicon.svg, favicon.ico, apple-touch-icon.png (from brand logo)
 ├── plugins/                    discover-apps.ts, emit-shared-assets.ts, copy-index-html.ts
@@ -32,7 +32,7 @@ Folder layout, the feature slice and the component folder, with responsibilities
 
 ## Feature app frontend tree
 
-```
+```text
 <feature-app>/frontend/
 ├── manifest.ts, manifest.test.ts
 ├── icons.json

@@ -1,14 +1,50 @@
 @@# ---------------------------------------------------------------------------
 @@# Template for frappe-bench/CLAUDE.md — rendered by ./initialize.sh when
 @@# Claude Code is installed in the container.
-@@#   @@SITE_NAME@@ @@TEST_SITE_NAME@@ @@VENDORED_APPS@@ @@CUSTOM_APPS@@
-@@#   @@CORE_APP@@ @@VENDORED_EXCLUDES@@
+@@#   @@SITE_NAME@@ @@TEST_SITE_NAME@@ @@TEST_MINIMAL_SITE_NAME@@
+@@#   @@VENDORED_APPS@@ @@CUSTOM_APPS@@ @@CORE_APP@@ @@VENDORED_EXCLUDES@@
 @@# ---------------------------------------------------------------------------
 # frappe-bench
 
-Frappe bench with a main development site (`@@SITE_NAME@@`) and a test site
-(`@@TEST_SITE_NAME@@`, developer mode + allow_tests, used by Playwright and
-`bench run-tests`). Bench root: everything below is relative to this file.
+Frappe bench with a main development site (`@@SITE_NAME@@`) and two test sites
+(developer mode + allow_tests, used by Playwright and `bench run-tests`):
+
+- `@@TEST_SITE_NAME@@`: every app installed (the "full site" of the guide);
+- `@@TEST_MINIMAL_SITE_NAME@@`: Frappe + the core app only (the "minimal site"). Install
+  the app under test and its hard dependencies on it to prove that capability
+  fallbacks work without the optional apps.
+
+Bench root: everything below is relative to this file.
+
+## Architecture guide — the source of truth
+
+All code in the custom apps MUST follow the **Platform Architecture Guide** in
+`../architecture/` (start at `../architecture/README.md`). It is authoritative:
+where code, comments or habits disagree with it, the guide wins.
+
+Before working:
+
+1. Read `../architecture/README.md` → "Rules for AI agents" and
+   `../architecture/00-foundations/00-how-to-read.md`.
+2. For a routine change, follow the matching playbook in
+   `../architecture/80-playbooks/` (new feature, new app, new error code, …).
+3. Check `../architecture/90-appendices/open-decisions.md`: areas marked
+   **PENDING** or *planned* MUST NOT be implemented beyond the rules written.
+
+Rules to apply while working:
+
+- **MUST / MUST NOT** are hard boundaries — never work around one; stop and ask.
+- A **SHOULD** may only be broken with an ADR (`docs/adr/` of the app repo,
+  citing the rule ID) — propose it, don't deviate silently.
+- **MAY** is freedom: decide, and stay consistent within the repository.
+- Tools are decided (`../architecture/50-delivery/504-toolchain.md`): don't add
+  alternatives or tools from its "Explicitly not used" list.
+- Not covered by the guide? Solve it inside one feature and flag it as a guide
+  candidate; don't invent platform-wide conventions.
+- Cite rule IDs (e.g. `BE-API-003`) in commit messages, PR descriptions, test
+  names and ADRs. Commit messages follow Conventional Commits.
+- `<core-app>`, `<feature-app>`, `<feature>` in the guide are placeholders;
+  examples (HR, leave requests) are non-normative.
 
 ## App layout
 

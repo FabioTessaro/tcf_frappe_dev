@@ -31,9 +31,14 @@ PARTS = {
 # Reading order inside folders whose file names do not sort meaningfully.
 ORDER = {
     "80-playbooks": [
-        "new-feature-app.md", "new-feature.md", "new-capability.md", "new-party-type.md",
-        "new-error-code.md", "new-integration-endpoint.md",
-        "new-storage-class-or-file-policy.md", "new-language-or-script.md",
+        "new-feature-app.md",
+        "new-feature.md",
+        "new-capability.md",
+        "new-party-type.md",
+        "new-error-code.md",
+        "new-integration-endpoint.md",
+        "new-storage-class-or-file-policy.md",
+        "new-language-or-script.md",
         "covering-a-new-norm.md",
     ],
     "90-appendices": ["open-decisions.md", "adr-template.md", "reference-deployment.md"],

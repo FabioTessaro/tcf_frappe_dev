@@ -8,7 +8,7 @@
 #                        ./initialize.sh starts them again)
 #   --containers         stop and remove the containers and the network
 #   --volumes[=LIST]     delete named volumes — all, or a comma list of:
-#                        mariadb, seaweedfs, vscode, claude
+#                        mariadb, seaweedfs, clamav, vscode, claude
 #                        (mariadb = database, seaweedfs = uploaded files)
 #   --images             remove the images used by this project
 #   --prune              docker: remove dangling images, unused networks and
@@ -38,9 +38,9 @@ source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/lib/common
 ALL_TARGETS=(containers volumes images prune bench workspace config state logs)
 declare -A T=()
 VOLUME_LIST=""; DRY_RUN=false; ASSUME_YES=false; FORCE=false; STOP_ONLY=false
-VOLUME_KEYS=(mariadb seaweedfs vscode claude)
-declare -A VOLUME_NAME=([mariadb]=mariadb-data [seaweedfs]=seaweedfs-data [vscode]=vscode-server [claude]=claude-config)
-declare -A VOLUME_DESC=([mariadb]="database (all sites' data)" [seaweedfs]="uploaded files / buckets" [vscode]="VS Code Server + extensions" [claude]="Claude Code settings & login")
+VOLUME_KEYS=(mariadb seaweedfs clamav vscode claude)
+declare -A VOLUME_NAME=([mariadb]=mariadb-data [seaweedfs]=seaweedfs-data [clamav]=clamav-db [vscode]=vscode-server [claude]=claude-config)
+declare -A VOLUME_DESC=([mariadb]="database (all sites' data)" [seaweedfs]="uploaded files / buckets" [clamav]="antivirus signatures (downloaded again on start)" [vscode]="VS Code Server + extensions" [claude]="Claude Code settings & login")
 
 for a in "$@"; do [[ "$a" == -h || "$a" == --help ]] && { usage_from_header "$0"; exit 0; }; done
 script_init teardown "$@"
@@ -96,7 +96,7 @@ fi
 if (( ${#T[@]} == 0 )); then
   ui_checklist --min 1 "What should be removed?" \
     "containers::Containers and network::$(count_lines "$CONTAINERS") container(s)$([[ -n $RUNNING ]] && echo ", running: $RUNNING")" \
-    "volumes::Docker volumes…::$(count_lines "$VOLUMES") volume(s) — database, files, VS Code, Claude" \
+    "volumes::Docker volumes…::$(count_lines "$VOLUMES") volume(s) — database, files, antivirus, VS Code, Claude" \
     "images::Project images::re-downloaded on the next ./initialize.sh" \
     "prune::Docker prune::dangling images, unused networks, build cache (system-wide)" \
     "bench::frappe-bench/::$( [[ -d $BENCH_DIR ]] && echo "$(du_h "$BENCH_DIR") — apps, custom-app clones, sites" || echo "not present")" \

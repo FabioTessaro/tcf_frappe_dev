@@ -57,7 +57,7 @@ cd frappe-dev
 Then:
 
 1. On the machine you browse from, add the sites to its hosts file:
-   `<server-ip>  <site> test.<site>`
+   `<server-ip>  <site> test.<site> test-minimal.<site>`
 2. In VS Code: **Remote-SSH** into the server, then **Dev Containers: Attach
    to Running Container…** and pick `tcf-frappe-dev-frappe-1`.
 3. Open `/workspace/.vscode/dev.code-workspace`.
@@ -81,7 +81,7 @@ A checklist of components; each one fixes only what is missing or wrong.
 
 | Component | What it ensures |
 |---|---|
-| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …) and the `en_US.UTF-8` locale as system default |
+| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks** and **lychee** (latest releases, in `/usr/local/bin`) and this repository's git hooks (see [Git hooks](#git-hooks)) |
 | `docker` | Docker Engine and the Compose plugin, Docker enabled at boot, your user in the `docker` group |
 | `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, and a check that GitHub / GitLab / Bitbucket / another server accepts the key |
 | `ftp` | vsftpd for one system user, configured from `bootstrap/templates/ftp.conf`, UFW rules when UFW is active |
@@ -114,9 +114,11 @@ through five sections:
 3. **Storage and services.** SeaweedFS buckets (pre-filled from
    `bootstrap/templates/buckets.list`; untick or add any) and whether
    MariaDB's port 3306 is published on the host.
-4. **Site.** The site name. The test site is always `test.<site>` and has
-   developer mode and `allow_tests` on (it's meant for Playwright). You choose
-   whether the main site has developer mode on.
+4. **Site.** The site name. The test sites are always `test.<site>` (every
+   app installed) and `test-minimal.<site>` (Frappe and the core app only);
+   both have developer mode and `allow_tests` on (they're meant for Playwright
+   and `bench run-tests`). You choose whether the main site has developer
+   mode on.
 5. **Custom apps.** *Empty shell* (no custom apps: setup.sh writes `.env` and
    exits) or *custom apps*: a git prefix (`git@github.com:my-org`), any
    number of app names, an optional full git URL per app, and the
@@ -153,10 +155,10 @@ Requires `.env`; without it the script stops and tells you to run
 | VS Code Server | Menu: the commit **detected on this host** (the VS Code client that last connected over Remote-SSH, recommended), the **latest stable** for your client's platform, a commit typed by hand, or skip |
 | Containers | renders `docker-compose.yml`, pulls images, `docker compose up -d` |
 | VS Code Server | downloads the build on the host and copies it into the container (avoids attach hangs) |
-| Container tools | apt packages, uv, pre-commit; waits for MariaDB and SeaweedFS; checks the MariaDB root password |
+| Container tools | apt packages; uv, pre-commit and the developer toolchain of the architecture guide (ruff, mypy, shellcheck, gitleaks, lychee, hadolint, just, trivy, markdownlint-cli2, all latest, in `~/.local/bin`); waits for MariaDB and SeaweedFS, then for ClamAV (only warns if it isn't ready); checks the MariaDB root password |
 | Bench | `bench init` with `FRAPPE_VERSION` (external Redis, no Redis in the Procfile) |
 | Apps | fetches the default apps at their versions, clones the custom apps |
-| Sites | creates `<site>` and `test.<site>`, installs the apps in order (dependencies, then core app, then feature apps), merges `bootstrap/templates/site-config/*.json.template` into each `site_config.json` |
+| Sites | creates `<site>`, `test.<site>` and `test-minimal.<site>`, installs the apps in order (dependencies, then core app, then feature apps; on `test-minimal.<site>` only the core app), merges `bootstrap/templates/site-config/*.json.template` into each `site_config.json` |
 | Buckets | creates missing SeaweedFS buckets. Buckets no longer listed are **never deleted**, only reported |
 | Assets | `bench build`, **one app at a time**. A failing app is reported and skipped, so Frappe and the other apps still work |
 | Extras | Claude Code CLI (optional, the choice is remembered), `.vscode/` workspace files, VS Code extensions installed into the container |
@@ -205,7 +207,7 @@ or unpushed work. Host setup from install.sh is never touched.
 |---|---|
 | `--stop` | nothing: only stops the containers (`./initialize.sh` restarts them) |
 | `--containers` | containers and network |
-| `--volumes[=mariadb,seaweedfs,vscode,claude]` | named volumes: all, or the listed ones |
+| `--volumes[=mariadb,seaweedfs,clamav,vscode,claude]` | named volumes: all, or the listed ones |
 | `--images` | the project's images |
 | `--prune` | dangling images, unused networks, build cache (system-wide) |
 | `--bench` | `frappe-bench/` |
@@ -224,11 +226,12 @@ Options: `--dry-run` (show the plan only), `-y` (skip "continue?"),
 
 | Key | Meaning |
 |---|---|
-| `SITE_NAME`, `TEST_SITE_NAME` | main site and `test.<site>` |
+| `SITE_NAME`, `TEST_SITE_NAME`, `TEST_MINIMAL_SITE_NAME` | main site, `test.<site>` (all apps) and `test-minimal.<site>` (core app only) |
 | `MAIN_SITE_DEVELOPER_MODE` | `1`/`0` |
 | `ADMIN_PASSWORD` | Administrator password of both sites |
 | `MARIADB_ROOT_USERNAME`, `MARIADB_ROOT_PASSWORD`, `MARIADB_EXPOSE_PORT` | database |
-| `SEAWEEDFS_ACCESS_KEY`, `SEAWEEDFS_SECRET_KEY`, `SEAWEEDFS_BUCKETS` | S3 storage |
+| `SEAWEEDFS_ACCESS_KEY`, `SEAWEEDFS_SECRET_KEY`, `SEAWEEDFS_BUCKETS` | S3 storage. SeaweedFS requires these keys on its S3 API (anonymous S3 requests are refused) |
+| `CLAMAV_HOST`, `CLAMAV_PORT` | antivirus (clamd), written into every `site_config.json` as `clamav_host` / `clamav_port` |
 | `FRAPPE_VERSION`, `DEFAULT_APPS`, `<APP>_VERSION` | framework and default apps (tag or branch) |
 | `JWT_SECRET`, `WEBRTC_ANNOUNCED_IP`, `MEDIASOUP_ANNOUNCED_IP` | Meet SFU (only with Meet) |
 | `APPS_MODE` | `shell` or `custom` |
@@ -257,6 +260,25 @@ Script-level knobs are in `bootstrap/settings.conf`: compose project name,
 log retention, service wait timeout, container user, and the number of tags
 shown by the version picker.
 
+## Git hooks
+
+The repository's checks run as git hooks through
+[pre-commit](https://pre-commit.com). `./install.sh` installs them on the
+host (base component) and `./initialize.sh` in the frappe container.
+
+| Hook | Checks |
+|---|---|
+| pre-commit-hooks | whitespace, end of files, merge markers, JSON/TOML/YAML syntax, shebangs |
+| gitleaks | secrets in the staged changes |
+| conventional-pre-commit | commit messages follow Conventional Commits (`feat: …`, `fix: …`, `docs: …`) |
+| shellcheck | Bash scripts |
+| ruff | Python lint (incl. security rules) and format, settings in `ruff.toml` |
+| markdownlint-cli2 | Markdown style, settings in `.markdownlint-cli2.yaml` |
+| lychee | links between Markdown files and to their headings (offline) |
+| guide consistency | architecture guide: rule IDs unique and defined, links valid |
+
+Run every check by hand with `pre-commit run --all-files`.
+
 ## Logs and state
 
 - `logs/<script>-<timestamp>.log`: one verbose log per run. It records the
@@ -281,7 +303,8 @@ shown by the version picker.
 | 9000-9005 | socket.io |
 | 5173 | Vite dev server |
 | 3306 | MariaDB (only if published) |
-| 8333 / 8888 / 9333 / 8080 / 7333 | SeaweedFS S3 / filer / master / volume / WebDAV |
+| 8333 / 8888 / 9333 / 8080 / 7333 | SeaweedFS S3 (keys required) / filer / master / volume / WebDAV |
+| — | ClamAV (clamd on `clamav:3310`, inside the compose network only) |
 | 3000 TCP, 40000-40099 UDP | Meet SFU (only with Meet) |
 | 21, 40000-50000 TCP | FTP (only with the ftp component) |
 
@@ -296,11 +319,14 @@ shown by the version picker.
 ├── teardown.sh                # stop & clean
 ├── bootstrap/
 │   ├── settings.conf          # script-level settings
-│   ├── lib/                   # shared code: ui, log, common, apps, project, vscode, render.py
+│   ├── lib/                   # shared code: ui, log, common, apps, project, vscode, tools, render.py
 │   ├── container/
 │   │   └── provision.sh       # runs inside the frappe container, step by step
 │   └── templates/             # every generated file starts here
 ├── architecture/              # Platform Architecture Guide (authoritative)
+├── .pre-commit-config.yaml    # git hooks (see Git hooks)
+├── .markdownlint-cli2.yaml    # Markdown style settings
+└── ruff.toml                  # Python lint/format settings
 ```
 
 `new-app.sh`, `check-env.sh` and the frontend toolchain setup (`setup-env.sh`)

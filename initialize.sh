@@ -9,12 +9,15 @@
 #                      host / latest stable / a specific commit / skip)
 #   3. containers      render docker-compose.yml, pull images, start them
 #   4. VS Code Server  copy the chosen build into the frappe container
-#   5. container tools apt packages, uv, pre-commit; wait for MariaDB and
-#                      SeaweedFS and check the MariaDB root password
+#   5. container tools apt packages; uv, pre-commit and the developer toolchain
+#                      (ruff, mypy, shellcheck, gitleaks, lychee, hadolint,
+#                      just, trivy, markdownlint-cli2); wait for MariaDB,
+#                      SeaweedFS and ClamAV; check the MariaDB root password
 #   6. bench           bench init with FRAPPE_VERSION
 #   7. apps            fetch default apps and custom apps
-#   8. sites           create <site> and test.<site>, install the apps, apply
-#                      bootstrap/templates/site-config/*.json.template
+#   8. sites           create <site>, test.<site> (all apps) and
+#                      test-minimal.<site> (core app only), install the apps,
+#                      apply bootstrap/templates/site-config/*.json.template
 #   9. buckets         create the SeaweedFS buckets
 #  10. assets          bench build, app by app: a failing app is reported and
 #                      skipped, so Frappe and the other apps still work
@@ -139,7 +142,9 @@ if cfg_meet_enabled ENV; then
 fi
 (( ${#missing[@]} == 0 )) || ui_die ".env is incomplete: ${missing[*]}" "Run ./setup.sh to complete it."
 SITE="${ENV[SITE_NAME]}"; TEST_SITE="${ENV[TEST_SITE_NAME]}"
-ui_ok ".env loaded: Frappe ${ENV[FRAPPE_VERSION]}, sites $SITE + $TEST_SITE"
+# Older .env files don't have it: derived from the site name.
+MIN_SITE="${ENV[TEST_MINIMAL_SITE_NAME]:-test-minimal.$SITE}"
+ui_ok ".env loaded: Frappe ${ENV[FRAPPE_VERSION]}, sites $SITE + $TEST_SITE + $MIN_SITE"
 ui_note "default apps: ${DEFAULT_LIST[*]:-none} · custom apps: ${CUSTOM_LIST[*]:-none (shell)}"
 
 [[ -f "$HOME/.gitconfig" ]] || ui_die "$HOME/.gitconfig doesn't exist (it is mounted into the container)." "Run ./install.sh (git component)."
@@ -229,8 +234,11 @@ fi
 ui_section "Container tools"
 ui_run "System packages" -- cx_root bash "$CONTAINER_WORKSPACE/bootstrap/container/provision.sh" system-root \
   || ui_die "Installing the container's system packages failed." "See ${LOG_FILE_REL}"
-pstep "uv and pre-commit" -- system-user
+pstep "Developer tools (uv, pre-commit, ruff, mypy, gitleaks, just, …)" -- system-user
 pstep "Waiting for MariaDB and SeaweedFS" -- wait-services "$SERVICE_WAIT_TIMEOUT"
+# Not fatal: the bench works without the antivirus while clamd is starting.
+pstep --optional "Waiting for ClamAV" -- wait-clamav "$SERVICE_WAIT_TIMEOUT" \
+  || ui_warn "ClamAV isn't answering yet — it keeps starting in the background (docker logs ${COMPOSE_PROJECT_NAME}-clamav-1)."
 
 if ! ui_run --quiet-fail "Checking the MariaDB root password" -- provision db-auth; then
   declare -A SNAP=(); env_parse "$SNAPSHOT_FILE" SNAP 2>/dev/null || true
@@ -343,14 +351,14 @@ done
 ui_section "Sites"
 inspect_bench
 for s in "${!REC_SITE[@]}"; do
-  [[ "$s" == "$SITE" || "$s" == "$TEST_SITE" ]] && continue
+  [[ "$s" == "$SITE" || "$s" == "$TEST_SITE" || "$s" == "$MIN_SITE" ]] && continue
   [[ -n "${ST_SITE[$s]+x}" ]] || contains "$s" "${ST_BROKEN[@]}" || continue
-  if reconcile "Site $s is no longer in .env (now: $SITE / $TEST_SITE)." "The site and its database are deleted."; then
+  if reconcile "Site $s is no longer in .env (now: $SITE / $TEST_SITE / $MIN_SITE)." "The site and its database are deleted."; then
     pstep "Dropping site $s" -- site-drop "$s"
   fi
 done
-for s in "$SITE" "$TEST_SITE"; do
-  kind="main"; [[ "$s" == "$TEST_SITE" ]] && kind="test"
+for s in "$SITE" "$TEST_SITE" "$MIN_SITE"; do
+  kind="main"; [[ "$s" == "$TEST_SITE" || "$s" == "$MIN_SITE" ]] && kind="test"
   force=""
   if contains "$s" "${ST_BROKEN[@]}"; then
     if reconcile "Site $s exists but doesn't respond (broken database?)." "It is recreated from scratch (its data is lost)."; then force=--force
@@ -361,9 +369,17 @@ done
 inspect_bench
 INSTALL_ORDER=("${DEFAULT_LIST[@]}")
 for a in "${CUSTOM_LIST[@]}"; do contains "$a" "${FAILED_CUSTOM[@]}" || INSTALL_ORDER+=("$a"); done
-for s in "$SITE" "$TEST_SITE"; do
+for s in "$SITE" "$TEST_SITE" "$MIN_SITE"; do
   [[ -n "${ST_SITE[$s]+x}" ]] || continue
-  for a in "${INSTALL_ORDER[@]}"; do
+  site_apps=("${INSTALL_ORDER[@]}")
+  if [[ "$s" == "$MIN_SITE" ]]; then
+    # Minimal test site: Frappe + the core app only. The app under test and its
+    # hard dependencies are installed on it by hand when needed.
+    site_apps=()
+    core="${ENV[CORE_APP]:-}"
+    [[ -n "$core" ]] && contains "$core" "${INSTALL_ORDER[@]}" && site_apps=("$core")
+  fi
+  for a in "${site_apps[@]}"; do
     if [[ ",${ST_SITE[$s]}," == *",$a,"* ]]; then log_line "$a already installed on $s"; continue; fi
     if contains "$a" "${CUSTOM_LIST[@]}"; then
       pstep --optional "Installing $a on $s" -- site-install "$s" "$a" || {
@@ -447,12 +463,12 @@ ui_section "Ready"
 host_ip=$(detect_lan_ip)
 ui_box \
   "1. On the machine you browse from, add to its hosts file:" \
-  "     ${host_ip:-<server-ip>}  $SITE $TEST_SITE" \
+  "     ${host_ip:-<server-ip>}  $SITE $TEST_SITE $MIN_SITE" \
   "2. VS Code: Remote-SSH into this server, then" \
   "   'Dev Containers: Attach to Running Container…' › ${COMPOSE_PROJECT_NAME}-frappe-1" \
   "3. In the container: File › Open Workspace from File… › /workspace/.vscode/dev.code-workspace" \
   "4. In a container terminal:  cd /workspace/frappe-bench && bench start" \
   "5. Open http://$SITE:8000  (Administrator / ADMIN_PASSWORD from .env)" \
-  "   Tests: http://$TEST_SITE:8000"
+  "   Tests: http://$TEST_SITE:8000 (all apps) · http://$MIN_SITE:8000 (core app only)"
 cfg_meet_enabled ENV && ui_note "Meet: open TCP 3000 and UDP 40000-40099 on any firewall between browsers and this host."
 [[ "${ENV[MARIADB_EXPOSE_PORT]}" == 1 ]] && ui_note "MariaDB: ${host_ip:-<server-ip>}:3306 (user ${ENV[MARIADB_ROOT_USERNAME]:-root}, password in .env)"

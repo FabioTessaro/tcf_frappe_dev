@@ -8,8 +8,10 @@
 # environment may be stale.
 #
 #   provision.sh system-root               apt packages (run as root)
-#   provision.sh system-user               uv, pre-commit, ~/.local/bin on PATH
+#   provision.sh system-user               uv, pre-commit and the developer
+#                                          toolchain in ~/.local/bin (on PATH)
 #   provision.sh wait-services             MariaDB + SeaweedFS answer
+#   provision.sh wait-clamav [SECONDS]     clamd answers PING (antivirus)
 #   provision.sh db-auth                   0 = root password in .env works,
 #                                          3 = rejected
 #   provision.sh db-root-password          ALTER root's password: old one on stdin
@@ -168,11 +170,37 @@ EOF
     curl -LsSf https://astral.sh/uv/install.sh | sh || exit 1
   fi
   command -v uv >/dev/null 2>&1 || die "uv is not on PATH after installation"
-  if ! command -v pre-commit >/dev/null 2>&1; then
-    step "installing pre-commit"
-    uv tool install pre-commit || exit 1
+  # Python tools: one isolated environment each (uv tool).
+  for t in pre-commit ruff mypy shellcheck-py; do
+    bin="${t%-py}"
+    if ! command -v "$bin" >/dev/null 2>&1; then
+      step "installing $t"
+      uv tool install "$t" || exit 1
+    fi
+  done
+  # Binary releases (gitleaks, lychee, hadolint, just, trivy) into ~/.local/bin.
+  # shellcheck source=bootstrap/lib/tools.sh
+  source "$WS/bootstrap/lib/tools.sh"
+  for t in gitleaks lychee hadolint just trivy; do
+    if ! command -v "$t" >/dev/null 2>&1; then
+      step "installing $t"
+      tool_fetch "$t" "$HOME/.local/bin" || die "couldn't install $t"
+    fi
+  done
+  # markdownlint-cli2 (Node): global yarn package with its binary in ~/.local/bin.
+  if ! command -v markdownlint-cli2 >/dev/null 2>&1; then
+    step "installing markdownlint-cli2"
+    yarn global add --silent --prefix "$HOME/.local" markdownlint-cli2 >/dev/null || die "couldn't install markdownlint-cli2"
   fi
-  echo "uv $(uv --version 2>/dev/null | awk '{print $2}'), pre-commit $(pre-commit --version 2>/dev/null | awk '{print $2}')"
+  # This repository's git hooks (also installed on the host by install.sh).
+  if [[ -d "$WS/.git" && ! -f "$WS/.git/hooks/commit-msg" ]]; then
+    (cd "$WS" && pre-commit install >/dev/null) && echo "git hooks installed in /workspace"
+  fi
+  ver() { "$@" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1; }
+  echo "uv $(ver uv --version), pre-commit $(ver pre-commit --version), ruff $(ver ruff --version)," \
+    "mypy $(ver mypy --version), shellcheck $(ver shellcheck --version), gitleaks $(ver gitleaks version)," \
+    "lychee $(ver lychee --version), hadolint $(ver hadolint --version), just $(ver just --version)," \
+    "trivy $(ver trivy --version), markdownlint-cli2 $(ver markdownlint-cli2 --help)"
   ;;
 
 # -----------------------------------------------------------------------------
@@ -205,6 +233,19 @@ wait-services)
     sleep 2; waited=$((waited + 2))
   done
   echo "SeaweedFS answers (${waited}s, HTTP $code)"
+  ;;
+
+wait-clamav)
+  timeout="${1:-300}"; waited=0
+  host="${E[CLAMAV_HOST]:-clamav}"; port="${E[CLAMAV_PORT]:-3310}"
+  # clamd protocol: "zPING\0" → "PONG\0". Answers once the signatures are loaded.
+  clamd_ping() { timeout 5 bash -c "exec 3<>/dev/tcp/$host/$port && printf 'zPING\0' >&3 && head -c 4 <&3" 2>/dev/null; }
+  until [[ "$(clamd_ping)" == PONG ]]; do
+    (( waited >= timeout )) && die "ClamAV ($host:$port) didn't answer within ${timeout}s — check its log: docker logs <project>-clamav-1"
+    (( waited % 30 == 0 )) && echo "waiting for ClamAV at $host:$port (${waited}s)"
+    sleep 5; waited=$((waited + 5))
+  done
+  echo "ClamAV answers at $host:$port (${waited}s)"
   ;;
 
 db-auth)
@@ -376,6 +417,7 @@ site-config)
     grep -qE "^$a\|[^|]*\|[^|]*\|[^|]*sfu" "$TEMPLATES/apps.catalog" && meet=1
   done
   dev="${E[MAIN_SITE_DEVELOPER_MODE]:-0}"; [[ "$dev" == 1 ]] || dev=0
+  clam_port="${E[CLAMAV_PORT]:-3310}"; [[ "$clam_port" =~ ^[0-9]+$ ]] || clam_port=3310
   fragment=$(mktemp)
   # Values land inside JSON strings: escape quotes and backslashes.
   jesc() { local v="${1//\\/\\\\}"; printf '%s' "${v//\"/\\\"}"; }
@@ -384,6 +426,7 @@ site-config)
     "SEAWEEDFS_ENDPOINT=$(jesc "${E[SEAWEEDFS_ENDPOINT]:-http://seaweedfs:8333}")" \
     "SEAWEEDFS_ACCESS_KEY=$(jesc "${E[SEAWEEDFS_ACCESS_KEY]:-}")" "SEAWEEDFS_SECRET_KEY=$(jesc "${E[SEAWEEDFS_SECRET_KEY]:-}")" \
     "JWT_SECRET=$(jesc "${E[JWT_SECRET]:-}")" "MEET_ANNOUNCED_IP=$(jesc "${E[WEBRTC_ANNOUNCED_IP]:-}")" \
+    "CLAMAV_HOST=$(jesc "${E[CLAMAV_HOST]:-clamav}")" "CLAMAV_PORT=$clam_port" \
     | python3 "$RENDER" "$TEMPLATES/site-config/$kind.json.template" "$fragment" >/dev/null || exit 1
   python3 - "sites/$site/site_config.json" "$fragment" <<'PY' || exit 1
 import json, sys, os
@@ -492,6 +535,7 @@ claude)
   printf '%s\0' "VENDORED_DENY_JSON=${deny%$'\n'}" \
     | python3 "$RENDER" "$TEMPLATES/claude/settings.json.template" .claude/settings.json || exit 1
   printf '%s\0' "SITE_NAME=${E[SITE_NAME]}" "TEST_SITE_NAME=${E[TEST_SITE_NAME]}" \
+    "TEST_MINIMAL_SITE_NAME=${E[TEST_MINIMAL_SITE_NAME]:-test-minimal.${E[SITE_NAME]}}" \
     "VENDORED_APPS=${vlist%, }" "CUSTOM_APPS=${clist%, }" "CORE_APP=${core:-none}" \
     "VENDORED_EXCLUDES=${excludes% }" \
     | python3 "$RENDER" "$TEMPLATES/claude/CLAUDE.md.template" CLAUDE.md || exit 1

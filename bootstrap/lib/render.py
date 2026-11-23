@@ -20,6 +20,7 @@ With --check nothing is written and the exit code is 0 (unchanged) or 3
 (would change). An existing target that changes is copied into --backup-dir
 (or TARGET.bak when no directory is given) first.
 """
+
 import os
 import re
 import shutil
@@ -34,17 +35,25 @@ FALSY = {"", "0", "false", "no", "off"}
 def parse_args(argv):
     if len(argv) < 3:
         raise SystemExit(__doc__)
-    opts = {"template": Path(argv[1]), "target": Path(argv[2]),
-            "mode": None, "backup_dir": None, "check": False}
+    opts = {
+        "template": Path(argv[1]),
+        "target": Path(argv[2]),
+        "mode": None,
+        "backup_dir": None,
+        "check": False,
+    }
     i = 3
     while i < len(argv):
         arg = argv[i]
         if arg == "--mode":
-            opts["mode"] = int(argv[i + 1], 8); i += 2
+            opts["mode"] = int(argv[i + 1], 8)
+            i += 2
         elif arg == "--backup-dir":
-            opts["backup_dir"] = Path(argv[i + 1]); i += 2
+            opts["backup_dir"] = Path(argv[i + 1])
+            i += 2
         elif arg == "--check":
-            opts["check"] = True; i += 1
+            opts["check"] = True
+            i += 1
         else:
             raise SystemExit(f"render.py: unknown option {arg}")
     return opts
@@ -127,7 +136,9 @@ def main():
         os.chmod(backup, mode)
         if opts["backup_dir"]:
             # Keep the 10 most recent backups of this file.
-            old = sorted(opts["backup_dir"].glob(f"{target.name}.*"), key=lambda f: f.stat().st_mtime)
+            old = sorted(
+                opts["backup_dir"].glob(f"{target.name}.*"), key=lambda f: f.stat().st_mtime
+            )
             for stale in old[:-10]:
                 stale.unlink()
         status = "updated"

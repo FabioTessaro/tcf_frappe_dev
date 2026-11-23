@@ -11,7 +11,8 @@
 #                     and, only when Meet is selected, the SFU secret/IP.
 #                     Press enter at a secret prompt to generate a random one.
 #   3. storage        SeaweedFS buckets to create, MariaDB host port
-#   4. site           site name; the test site is always test.<site>
+#   4. site           site name; the test sites are always test.<site> (all
+#                     apps) and test-minimal.<site> (core app only)
 #   5. custom apps    "shell" (empty bench, stop here) or "custom": git
 #                     prefix, app names, optional per-app URLs, core app
 # Re-run: shows the current configuration and a menu to edit single sections.
@@ -80,6 +81,8 @@ if [[ -f "$ENV_FILE" ]]; then
   env_parse "$ENV_FILE" OLD; _normalize OLD
   for k in "${!OLD[@]}"; do CFG[$k]="${OLD[$k]}"; done
   for k in "${SECRET_KEYS[@]}"; do [[ -n "${OLD[$k]:-}" ]] && log_add_secret "${OLD[$k]}"; done
+  # Derived from SITE_NAME (older .env files don't have it yet).
+  [[ -n "${CFG[SITE_NAME]:-}" ]] && CFG[TEST_MINIMAL_SITE_NAME]="test-minimal.${CFG[SITE_NAME]}"
   FIRST_RUN=false
 fi
 if [[ -f "$SNAPSHOT_FILE" ]]; then env_parse "$SNAPSHOT_FILE" SNAP; _normalize SNAP; fi
@@ -111,7 +114,8 @@ show_config() {
     ui_kv "Default apps" "none"
   fi
   ui_kv "Site" "${CFG[SITE_NAME]:-(not set)}  (developer mode: $([[ ${CFG[MAIN_SITE_DEVELOPER_MODE]:-} == 1 ]] && echo on || echo off))"
-  ui_kv "Test site" "${CFG[TEST_SITE_NAME]:-(not set)}  (developer mode: on)"
+  ui_kv "Test site" "${CFG[TEST_SITE_NAME]:-(not set)}  (developer mode: on, all apps)"
+  ui_kv "Minimal test site" "${CFG[TEST_MINIMAL_SITE_NAME]:-(not set)}  (developer mode: on, core app only)"
   ui_kv "Admin password" "$(cfg_mask "${CFG[ADMIN_PASSWORD]:-}")"
   ui_kv "MariaDB root" "${CFG[MARIADB_ROOT_USERNAME]:-(not set)} / $(cfg_mask "${CFG[MARIADB_ROOT_PASSWORD]:-}")"
   ui_kv "MariaDB host port" "$([[ ${CFG[MARIADB_EXPOSE_PORT]:-} == 1 ]] && echo "published (3306)" || echo "${CFG[MARIADB_EXPOSE_PORT]:+not published}")"
@@ -379,18 +383,19 @@ section_storage() {
 section_site() {
   ui_section "Site"
   if has_answer SITE_NAME; then
-    valid_site_name "${ANS[SITE_NAME]}" || ui_die "SITE_NAME '${ANS[SITE_NAME]}' is not a valid lowercase host name (and must not start with test.)."
+    valid_site_name "${ANS[SITE_NAME]}" || ui_die "SITE_NAME '${ANS[SITE_NAME]}' is not a valid lowercase host name (and must not start with test. or test-minimal.)."
     CFG[SITE_NAME]="${ANS[SITE_NAME]}"
   elif [[ -n "$ANSWERS_FILE" && -n "${CFG[SITE_NAME]:-}" ]]; then :
   else
     need_tty_for SITE_NAME "the site name"
     ui_note "The host name you'll open in the browser (e.g. erp.local); add it to your hosts file later."
     ui_input --default "${CFG[SITE_NAME]:-}" --validate valid_site_name \
-      --error "use a lowercase host name like erp.local (not starting with test.)" "Site name"
+      --error "use a lowercase host name like erp.local (not starting with test. or test-minimal.)" "Site name"
     CFG[SITE_NAME]="$UI_VALUE"
   fi
   CFG[TEST_SITE_NAME]="test.${CFG[SITE_NAME]}"
-  ui_ok "Site ${CFG[SITE_NAME]} · test site ${CFG[TEST_SITE_NAME]}"
+  CFG[TEST_MINIMAL_SITE_NAME]="test-minimal.${CFG[SITE_NAME]}"
+  ui_ok "Site ${CFG[SITE_NAME]} · test sites ${CFG[TEST_SITE_NAME]} (all apps) and ${CFG[TEST_MINIMAL_SITE_NAME]} (core app only)"
 
   if has_answer MAIN_SITE_DEVELOPER_MODE; then
     [[ "${ANS[MAIN_SITE_DEVELOPER_MODE]}" =~ ^[01]$ ]] || ui_die "MAIN_SITE_DEVELOPER_MODE must be 1 or 0."
@@ -602,7 +607,7 @@ review_and_save() {
     local k changed=() all_keys
     all_keys=$(printf '%s\n' "${!OLD[@]}" "${!CFG[@]}" | sort -u)
     while IFS= read -r k; do
-      [[ -z "$k" || "$k" == MARIADB_AUTO_UPGRADE || "$k" == SEAWEEDFS_ENDPOINT ]] && continue
+      [[ -z "$k" || "$k" == MARIADB_AUTO_UPGRADE || "$k" == SEAWEEDFS_ENDPOINT || "$k" == CLAMAV_* ]] && continue
       [[ "${OLD[$k]:-}" == "${CFG[$k]:-}" ]] && continue
       changed+=("$k")
     done <<< "$all_keys"
@@ -648,10 +653,12 @@ write_files() {
   done
   versions="${versions%$'\n'}"
   cfg_meet_enabled CFG && meet=1
+  CFG[TEST_MINIMAL_SITE_NAME]="test-minimal.${CFG[SITE_NAME]}"
   render "$TEMPLATE_DIR/env.template" "$ENV_FILE" --mode 600 --backup-dir "$BACKUP_DIR" -- \
     "GENERATED_AT=$(date '+%Y-%m-%d %H:%M')" \
     "SITE_NAME=$(env_quote "${CFG[SITE_NAME]}")" \
     "TEST_SITE_NAME=$(env_quote "${CFG[TEST_SITE_NAME]}")" \
+    "TEST_MINIMAL_SITE_NAME=$(env_quote "${CFG[TEST_MINIMAL_SITE_NAME]}")" \
     "MAIN_SITE_DEVELOPER_MODE=$(env_quote "${CFG[MAIN_SITE_DEVELOPER_MODE]}")" \
     "ADMIN_PASSWORD=$(env_quote "${CFG[ADMIN_PASSWORD]}")" \
     "MARIADB_ROOT_USERNAME=$(env_quote "${CFG[MARIADB_ROOT_USERNAME]}")" \

@@ -1,0 +1,9 @@
+# Ruff (lint + format) for the Python files of this repository
+# (bootstrap/lib/render.py, architecture/book/assemble.py, architecture/tools/).
+# Tool choice: architecture/50-delivery/504-toolchain.md
+line-length = 100
+target-version = "py312"
+
+[lint]
+# pycodestyle, pyflakes, bugbear, pyupgrade, isort, security (bandit)
+select = ["E", "W", "F", "B", "UP", "I", "S"]

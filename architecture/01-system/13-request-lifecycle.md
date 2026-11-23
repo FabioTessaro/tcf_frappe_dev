@@ -7,7 +7,7 @@ Use it to decide where a piece of logic belongs.
 
 ## Portal request
 
-```
+```text
 View ─► composable ─► feature api module ─► shared/frappe client ──HTTP──►
   portal page / router guard (UX only)        adds CSRF, X-Trace-Id, handles error envelope
 

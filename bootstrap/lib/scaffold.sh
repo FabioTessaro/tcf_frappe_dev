@@ -115,7 +115,25 @@ gh_apply_repo_settings() {
   fi
   json+=']}'
   _gh_json() { local method="$1" path="$2" body="$3"; printf '%s' "$body" | gh api -X "$method" "$path" --input - >/dev/null; }
-  gh_setting "Ruleset on main (pull requests, review, green CI, no force-push)" -- _gh_json POST "repos/$repo/rulesets" "$json"
+  # Create the ruleset, or update it when a run before this one created it.
+  local rs_id
+  rs_id=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.name == "main") | .id' 2>/dev/null | head -n 1)
+  if [[ -n "$rs_id" ]]; then
+    gh_setting "Ruleset on main (updated)" -- _gh_json PUT "repos/$repo/rulesets/$rs_id" "$json"
+  else
+    gh_setting "Ruleset on main (pull requests, review, green CI, no force-push)" -- _gh_json POST "repos/$repo/rulesets" "$json"
+  fi
+  # Other repositories of the owner may call these workflows. GitHub only has
+  # this setting for private/internal repositories: public ones are open to all.
+  local visibility owner="${repo%%/*}" access=user
+  visibility=$(gh api "repos/$repo" --jq .visibility 2>/dev/null)
+  if [[ "$visibility" == public ]]; then
+    ui_ok "Actions: public repository, every repository can use its workflows"
+  else
+    gh_owner_is_org "$owner" && access=organization
+    gh_setting "Actions: other repositories of $owner may use these workflows" -- \
+      gh api -X PUT "repos/$repo/actions/permissions/access" -f access_level="$access" --silent
+  fi
   gh_setting "Private vulnerability reporting" -- gh api -X PUT "repos/$repo/private-vulnerability-reporting" --silent
   local env
   for env in staging production; do

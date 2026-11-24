@@ -107,39 +107,63 @@ valid_gh_name "$REPO" || ui_die "Invalid repository name '$REPO'."
 SLUG="$OWNER/$REPO"; URL="git@github.com:$SLUG.git"
 ui_kv "Repository" "$SLUG"; ui_kv "Checkout" "${PLATFORM_DIR#"$REPO_ROOT"/}"
 
-MODE=""
+# --- current state: the script converges from any of them (idempotent) -----------
+#   local   none | unpublished (scaffold not linked to GitHub yet) | linked
+#   GitHub  missing | empty (created, nothing pushed) | populated
+LOCAL=none; REMOTE=skipped
 if [[ -e "$PLATFORM_DIR" ]]; then
   if [[ -d "$PLATFORM_DIR/.git" ]]; then
     origin=$(git -C "$PLATFORM_DIR" remote get-url origin 2>/dev/null || true)
-    if [[ -z "$origin" && "$NO_PUSH" == true ]]; then MODE=present
-    elif [[ "$origin" == "$URL" || "$origin" == "https://github.com/$SLUG"* ]]; then MODE=present
-    else ui_die "${PLATFORM_DIR#"$REPO_ROOT"/} is a checkout of '${origin:-no origin}', not $SLUG." "Move it away or choose its owner."
+    if [[ -z "$origin" ]]; then LOCAL=unpublished
+    elif [[ "$origin" == "$URL" || "$origin" == "https://github.com/$SLUG"* ]]; then LOCAL=linked
+    else ui_die "${PLATFORM_DIR#"$REPO_ROOT"/} is a checkout of '$origin', not $SLUG." "Move it away or choose its owner."
     fi
   elif [[ -n "$(ls -A "$PLATFORM_DIR" 2>/dev/null)" ]]; then
     ui_die "${PLATFORM_DIR#"$REPO_ROOT"/} exists and is not a git checkout." "Move it away and run again."
   fi
 fi
-if [[ -z "$MODE" && "$NO_PUSH" == false ]] && ui_run --quiet-fail "Looking for $SLUG on GitHub" -- gh_repo_exists "$SLUG"; then
-  MODE=clone
+if [[ "$NO_PUSH" == false ]]; then
+  if ui_run --quiet-fail "Looking for $SLUG on GitHub" -- gh_repo_exists "$SLUG"; then
+    if gh api "repos/$SLUG/branches/main" --silent >/dev/null 2>&1; then REMOTE=populated; else REMOTE=empty; fi
+  else
+    REMOTE=missing
+  fi
 fi
-MODE="${MODE:-create}"
-case "$MODE" in
-  present) ui_ok "${PLATFORM_DIR#"$REPO_ROOT"/} is already a checkout of $SLUG" ;;
-  clone) ui_ok "$SLUG exists on GitHub: it will be cloned" ;;
-  create) ui_info "$SLUG doesn't exist yet: it will be created" ;;
+[[ "$LOCAL" == unpublished && "$REMOTE" == populated ]] && ui_die \
+  "${PLATFORM_DIR#"$REPO_ROOT"/} holds a local scaffold, but $SLUG already has content on GitHub." \
+  "Move ${PLATFORM_DIR#"$REPO_ROOT"/} away and run again to clone the repository."
+SCAFFOLD=false; CLONE=false; CREATED=false
+case "$LOCAL:$REMOTE" in
+  none:populated) CLONE=true ;;
+  none:*) SCAFFOLD=true ;;
+esac
+case "$LOCAL" in
+  none) ui_kv "Local checkout" "none — will be $([[ $CLONE == true ]] && echo cloned || echo scaffolded)" ;;
+  unpublished) ui_kv "Local checkout" "present, not linked to GitHub yet" ;;
+  linked) ui_kv "Local checkout" "present, linked to $SLUG" ;;
+esac
+case "$REMOTE" in
+  missing) ui_kv "GitHub" "doesn't exist yet — will be created" ;;
+  empty) ui_kv "GitHub" "exists but empty — main will be pushed" ;;
+  populated) ui_kv "GitHub" "exists" ;;
+  skipped) ui_kv "GitHub" "not checked (--no-push)" ;;
 esac
 
 # =============================================================================
-if [[ "$MODE" == create ]]; then
-  ui_section "Choices"
+VISIBILITY=""
+if [[ "$REMOTE" == missing ]]; then
+  ui_section "Visibility"
   if has_answer PLATFORM_VISIBILITY; then VISIBILITY="${ANS[PLATFORM_VISIBILITY]}"
-  elif [[ "$NO_PUSH" == true ]]; then VISIBILITY=private
   else
     need_tty_for PLATFORM_VISIBILITY "the visibility"
     ui_select "Visibility of $SLUG" "private::Private" "public::Public::anyone can read it" || exit 1
     VISIBILITY="$UI_VALUE"
   fi
   [[ "$VISIBILITY" == private || "$VISIBILITY" == public ]] || ui_die "PLATFORM_VISIBILITY must be private or public."
+fi
+
+if [[ "$SCAFFOLD" == true ]]; then
+  ui_section "Choices"
 
   if has_answer PLATFORM_LICENSE; then LICENSE_KEY="${ANS[PLATFORM_LICENSE]}"
   else
@@ -170,7 +194,8 @@ if [[ "$MODE" == create ]]; then
   [[ "$FRAPPE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || ui_die "FRAPPE_VERSION must be a release tag like v16.2.0 (got '$FRAPPE_TAG')."
   FRAPPE_MAJOR=$(version_major "$FRAPPE_TAG")
 
-  ui_kv "Visibility" "$VISIBILITY"; ui_kv "Licence" "$(license_name "$LICENSE_KEY") — $HOLDER"
+  [[ -n "$VISIBILITY" ]] && ui_kv "Visibility" "$VISIBILITY"
+  ui_kv "Licence" "$(license_name "$LICENSE_KEY") — $HOLDER"
   ui_kv "Frappe" "$FRAPPE_TAG"; ui_kv "Guide" "$(guide_version)"
   if [[ "$ASSUME_YES" == false && "$UI_TTY_IN" == true ]]; then
     msg="Create $SLUG"; [[ "$NO_PUSH" == true ]] && msg="Scaffold $SLUG locally (no push)"
@@ -256,26 +281,44 @@ if [[ "$MODE" == create ]]; then
   ui_run "Creating the first commit" -- _commit || ui_die "git commit failed."
   ui_ok "Scaffolded $(git -C "$PLATFORM_DIR" ls-files | wc -l) files in ${PLATFORM_DIR#"$REPO_ROOT"/}"
 
-  if [[ "$NO_PUSH" == false ]]; then
-    # =========================================================================
-    ui_section "GitHub"
-    ui_run "Creating $SLUG ($VISIBILITY)" -- gh repo create "$SLUG" "--$VISIBILITY" \
-      --description "Platform repository: release definition, CI image, shared configuration" \
-      || ui_die "gh repo create failed."
-    _push() { cd "$PLATFORM_DIR" && git remote add origin "$URL" && git push -q -u origin main; }
-    ui_run "Pushing main" -- _push || ui_die "git push failed." "Check that $URL accepts your SSH key."
-    access=user; gh_owner_is_org "$OWNER" && access=organization
-    gh_setting "Actions: other repositories of $OWNER may use these workflows" -- \
-      gh api -X PUT "repos/$SLUG/actions/permissions/access" -f access_level="$access" --silent
-    gh_apply_repo_settings "$SLUG" ci-image checks
-  fi
 fi
 
 # =============================================================================
-if [[ "$MODE" == clone ]]; then
+if [[ "$CLONE" == true ]]; then
   ui_section "Checkout"
   mkdir -p "$(dirname "$PLATFORM_DIR")"
   ui_run "Cloning $SLUG" -- git clone -q "$URL" "$PLATFORM_DIR" || ui_die "git clone failed." "Check that $URL accepts your SSH key."
+fi
+
+# =============================================================================
+# GitHub: create what is missing, push only into an empty repository (later
+# commits go through pull requests), then (re)apply every setting.
+if [[ "$NO_PUSH" == false ]]; then
+  ui_section "GitHub"
+  if [[ "$REMOTE" == missing ]]; then
+    ui_run "Creating $SLUG ($VISIBILITY)" -- gh repo create "$SLUG" "--$VISIBILITY" \
+      --description "Platform repository: release definition, CI image, shared configuration" \
+      || ui_die "gh repo create failed."
+    REMOTE=empty; CREATED=true
+  else
+    ui_ok "$SLUG exists"
+  fi
+  if [[ -z "$(git -C "$PLATFORM_DIR" remote get-url origin 2>/dev/null)" ]]; then
+    git -C "$PLATFORM_DIR" remote add origin "$URL" && ui_ok "origin → $URL"
+  fi
+  if [[ "$REMOTE" == empty ]]; then
+    ui_run "Pushing main" -- git -C "$PLATFORM_DIR" push -q -u origin main \
+      || ui_die "git push failed." "Check that $URL accepts your SSH key, then run ./new-platform.sh again."
+    CREATED=true
+  else
+    ui_run --quiet-fail "Fetching origin" -- git -C "$PLATFORM_DIR" fetch -q origin || ui_warn "Couldn't fetch origin."
+    ahead=$(git -C "$PLATFORM_DIR" rev-list --count origin/main..main 2>/dev/null || echo 0)
+    behind=$(git -C "$PLATFORM_DIR" rev-list --count main..origin/main 2>/dev/null || echo 0)
+    if (( ahead > 0 )); then ui_note "Local main has $ahead commit(s) not on GitHub: not pushed — changes go through pull requests."; fi
+    if (( behind > 0 )); then ui_note "Local main is $behind commit(s) behind GitHub: git -C ${PLATFORM_DIR#"$REPO_ROOT"/} pull"; fi
+    (( ahead == 0 && behind == 0 )) && ui_ok "main is in sync with GitHub"
+  fi
+  gh_apply_repo_settings "$SLUG" ci-image checks
 fi
 
 # =============================================================================
@@ -295,7 +338,7 @@ else
   workspace_render && ui_ok ".vscode/dev.code-workspace $RENDER_STATUS (platform folder added)"
 fi
 
-if [[ "$MODE" == create && "$NO_PUSH" == false ]]; then
+if [[ "$CREATED" == true ]]; then
   pkg_url="https://github.com/$( gh_owner_is_org "$OWNER" && echo "orgs/$OWNER" || echo "users/$OWNER")/packages/container/ci/settings"
   ui_box "One-time steps on GitHub (the API can't do them):" \
     "1. After the first CI run, make the CI image package public: $pkg_url" \

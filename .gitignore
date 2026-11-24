@@ -26,3 +26,6 @@ architecture/book/dist/
 
 # python bytecode
 __pycache__/
+
+# ruff
+.ruff_cache/

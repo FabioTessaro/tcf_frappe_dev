@@ -1,0 +1,19 @@
+# Security policy
+
+## Scope
+
+This repository defines how the platform is built, released and deployed: the
+CI image, the production image, the lock file and the deploy procedure. A flaw
+here can reach every app and every environment.
+
+## Reporting a vulnerability
+
+Don't open a public issue. Report it privately through GitHub's private
+vulnerability reporting:
+[Report a vulnerability](https://github.com/@@OWNER@@/@@REPO_NAME@@/security/advisories/new).
+
+You get an acknowledgement within 5 working days.
+
+## Supported versions
+
+Only the latest platform release and `main` receive fixes.

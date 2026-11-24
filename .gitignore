@@ -13,7 +13,7 @@ logs/
 frappe-bench/
 
 # checkout of the platform repository (./new-platform.sh) — its own git repository
-platform/
+/platform/
 .pnpm-store
 
 # agentic settings

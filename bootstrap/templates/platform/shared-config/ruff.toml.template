@@ -1,0 +1,13 @@
+# Shared Ruff configuration (DEL-TOOL-003) — copied by `just sync-config`; do
+# not edit the copy. Lint (incl. the security `S` rules) and format.
+line-length = 100
+target-version = "py314"
+
+[lint]
+# pycodestyle, pyflakes, bugbear, pyupgrade, isort, security (bandit rules)
+select = ["E", "W", "F", "B", "UP", "I", "S"]
+
+[lint.per-file-ignores]
+# Tests may use assert.
+"**/tests/**" = ["S101"]
+"**/test_*.py" = ["S101"]

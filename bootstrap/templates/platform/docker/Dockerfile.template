@@ -1,0 +1,46 @@
+# syntax=docker/dockerfile:1
+# Production image (guide 503): bench, Frappe and every app at the versions in
+# platform.lock, with the built frontend. Built only in CI (DEL-CD-001) by
+# `just build-image`; never contains secrets (DEL-CD-005).
+# Private app repositories are read with the BuildKit secret `git_token`
+# (never stored in a layer).
+
+FROM @@BUILD_IMAGE@@ AS builder
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# root (numeric: DL3066)
+USER 0
+RUN mkdir -p /opt/platform && chown 1000:0 /opt/platform
+# frappe (UID 1000 in the Frappe images)
+USER 1000
+COPY --chown=1000:0 platform.lock tools/lock.py /opt/platform/
+# hadolint ignore=DL3003
+RUN --mount=type=secret,id=git_token,uid=1000 \
+    set -eu; \
+    if [ -s /run/secrets/git_token ]; then \
+      git config --global url."https://x-access-token:$(cat /run/secrets/git_token)@github.com/".insteadOf "https://github.com/"; \
+    fi; \
+    python3 /opt/platform/lock.py apps-json /opt/platform/platform.lock > /opt/platform/apps.json; \
+    eval "$(python3 /opt/platform/lock.py frappe-env /opt/platform/platform.lock)"; \
+    bench init --frappe-path "$FRAPPE_REPOSITORY" --frappe-branch "$FRAPPE_VERSION" \
+      --apps_path /opt/platform/apps.json --no-procfile --no-backups \
+      --skip-redis-config-generation --verbose /home/frappe/frappe-bench; \
+    cd /home/frappe/frappe-bench; \
+    python3 /opt/platform/lock.py verify-bench /opt/platform/platform.lock .; \
+    core="$(python3 /opt/platform/lock.py core /opt/platform/platform.lock)"; \
+    if [ -n "$core" ] && [ -f "apps/$core/frontend/package.json" ]; then \
+      (cd "apps/$core/frontend" && yarn install --frozen-lockfile && yarn build); \
+    fi; \
+    echo '{}' > sites/common_site_config.json; \
+    rm -f "$HOME/.gitconfig"; \
+    find apps -mindepth 2 -maxdepth 2 -name .git -type d -prune -exec rm -rf {} +
+
+FROM @@BASE_IMAGE@@ AS production
+LABEL org.opencontainers.image.source="https://github.com/@@OWNER@@/@@REPO_NAME@@"
+# frappe (UID 1000 in the Frappe images)
+USER 1000
+COPY --from=builder --chown=1000:0 /home/frappe/frappe-bench /home/frappe/frappe-bench
+WORKDIR /home/frappe/frappe-bench
+VOLUME ["/home/frappe/frappe-bench/sites", "/home/frappe/frappe-bench/sites/assets", "/home/frappe/frappe-bench/logs"]
+CMD ["/home/frappe/frappe-bench/env/bin/gunicorn", "--chdir=/home/frappe/frappe-bench/sites", \
+     "--bind=0.0.0.0:8000", "--threads=4", "--workers=2", "--worker-class=gthread", \
+     "--worker-tmp-dir=/dev/shm", "--timeout=120", "--preload", "frappe.app:application"]

@@ -1,0 +1,26 @@
+# Dependency updates for every repository of @@OWNER@@ (Renovate run as a
+# scheduled job, guide 504). Inactive until the RENOVATE_TOKEN secret exists.
+name: renovate
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/@@OWNER@@/ci:@@CI_TAG@@
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    env:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+    steps:
+      - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+      - run: just renovate

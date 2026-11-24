@@ -1,0 +1,44 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Shared Renovate preset of every repository of @@OWNER@@ (extend it with github>@@OWNER@@/@@REPO_NAME@@)",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommitTypeAll(chore)"],
+  "dependencyDashboard": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Tool versions in Dockerfiles annotated with '# renovate:'",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+ARG \\S+?_VERSION=(?<currentValue>\\S+)"
+      ],
+      "extractVersionTemplate": "{{#if extractVersion}}{{{extractVersion}}}{{else}}^v?(?<version>.*)${{/if}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Apps in platform.lock: tag and commit",
+      "managerFilePatterns": ["/(^|/)platform\\.lock$/"],
+      "matchStrings": [
+        "repository = \"(?<packageName>[^\"]+)\"\\s+version = \"(?<currentValue>[^\"]+)\"\\s+commit = \"(?<currentDigest>[0-9a-f]{40})\""
+      ],
+      "datasourceTemplate": "git-tags",
+      "depNameTemplate": "{{{packageName}}}"
+    },
+    {
+      "customType": "regex",
+      "description": "Pinned platform commit of app repositories (shared configuration, DEL-TOOL-003)",
+      "managerFilePatterns": ["/(^|/)justfile$/"],
+      "matchStrings": ["platform_ref := \"(?<currentDigest>[0-9a-f]{40})\""],
+      "datasourceTemplate": "git-refs",
+      "packageNameTemplate": "https://github.com/@@OWNER@@/@@REPO_NAME@@",
+      "depNameTemplate": "@@REPO_NAME@@",
+      "currentValueTemplate": "main"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "One pull request per platform commit bump (workflow SHA and shared configuration together)",
+      "matchDepNames": ["@@REPO_NAME@@", "@@OWNER@@/@@REPO_NAME@@"],
+      "groupName": "platform"
+    }
+  ]
+}

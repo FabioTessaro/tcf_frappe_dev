@@ -1,0 +1,15 @@
+# Shared tool configuration (DEL-TOOL-003). `just sync-config` in every
+# repository copies these files from a pinned tag of this repository;
+# `just check-config` fails when a copy differs. Repositories may add stricter
+# settings only in their own files (e.g. eslint.config.js importing
+# eslint.shared.js), never by editing a copy.
+#
+# file                        destination in the repository     repository kinds
+ruff.toml                     ruff.toml                         all
+mypy.ini                      mypy.ini                          all
+.markdownlint-cli2.yaml       .markdownlint-cli2.yaml           all
+.pre-commit-config.yaml       .pre-commit-config.yaml           all
+.editorconfig                 .editorconfig                     all
+.prettierrc.json              frontend/.prettierrc.json         core
+eslint.shared.js              frontend/eslint.shared.js         core
+stylelint.shared.js           frontend/stylelint.shared.js      core

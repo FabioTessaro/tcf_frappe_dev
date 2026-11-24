@@ -1,0 +1,58 @@
+# @@REPO_NAME@@
+
+Targets Platform Architecture Guide @@GUIDE_VERSION@@.
+
+The **platform repository**: it defines what a platform release is and how it is
+built, checked, released and deployed (guide chapter 500). Apps live in their own
+repositories; this one holds what they share.
+
+| Path | Holds |
+|---|---|
+| `platform.lock` | Frappe and every app, with repository URL, tag and commit SHA: the definition of a platform release |
+| `ci-image/` | The CI container image every repository's CI runs in (pinned tools) |
+| `shared-config/` | Tool configuration copied into every repository by `just sync-config` (DEL-TOOL-003) |
+| `.github/workflows/app-ci.yml` | Reusable level-1 workflow that app repositories call (DEL-CI-002) |
+| `.github/workflows/platform.yml` | This repository's checks, the CI image publication and level-2 CI |
+| `docker/`, `compose/` | Production image and the production / end-to-end compose files |
+| `tools/` | The Python behind the recipes (lock handling, platform contracts) |
+| `docs/adr/` | Decisions of this repository |
+
+## Working on it
+
+The checkout lives next to the bench, in `frappe-dev/platform/`, and is part of the
+VS Code workspace. Edit anywhere. Recipes that need Docker (`build-image`,
+`test-*`, `sbom`, `scan-image`) run **on the host**, because the development
+container has no Docker access.
+
+Every recipe runs inside the CI image, so a recipe gives the same result on your
+machine and in CI (DEL-TOOL-004). On the host, `just` starts the image for you
+with `docker run`; build it once with `just ci-image-build`.
+
+```bash
+just                 # list the recipes
+just ci              # this repository's checks
+just level2          # build the platform image and run the level-2 checks
+```
+
+## Pre-production
+
+Until the first app conforms and the first release is made, some steps have
+nothing to act on. They print `inactive: <reason>` and pass instead of failing
+(see `docs/adr/0001-pre-production-inactive-steps.md`). Running `just release` or
+`just deploy` by hand still fails, with the reason.
+
+## One-time settings on GitHub
+
+`new-platform.sh` applies what the GitHub plan allows and lists the rest. Check:
+
+- the CI image package `ghcr.io/@@OWNER@@/ci` is **public** (it holds only public
+  tools), so every repository's CI can pull it;
+- Actions access: repositories of `@@OWNER@@` may use this repository's workflows;
+- secrets: `RENOVATE_TOKEN` (Renovate), `APPS_READ_TOKEN` (CI reads the private app
+  repositories), `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` (signing),
+  `DEPLOY_SSH_KEY` and `DEPLOY_HOST` per environment (deploys). Steps whose secret
+  is missing stay inactive.
+
+## Licence
+
+@@LICENSE_NAME@@ — see `LICENSE`.

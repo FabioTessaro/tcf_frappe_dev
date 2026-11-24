@@ -1,0 +1,70 @@
+# Shared git hooks (DEL-TOOL-003) — copied by `just sync-config`; do not edit
+# the copy. `just setup` installs both hook types. Tools: guide chapter 504.
+exclude: '(^|/)(node_modules|dist|\.cache)(/|$)'
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+# Node for Node-based hooks (markdownlint-cli2); pre-commit downloads it when
+# the machine has none. Pinned: "latest" can be a pre-release that the
+# system nodeenv can't parse. Guide 504: Node >= 24 (LTS line).
+default_language_version:
+  node: "24.22.3"
+fail_fast: false
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-executables-have-shebangs
+      - id: check-case-conflict
+
+  # Secret scanning of the staged changes (SEC-VULN-006); gitleaks binary from
+  # the CI image or the development environment.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks-system
+        pass_filenames: false
+
+  # Conventional Commits (DEL-REL-001)
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.5.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.24.2
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: local
+    hooks:
+      - id: lychee-offline
+        name: lychee (Markdown links, offline)
+        entry: lychee --offline --no-progress --include-fragments
+        language: system
+        types: [markdown]
+      - id: hadolint
+        name: hadolint (Dockerfiles)
+        entry: hadolint
+        language: system
+        types: [dockerfile]

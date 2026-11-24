@@ -1,0 +1,25 @@
+# Conformance
+
+This repository **targets** Platform Architecture Guide @@GUIDE_VERSION@@
+(`FND-CONF-001`). It switches to "Conforms to" when the list of open rules
+below is empty and CI passes (`FND-CONF-006`).
+
+## Open rules
+
+| Rule | What is missing | Closes when |
+|---|---|---|
+| DEL-REPO-002 | No app is in `platform.lock`, so nothing is releasable | The first app conforms and Renovate adds it |
+| DEL-REL-004 | No signing key (`sign` is inactive, ADR 0001) | `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD` secrets and `cosign.pub` exist |
+| DEL-CD-002, DEL-CD-003 | No staging or production host, no host backup script | `DEPLOY_HOST`, `DEPLOY_SSH_KEY` environment secrets and `/srv/platform/<env>/backup.sh` exist |
+| DEL-CI-001 | Level-2 test steps are inactive (ADR 0001) | An app is in `platform.lock` |
+
+## Implemented
+
+| Rule | Where |
+|---|---|
+| DEL-CI-002, DEL-CI-007 | `.github/workflows/` call `just` recipes only; actions pinned to a commit SHA |
+| DEL-CI-003 | `ci-image/Dockerfile`, every job runs in it |
+| DEL-TOOL-003 | `shared-config/`, `just sync-config`, `just check-config` |
+| DEL-TOOL-004 | `justfile`: every recipe runs in the CI image, locally too |
+| DEL-CD-001 | `docker/Dockerfile` is built only by `just build-image` in CI |
+| SYS-DEP-001…003, 006, CT-REG-003 | `tools/contracts.py` (`just test-platform`) |

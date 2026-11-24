@@ -1,0 +1,40 @@
+# Level 1 of this repository and publication of the CI image (guide 501).
+# Trigger only: every step is a `just` recipe (DEL-CI-002); actions are
+# plumbing pinned to a commit SHA (DEL-CI-007).
+name: platform
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ci-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+      - name: Install just
+        run: curl -fsSL https://just.systems/install.sh | bash -s -- --tag @@JUST_VERSION@@ --to "$HOME/.local/bin" && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: just ci-image-publish
+
+  checks:
+    needs: ci-image
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/@@OWNER@@/ci:@@CI_TAG@@
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    steps:
+      - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+        with:
+          fetch-depth: 0
+      - run: just ci

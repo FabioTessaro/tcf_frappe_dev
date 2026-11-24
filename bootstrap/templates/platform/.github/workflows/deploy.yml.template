@@ -1,0 +1,41 @@
+# Deploy a platform release (guide 503). Step 1, the manual approval, is the
+# GitHub environment's required reviewers; DEPLOY_HOST and DEPLOY_SSH_KEY are
+# environment secrets.
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+      version:
+        description: Platform version to deploy (YYYY.MM.PATCH)
+        required: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency: deploy-${{ inputs.environment }}
+    container:
+      image: ghcr.io/@@OWNER@@/ci:@@CI_TAG@@
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: just deploy "${{ inputs.environment }}" "${{ inputs.version }}"

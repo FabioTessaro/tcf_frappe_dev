@@ -1,0 +1,23 @@
+# End-to-end overlay: `docker compose -f compose/production.yml -f compose/e2e.yml`.
+# Disposable stack for `just test-backend site=full` and `just test-e2e`, with
+# throw-away credentials and one site holding every app of platform.lock.
+services:
+  create-site:
+    image: ${PLATFORM_IMAGE:?set PLATFORM_IMAGE}
+    restart: "no"
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        bench new-site e2e.localhost --mariadb-user-host-login-scope='%'
+        --db-root-username=root --db-root-password=$${DB_ROOT_PASSWORD}
+        --admin-password=$${ADMIN_PASSWORD} --set-default
+        $$(ls -1 apps | grep -vx frappe | sed 's/^/--install-app /' | tr '\n' ' ');
+        bench --site e2e.localhost set-config allow_tests true
+    environment:
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      configurator:
+        condition: service_completed_successfully

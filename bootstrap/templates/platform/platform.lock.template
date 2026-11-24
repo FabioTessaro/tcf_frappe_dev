@@ -1,0 +1,14 @@
+# platform.lock — the single definition of a platform release (DEL-REPO-002).
+# Every app with repository URL, exact tag and commit SHA. Apps are added only
+# when they conform to the guide (FND-CONF-005); Renovate opens the pull
+# requests that bump them. Check it with `just check-lock`.
+
+[frappe]
+repository = "https://github.com/frappe/frappe"
+version = "@@FRAPPE_VERSION@@"
+commit = "@@FRAPPE_SHA@@"
+
+# [<app>]
+# repository = "https://github.com/@@OWNER@@/<app>"
+# version = "v1.0.0"
+# commit = "<40-character SHA the tag points to>"

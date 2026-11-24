@@ -1,0 +1,49 @@
+# Reusable level-1 workflow of every app repository (guide 501, DEL-CI-002).
+# An app's .github/workflows/ci.yml calls it, pinned to a commit SHA of this
+# repository; Renovate bumps the SHA. Every step is `just ci` in the CI image,
+# with MariaDB and Redis as job services.
+name: app-ci
+
+on:
+  workflow_call:
+    secrets:
+      APPS_READ_TOKEN:
+        description: Read access to the private app repositories and this one
+        required: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  level1:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/@@OWNER@@/ci:@@CI_TAG@@
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+    services:
+      mariadb:
+        image: @@MARIADB_IMAGE@@
+        env:
+          MARIADB_ROOT_PASSWORD: ci-root
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-retries 30
+      redis-cache:
+        image: @@REDIS_IMAGE@@
+      redis-queue:
+        image: @@REDIS_IMAGE@@
+    env:
+      APPS_READ_TOKEN: ${{ secrets.APPS_READ_TOKEN }}
+      CI_DB_HOST: mariadb
+      CI_DB_ROOT_PASSWORD: ci-root
+      CI_REDIS_CACHE: redis://redis-cache:6379
+      CI_REDIS_QUEUE: redis://redis-queue:6379
+    steps:
+      - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+        with:
+          fetch-depth: 0
+      - run: just ci

@@ -1,0 +1,15 @@
+# Shared markdownlint-cli2 configuration (DEL-TOOL-003) — copied by
+# `just sync-config`; do not edit the copy.
+config:
+  default: true
+  # Prose and tables are not wrapped at a fixed width.
+  MD013: false
+  # Repeated headings ("Rules", "Defaults", …) are fine in different sections.
+  MD024:
+    siblings_only: true
+  # Tables use the compact `|---|` style.
+  MD060: false
+ignores:
+  - "**/node_modules/**"
+  - "dist/**"
+  - ".cache/**"

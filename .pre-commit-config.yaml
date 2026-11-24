@@ -4,9 +4,14 @@
 # installs both hook types below). Run everything by hand:
 #   pre-commit run --all-files
 # Tools: architecture/50-delivery/504-toolchain.md
-exclude: '(^|/)(\.git|node_modules)(/|$)'
+exclude: '(^|/)node_modules(/|$)'
 default_install_hook_types: [pre-commit, commit-msg]
 default_stages: [pre-commit]
+# Node for Node-based hooks (markdownlint-cli2); pre-commit downloads it when
+# the machine has none. Pinned: "latest" can be a pre-release that the
+# system nodeenv can't parse. Guide 504: Node >= 24 (LTS line).
+default_language_version:
+  node: "24.22.3"
 fail_fast: false
 
 repos:

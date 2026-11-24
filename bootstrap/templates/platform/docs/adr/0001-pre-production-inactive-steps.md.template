@@ -1,0 +1,37 @@
+# 0001 · Pre-production: steps with nothing to act on are inactive
+
+- Status: accepted
+- Date: @@TODAY@@
+- Guide version: @@GUIDE_VERSION@@
+- Rules concerned: DEL-CI-001, DEL-REPO-002, FND-CONF-005, DEL-CD-003
+
+## Context
+
+The repository exists before any app conforms, before the signing key and the
+servers exist. DEL-CI-001 makes every CI step mandatory and allows disabling one
+only through an ADR.
+
+## Decision
+
+A step that has nothing to act on prints `inactive: <reason>` and passes:
+
+| Step | Inactive while |
+|---|---|
+| `test-platform`, `test-backend`, `test-e2e` | no app is in `platform.lock` (or no core app with a Playwright configuration) |
+| `sign` | the `COSIGN_PRIVATE_KEY` secret is not set |
+| `renovate` | the `RENOVATE_TOKEN` secret is not set |
+
+Every other step always runs. `just release` and `just deploy`, run on purpose,
+fail with the missing precondition instead of passing.
+
+## Consequences
+
+- CI is green from the first commit while still running everything that can run.
+- Each inactive step activates by itself when its precondition appears; nothing
+  has to be switched on by hand.
+- No release can be made while any of them is inactive for lack of an app or a
+  key, so the shortcut never reaches production.
+
+## Review
+
+Remove this ADR, and the inactive branches, after the first platform release.

@@ -16,3 +16,4 @@ deviation from a SHOULD rule of the
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-dev-environment-follows-latest.md) | The development environment follows the latest images and tools | accepted |
+| [0002](0002-github-as-interim-host.md) | GitHub is the interim git and CI host | accepted |

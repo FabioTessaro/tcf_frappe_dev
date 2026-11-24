@@ -19,10 +19,12 @@ chapters; this appendix shows one way to satisfy them.
 | Qdrant (planned) | Pinned version | Semantic search index; internal network only |
 | Text Embeddings Inference (planned) | Pinned version | Self-hosted embedding service; GPU optional for bulk indexing |
 
-## CI/CD host (separate machine)
+## CI/CD (GitHub, interim)
 
-Forgejo (git, Actions, registry), forgejo-runner(s), Renovate, Weblate; optionally a log stack
-(e.g. Grafana Loki) for centralised logs.
+GitHub (git, Actions on GitHub-hosted runners, Container Registry); Renovate runs as a scheduled
+Actions job. Weblate and an optional log stack (e.g. Grafana Loki) need a separate host once
+self-hosting is possible ([open decision 7](open-decisions.md)); that host would then also be the
+candidate for Forgejo.
 
 ## Buckets
 

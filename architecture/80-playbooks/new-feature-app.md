@@ -1,8 +1,8 @@
 # Playbook · New feature app
 
-1. Choose the app name (`SYS-APP-001`) and create the repository on Forgejo with the mandatory
-   files (`DEL-REPO-004`), the shared tool configuration (`DEL-TOOL-003`) and the conformance
-   statement (`FND-CONF-001`).
+1. Choose the app name (`SYS-APP-001`) and create the repository in the GitHub organisation with
+   the mandatory files (`DEL-REPO-004`), the shared tool configuration (`DEL-TOOL-003`) and the
+   conformance statement (`FND-CONF-001`).
 2. Create the Frappe app; set `required_apps` (≥ `<core-app>`) and `core_sdk_version`
    (`SYS-DEP-001`, `SYS-DEP-002`). Justify any other hard dependency in the README (`SYS-DEP-010`).
 3. Create `<app>/public/` with `settings.py` and `roles.py` (`BE-INT-001`, `DOM-SET-002`);

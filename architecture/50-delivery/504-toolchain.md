@@ -14,6 +14,12 @@ image in `platform`) and updated only through Renovate pull requests.
 Open source, self-hostable, no dependency on a specific git hosting platform, runnable locally
 exactly as in CI.
 
+**Interim exception:** git hosting, CI triggers, the container registry and CI secrets use
+**GitHub** until the platform can self-host
+([open decision 7](../90-appendices/open-decisions.md)). Pipeline logic stays in `just` recipes
+running in the CI image, and no GitHub-only pipeline feature is used, so a later move to a
+self-hosted host replaces only trigger files, secrets and registry paths.
+
 ## Runtime baseline
 
 | Purpose | Tool |
@@ -69,10 +75,10 @@ exactly as in CI.
 
 | Purpose | Tool |
 |---|---|
-| Git hosting | **Forgejo** (self-hosted) |
-| CI trigger and runners | **Forgejo Actions** with **forgejo-runner** (on infrastructure separate from production) |
-| Container and package registry | **Forgejo built-in registry** |
-| Dependency updates | **Renovate** (self-hosted) |
+| Git hosting | **GitHub** (organisation account; interim, see open decision 7) |
+| CI trigger and runners | **GitHub Actions** on GitHub-hosted runners (separate from production by construction) |
+| Container and package registry | **GitHub Container Registry** (`ghcr.io`) |
+| Dependency updates | **Renovate**, run as a scheduled GitHub Actions job (no Renovate server, no hosted Renovate app) |
 | Vulnerability and licence scanning | **Trivy** |
 | SBOM | **Syft** (CycloneDX JSON) |
 | Image signing | **cosign** with organisation-held keys (no public transparency log required) |
@@ -101,10 +107,12 @@ Do not introduce these (or other tools for the same purposes) without changing t
 
 | Tool | Reason |
 |---|---|
-| GitHub Actions, GitLab CI, other hosted CI | Ties pipelines to a hosting platform; Forgejo Actions only triggers portable recipes |
+| GitLab CI, Jenkins, other CI systems | One trigger system only; GitHub Actions only triggers portable recipes |
 | Dagger, Make (as main runner) | `just` chosen for simplicity |
-| Woodpecker CI | Forgejo Actions chosen to keep one service; recipes keep a future switch cheap |
-| Harbor | Forgejo registry sufficient; revisit if image policies are needed |
+| Woodpecker CI, self-hosted Forgejo (for now) | No self-hosting yet; Forgejo is the candidate target of open decision 7, and recipes keep the switch cheap |
+| Harbor | GitHub Container Registry sufficient; revisit if image policies are needed |
+| Dependabot | Renovate chosen: one update tool, and it also runs on a self-hosted host |
+| GitHub-only pipeline features (CodeQL / GitHub Advanced Security, Marketplace actions that lint, test, build, scan or release) | Puts pipeline logic outside `just` and ties it to GitHub; Ruff `S`, eslint-plugin-security, gitleaks and Trivy cover the baseline |
 | black, isort, flake8, pylint, bandit (standalone) | Covered by Ruff |
 | pyright | mypy chosen (pydantic plugin) |
 | poetry, pip-tools, pipenv | uv chosen |

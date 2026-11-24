@@ -25,6 +25,8 @@ SHA). It is the single definition of a platform release.
   `SECURITY.md`, `justfile`, `.pre-commit-config.yaml`, CI trigger file, `docs/adr/`, lockfiles,
   `renovate.json`.
 - `DEL-REPO-005` The default branch is `main`, protected: changes only via pull request with green
-  CI and at least one review. Force-pushes to `main` are forbidden.
-- `DEL-REPO-006` Repositories are hosted on the self-hosted Forgejo instance; mirrors to other
-  hosts MAY exist but are never the source of truth.
+  CI and at least one review. Force-pushes to `main` are forbidden. On GitHub this is enforced
+  with branch rulesets.
+- `DEL-REPO-006` Repositories are hosted in the organisation's GitHub account (interim host, see
+  [open decision 7](../90-appendices/open-decisions.md)); mirrors to other hosts MAY exist but are
+  never the source of truth.

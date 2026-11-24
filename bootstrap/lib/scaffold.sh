@@ -95,17 +95,18 @@ gh_setting() {
   return 0
 }
 
-# gh_apply_repo_settings OWNER/REPO REQUIRED_CHECKS... — rulesets on main
-# (DEL-REPO-005), private vulnerability reporting, staging/production
-# environments with the current user as required reviewer (guide 503).
+# gh_apply_repo_settings OWNER/REPO APPROVALS REQUIRED_CHECKS... — ruleset on
+# main (DEL-REPO-005: pull request + green CI; APPROVALS = 0 for a single
+# maintainer, 1 for a team), private vulnerability reporting, staging and
+# production environments with the current user as required reviewer (503).
 gh_apply_repo_settings() {
-  local repo="$1"; shift
+  local repo="$1" approvals="$2"; shift 2
   local checks=("$@") me_id json c sep=""
   me_id=$(gh api user --jq .id)
   json='{"name":"main","target":"branch","enforcement":"active",'
   json+='"conditions":{"ref_name":{"include":["~DEFAULT_BRANCH"],"exclude":[]}},"rules":['
   json+='{"type":"deletion"},{"type":"non_fast_forward"},'
-  json+='{"type":"pull_request","parameters":{"required_approving_review_count":1,'
+  json+='{"type":"pull_request","parameters":{"required_approving_review_count":'"$approvals"','
   json+='"dismiss_stale_reviews_on_push":true,"require_code_owner_review":false,'
   json+='"require_last_push_approval":false,"required_review_thread_resolution":false}}'
   if (( ${#checks[@]} )); then
@@ -119,9 +120,9 @@ gh_apply_repo_settings() {
   local rs_id
   rs_id=$(gh api "repos/$repo/rulesets" --jq '.[] | select(.name == "main") | .id' 2>/dev/null | head -n 1)
   if [[ -n "$rs_id" ]]; then
-    gh_setting "Ruleset on main (updated)" -- _gh_json PUT "repos/$repo/rulesets/$rs_id" "$json"
+    gh_setting "Ruleset on main (updated: $approvals required approval(s))" -- _gh_json PUT "repos/$repo/rulesets/$rs_id" "$json"
   else
-    gh_setting "Ruleset on main (pull requests, review, green CI, no force-push)" -- _gh_json POST "repos/$repo/rulesets" "$json"
+    gh_setting "Ruleset on main (pull requests, green CI, $approvals required approval(s), no force-push)" -- _gh_json POST "repos/$repo/rulesets" "$json"
   fi
   # Other repositories of the owner may call these workflows. GitHub only has
   # this setting for private/internal repositories: public ones are open to all.
@@ -175,6 +176,30 @@ for a, b in (("[year]", year), ("[yyyy]", year), ("[fullname]", holder),
 open(dst, "w", encoding="utf-8").write(text if text.endswith("\n") else text + "\n")
 PY
   rm -f "$file.tmp"
+}
+
+# gh_ruleset_approvals OWNER/REPO — required approvals of the "main" ruleset, or nothing
+gh_ruleset_approvals() {
+  local id
+  id=$(gh api "repos/$1/rulesets" --jq '.[] | select(.name == "main") | .id' 2>/dev/null | head -n 1)
+  [[ -n "$id" ]] || return 0
+  gh api "repos/$1/rulesets/$id" --jq '.rules[] | select(.type == "pull_request") | .parameters.required_approving_review_count' 2>/dev/null
+}
+
+# ask_team_mode CURRENT_APPROVALS — sets TEAM_MODE (solo|team) from the answers
+# file key given in $TEAM_KEY, or asks; default from the existing ruleset.
+ask_team_mode() {
+  local current="$1" def=solo
+  [[ -n "$current" && "$current" != 0 ]] && def=team
+  if [[ -n "${ANS[$TEAM_KEY]+x}" ]]; then TEAM_MODE="${ANS[$TEAM_KEY]}"
+  else
+    need_tty_for "$TEAM_KEY" "solo or team"
+    ui_select --initial "$def" "Who maintains this repository? (DEL-REPO-005)" \
+      "solo::Solo — one maintainer::pull request + green CI, merge after the self-review checklist" \
+      "team::Team — two or more::pull request + green CI + one approval by someone else" || exit 1
+    TEAM_MODE="$UI_VALUE"
+  fi
+  [[ "$TEAM_MODE" == solo || "$TEAM_MODE" == team ]] || ui_die "$TEAM_KEY must be solo or team."
 }
 
 # guide_version — version of the architecture guide in this repository

@@ -10,6 +10,7 @@ mypy.ini                      mypy.ini                          all
 .markdownlint-cli2.yaml       .markdownlint-cli2.yaml           all
 .pre-commit-config.yaml       .pre-commit-config.yaml           all
 .editorconfig                 .editorconfig                     all
+pull_request_template.md      .github/pull_request_template.md  all
 .prettierrc.json              frontend/.prettierrc.json         core
 eslint.shared.js              frontend/eslint.shared.js         core
 stylelint.shared.js           frontend/stylelint.shared.js      core

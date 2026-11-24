@@ -16,7 +16,9 @@ What it means for a repository to conform to this guide, and how it is shown.
 - `FND-CONF-002` A repository conforms when all MUST rules applicable to it hold, every SHOULD
   deviation has an ADR, and all automated checks listed under *Verification* pass in CI.
 - `FND-CONF-003` Rules that cannot be checked automatically are marked *manual review*. They
-  MUST be part of the pull-request review checklist of the repository.
+  MUST be part of the pull-request review checklist of the repository
+  (`.github/pull_request_template.md`, from the shared configuration), used by the reviewer or,
+  in a single-maintainer repository, by the author as self-review (DEL-REPO-005).
 - `FND-CONF-004` Upgrading to a new **major** guide version MUST be tracked as work in each
   repository; until finished, the repository keeps declaring the previous version.
 - `FND-CONF-005` An app that is non-conforming MUST NOT be added to `platform.lock`

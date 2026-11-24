@@ -25,8 +25,11 @@ SHA). It is the single definition of a platform release.
   `SECURITY.md`, `justfile`, `.pre-commit-config.yaml`, CI trigger file, `docs/adr/`, lockfiles,
   `renovate.json`.
 - `DEL-REPO-005` The default branch is `main`, protected: changes only via pull request with green
-  CI and at least one review. Force-pushes to `main` are forbidden. On GitHub this is enforced
-  with branch rulesets.
+  CI; force-pushes to `main` are forbidden. A repository with two or more maintainers MUST require
+  at least one approving review by someone other than the author. A repository with a single
+  maintainer MAY merge without approval; the author MUST then complete the self-review checklist
+  of the pull-request template before merging (FND-CONF-003). On GitHub this is enforced with
+  branch rulesets (required approvals: 0 for a single maintainer, at least 1 otherwise).
 - `DEL-REPO-006` Repositories are hosted in the organisation's GitHub account (interim host, see
   [open decision 7](../90-appendices/open-decisions.md)); mirrors to other hosts MAY exist but are
   never the source of truth.

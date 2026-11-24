@@ -18,7 +18,8 @@
 #   --answers FILE   take answers from FILE (KEY=VALUE): PLATFORM_OWNER,
 #                    PLATFORM_REPO (default platform), PLATFORM_VISIBILITY (private|public),
 #                    PLATFORM_LICENSE (proprietary|mit|apache-2.0|agpl-3.0|
-#                    gpl-3.0), PLATFORM_COPYRIGHT, FRAPPE_VERSION (a tag).
+#                    gpl-3.0), PLATFORM_COPYRIGHT, FRAPPE_VERSION (a tag),
+#                    PLATFORM_TEAM (solo|team: required approvals 0 or 1).
 #                    See bootstrap/templates/new-platform.answers.example.conf
 #   --dir DIR        checkout folder (default: ./platform)
 #   --no-push        scaffold and commit locally only: no GitHub calls (tests)
@@ -318,7 +319,9 @@ if [[ "$NO_PUSH" == false ]]; then
     if (( behind > 0 )); then ui_note "Local main is $behind commit(s) behind GitHub: git -C ${PLATFORM_DIR#"$REPO_ROOT"/} pull"; fi
     (( ahead == 0 && behind == 0 )) && ui_ok "main is in sync with GitHub"
   fi
-  gh_apply_repo_settings "$SLUG" ci-image checks
+  TEAM_KEY=PLATFORM_TEAM; ask_team_mode "$( [[ "$CREATED" == true ]] || gh_ruleset_approvals "$SLUG")"
+  approvals=0; [[ "$TEAM_MODE" == team ]] && approvals=1
+  gh_apply_repo_settings "$SLUG" "$approvals" ci-image checks
 fi
 
 # =============================================================================

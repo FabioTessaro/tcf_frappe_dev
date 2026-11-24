@@ -202,6 +202,35 @@ env_require() {
   log_line "loaded .env ($(wc -l < "$ENV_FILE") lines)"
 }
 
+# env_set_key KEY VALUE — set one key in .env (replaced in place, or appended),
+# keeping its mode. For keys owned by other scripts than setup.sh
+# (PLATFORM_URL); setup.sh keeps them when it rewrites the file.
+env_set_key() {
+  local key="$1" value="$2" tmp
+  [[ -f "$ENV_FILE" ]] || return 1
+  valid_env_value "$value" || return 1
+  tmp=$(mktemp "$STATE_TMP_DIR/env.XXXXXX") || return 1
+  python3 - "$ENV_FILE" "$tmp" "$key" "$(env_quote "$value")" <<'PY' || { rm -f "$tmp"; return 1; }
+import re, sys
+src, dst, key, value = sys.argv[1:]
+lines = open(src, encoding="utf-8").read().splitlines()
+pat = re.compile(rf"^\s*{re.escape(key)}=")
+out, done = [], False
+for line in lines:
+    if pat.match(line):
+        if not done:
+            out.append(f"{key}={value}")
+            done = True
+        continue
+    out.append(line)
+if not done:
+    out.append(f"{key}={value}")
+open(dst, "w", encoding="utf-8").write("\n".join(out) + "\n")
+PY
+  cat "$tmp" > "$ENV_FILE" && rm -f "$tmp"
+  log_line "env_set_key $key"
+}
+
 # env_quote VALUE — single-quoted .env value (values never contain ').
 env_quote() { printf "'%s'" "$1"; }
 

@@ -5,13 +5,15 @@
 #
 # Components (choose in the menu, or with --components):
 #   base     apt prerequisites (curl, git, python3, openssl, pre-commit, …),
-#            the en_US.UTF-8 locale, gitleaks, lychee and just (latest releases, in
-#            /usr/local/bin) and this repository's git hooks (pre-commit:
-#            secret scanning, Markdown and Python checks, commit messages)
+#            the en_US.UTF-8 locale, gitleaks, lychee, just and the GitHub CLI
+#            gh (latest releases, in /usr/local/bin) and this repository's git
+#            hooks (pre-commit: secret scanning, Markdown and Python checks,
+#            commit messages)
 #   docker   Docker Engine + Compose plugin, enabled at boot, your user in
 #            the "docker" group
-#   git      git identity (user.name / user.email), an ed25519 SSH key and a
-#            check that your git server accepts it
+#   git      git identity (user.name / user.email), an ed25519 SSH key, a
+#            check that your git server accepts it, and the GitHub CLI login
+#            (gh auth, git over SSH; needed by new-platform.sh and new-app.sh)
 #   ftp      vsftpd FTP server for one system user (settings in
 #            bootstrap/templates/ftp.conf)
 #
@@ -44,7 +46,7 @@ source "$LIB_DIR/tools.sh"
 
 ALL_COMPONENTS=(base docker git ftp)
 # Binary tools the git hooks and the justfile of this repository need on the host.
-HOST_TOOLS=(gitleaks lychee just)
+HOST_TOOLS=(gitleaks lychee just gh)
 COMPONENTS=""
 GIT_NAME=""; GIT_EMAIL=""; GIT_HOST=""; SSH_PASSPHRASE=""; FTP_USER=""
 
@@ -98,7 +100,14 @@ status_git() {
   n=$(git config --global user.name 2>/dev/null); e=$(git config --global user.email 2>/dev/null)
   if [[ -z "$n" || -z "$e" ]]; then printf 'identity not set'
   elif [[ ! -f "$HOME/.ssh/id_ed25519" ]]; then printf '%s <%s>, no SSH key' "$n" "$e"
-  else printf '%s <%s>, key present' "$n" "$e"; fi
+  else printf '%s <%s>, key present, gh: %s' "$n" "$e" "$(gh_status)"; fi
+}
+# gh_status — "logged in as USER", "not logged in" or "not installed".
+gh_status() {
+  command -v gh >/dev/null 2>&1 || { printf 'not installed'; return; }
+  local user
+  user=$(gh api user --jq .login 2>/dev/null) && [[ -n "$user" ]] \
+    && printf 'logged in as %s' "$user" || printf 'not logged in'
 }
 status_ftp() {
   if [[ "$(dpkg-query -W -f='${db:Status-Status}' vsftpd 2>/dev/null)" == installed ]]; then
@@ -161,8 +170,9 @@ component_base() {
   fi
 
   # gitleaks (secret scanning) and lychee (link checking) are called by the git
-  # hooks of this repository, just runs its justfile; the frappe container gets
-  # its own copies.
+  # hooks of this repository, just runs its justfile, gh creates and configures
+  # repositories (new-platform.sh, new-app.sh); the frappe container gets its
+  # own copies of the first three.
   local t tmp
   for t in "${HOST_TOOLS[@]}"; do
     if command -v "$t" >/dev/null 2>&1; then
@@ -244,6 +254,40 @@ ssh_check_host() {
 }
 
 component_git() {
+  _git_identity_and_key
+  gh_login
+}
+
+# gh_login — log the GitHub CLI in (git over SSH, the key above; no second key
+# is uploaded). Default scopes (repo, read:org, gist) cover creating
+# repositories and setting rulesets, environments and vulnerability reporting.
+gh_login() {
+  ui_section "GitHub CLI"
+  if ! command -v gh >/dev/null 2>&1; then
+    ui_warn "gh is not installed: run ./install.sh --components base, then this component again."
+    return 0
+  fi
+  local st; st=$(gh_status)
+  if [[ "$st" == logged\ in* ]]; then
+    ui_ok "gh is $st"
+    [[ "$(gh config get git_protocol -h github.com 2>/dev/null)" == ssh ]] \
+      || { gh config set git_protocol ssh -h github.com && ui_ok "gh uses SSH for git"; }
+    return 0
+  fi
+  if [[ "$UI_TTY_IN" != true ]]; then
+    ui_warn "gh is not logged in to GitHub." "Run: gh auth login --hostname github.com --git-protocol ssh --skip-ssh-key --web"
+    return 0
+  fi
+  ui_select "gh is not logged in to GitHub. Log in now?" \
+    "login::Log in (opens a one-time code for github.com/login/device)" \
+    "skip::Skip for now::new-platform.sh and new-app.sh need it" || exit 1
+  if [[ "$UI_VALUE" == skip ]]; then ui_warn "gh not logged in."; return 0; fi
+  ui_exec "Logging gh in to GitHub" -- gh auth login --hostname github.com --git-protocol ssh --skip-ssh-key --web \
+    || ui_die "gh auth login failed."
+  ui_ok "gh is $(gh_status)"
+}
+
+_git_identity_and_key() {
   ui_section "Git identity & SSH key"
   local name email
   name=$(git config --global user.name 2>/dev/null); email=$(git config --global user.email 2>/dev/null)

@@ -678,6 +678,7 @@ write_files() {
     "CUSTOM_APPS=$(env_quote "${CFG[CUSTOM_APPS]:-}")" \
     "CUSTOM_APP_URLS=$(env_quote "${CFG[CUSTOM_APP_URLS]:-}")" \
     "CORE_APP=$(env_quote "${CFG[CORE_APP]:-}")" \
+    "PLATFORM_URL=$(env_quote "${CFG[PLATFORM_URL]:-}")" \
     || ui_die "Writing .env failed."
   ui_ok ".env $RENDER_STATUS (mode 600$([[ $RENDER_STATUS == updated ]] && echo ", previous version in .state/backups/"))"
   compose_render CFG || ui_die "Writing docker-compose.yml failed."

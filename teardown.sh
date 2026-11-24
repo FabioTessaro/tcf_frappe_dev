@@ -15,6 +15,8 @@
 #                        the build cache (SYSTEM-WIDE, not only this project)
 #   --bench              delete frappe-bench/ (apps, custom-app clones, sites)
 #   --workspace          delete the generated .vscode/ files
+# platform/ (the platform repository checkout) is never deleted: it is your
+# working copy, like an app checkout outside the bench.
 #   --config             delete .env and docker-compose.yml
 #   --state              delete .state/ (VS Code cache, snapshots, backups)
 #   --logs               delete logs/ (including this run's log)

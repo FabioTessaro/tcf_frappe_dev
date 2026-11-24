@@ -420,6 +420,16 @@ else
   ui_note "Skipped (--no-build)."
 fi
 
+# The platform repository (./new-platform.sh) is checked out next to the bench.
+if [[ -n "${ENV[PLATFORM_URL]:-}" ]]; then
+  if [[ -d "$REPO_ROOT/platform/.git" ]]; then
+    ui_ok "platform/ is checked out"
+  else
+    ui_run --quiet-fail "Cloning the platform repository into platform/" -- git clone -q "${ENV[PLATFORM_URL]}" "$REPO_ROOT/platform" \
+      || ui_error "Couldn't clone ${ENV[PLATFORM_URL]} into platform/ — continuing without it."
+  fi
+fi
+
 # =============================================================================
 ui_section "Extras"
 if [[ "$WITH_CLAUDE" == 1 ]]; then
@@ -428,20 +438,7 @@ if [[ "$WITH_CLAUDE" == 1 ]]; then
     || ui_error "Claude Code installation failed (see the log)."
 fi
 
-ext_json() {
-  local indent="$1" e json="" sep=""
-  while IFS= read -r e || [[ -n "$e" ]]; do
-    e="${e%%#*}"; e="${e//[[:space:]]/}"; [[ -z "$e" ]] && continue
-    json+="$sep$indent\"$e\""; sep=$',\n'
-  done < "$TEMPLATE_DIR/vscode/extensions.list"
-  printf '%s' "$json"
-}
-folders='        { "path": ".." }'
-for a in "${CUSTOM_LIST[@]}"; do
-  [[ -d "$BENCH_DIR/apps/$a" ]] && folders+=$',\n'"        { \"path\": \"../frappe-bench/apps/$a\" }"
-done
-render "$TEMPLATE_DIR/vscode/dev.code-workspace.template" "$VSCODE_DIR/dev.code-workspace" --backup-dir "$BACKUP_DIR" -- \
-  "FOLDERS_JSON=$folders" "EXTENSIONS_JSON=$(ext_json '            ')" && ui_ok ".vscode/dev.code-workspace $RENDER_STATUS"
+workspace_render && ui_ok ".vscode/dev.code-workspace $RENDER_STATUS"
 render "$TEMPLATE_DIR/vscode/settings.json.template" "$VSCODE_DIR/settings.json" --backup-dir "$BACKUP_DIR" -- \
   && ui_ok ".vscode/settings.json $RENDER_STATUS"
 render "$TEMPLATE_DIR/vscode/extensions.json.template" "$VSCODE_DIR/extensions.json" --backup-dir "$BACKUP_DIR" -- \

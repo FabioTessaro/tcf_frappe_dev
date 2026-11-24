@@ -6,8 +6,13 @@ What it means for a repository to conform to this guide, and how it is shown.
 
 ## Rules
 
-- `FND-CONF-001` Every app repository MUST declare the guide version it conforms to in its
-  `README.md` (`Conforms to Platform Architecture Guide x.y`).
+- `FND-CONF-001` Every app repository MUST declare the guide version in its `README.md`: either
+  `Conforms to Platform Architecture Guide x.y` when FND-CONF-002 holds, or
+  `Targets Platform Architecture Guide x.y` while it does not yet conform (for example a freshly
+  scaffolded app).
+- `FND-CONF-006` A repository that declares `Targets` MUST list the applicable MUST rules that do
+  not hold yet in `docs/conformance.md` (section *Open rules*). It switches to `Conforms to` when
+  that list is empty and CI passes; until then FND-CONF-005 keeps it out of `platform.lock`.
 - `FND-CONF-002` A repository conforms when all MUST rules applicable to it hold, every SHOULD
   deviation has an ADR, and all automated checks listed under *Verification* pass in CI.
 - `FND-CONF-003` Rules that cannot be checked automatically are marked *manual review*. They

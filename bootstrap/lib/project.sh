@@ -155,3 +155,31 @@ cfg_print_impact() {
 
 # Keys of setup.sh's configuration that may legitimately be empty.
 cfg_mask() { local v="$1"; if [[ -z "$v" ]]; then printf '(not set)'; else printf '%s (%d chars)' "••••••••" "${#v}"; fi; }
+
+# --- VS Code workspace ----------------------------------------------------------
+# _ext_json INDENT — recommended extensions from vscode/extensions.list as JSON.
+_ext_json() {
+  local indent="$1" e json="" sep=""
+  while IFS= read -r e || [[ -n "$e" ]]; do
+    e="${e%%#*}"; e="${e//[[:space:]]/}"; [[ -z "$e" ]] && continue
+    json+="$sep$indent\"$e\""; sep=$',\n'
+  done < "$TEMPLATE_DIR/vscode/extensions.list"
+  printf '%s' "$json"
+}
+
+# workspace_render — writes .vscode/dev.code-workspace: the repository root,
+# ./platform when checked out, and every custom app present in the bench
+# (CUSTOM_APPS of .env). Shared by initialize.sh, new-platform.sh, new-app.sh.
+# Sets RENDER_STATUS.
+workspace_render() {
+  local -A _w=()
+  [[ -f "$ENV_FILE" ]] && env_parse "$ENV_FILE" _w
+  local folders='        { "path": ".." }' a
+  [[ -d "$REPO_ROOT/platform/.git" ]] && folders+=$',\n'"        { \"path\": \"../platform\" }"
+  for a in ${_w[CUSTOM_APPS]:-}; do
+    [[ -d "$BENCH_DIR/apps/$a" ]] && folders+=$',\n'"        { \"path\": \"../frappe-bench/apps/$a\" }"
+  done
+  mkdir -p "$VSCODE_DIR"
+  render "$TEMPLATE_DIR/vscode/dev.code-workspace.template" "$VSCODE_DIR/dev.code-workspace" --backup-dir "$BACKUP_DIR" -- \
+    "FOLDERS_JSON=$folders" "EXTENSIONS_JSON=$(_ext_json '            ')"
+}

@@ -81,9 +81,9 @@ A checklist of components; each one fixes only what is missing or wrong.
 
 | Component | What it ensures |
 |---|---|
-| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks**, **lychee** and **just** (latest releases, in `/usr/local/bin`) and this repository's git hooks (see [Git hooks](#git-hooks)) |
+| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks**, **lychee**, **just** and the GitHub CLI **gh** (latest releases, in `/usr/local/bin`) and this repository's git hooks (see [Git hooks](#git-hooks)) |
 | `docker` | Docker Engine and the Compose plugin, Docker enabled at boot, your user in the `docker` group |
-| `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, and a check that GitHub / GitLab / Bitbucket / another server accepts the key |
+| `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, a check that GitHub / GitLab / Bitbucket / another server accepts the key, and the **gh** login to GitHub (git over SSH, no second key uploaded; needed by `new-platform.sh`) |
 | `ftp` | vsftpd for one system user, configured from `bootstrap/templates/ftp.conf`, UFW rules when UFW is active |
 
 | Option | Meaning |
@@ -194,6 +194,31 @@ to delete the other builds.
 | `--detect` / `--latest` / `--commit HASH` | build choice without the menu |
 | `--platform NAME` | platform for `--latest` (remembered) |
 | `--purge` / `--keep-others` | delete or keep the other builds |
+| `-y, --yes` | no confirmation |
+
+### `new-platform.sh` — the platform repository
+
+The platform repository (guide chapter 500: `platform.lock`, CI image, shared
+tool configuration, reusable CI workflow, production image) lives in its own
+GitHub repository and is checked out in `./platform`, next to the bench, and
+added to the VS Code workspace.
+
+| Situation | What it does |
+|---|---|
+| `./platform` is a checkout of it | checks its origin |
+| the repository exists on GitHub | clones it into `./platform` |
+| neither | scaffolds it from `bootstrap/templates/platform` with the current tool versions and image digests pinned, creates the GitHub repository (visibility and licence asked), pushes, and applies the settings your GitHub plan allows (ruleset on `main`, private vulnerability reporting, `staging` / `production` environments, Actions access for your other repositories) |
+
+Then `PLATFORM_URL` goes into `.env` (`./initialize.sh` clones it on a new
+machine; `./teardown.sh` never deletes it) and the git hooks are installed.
+Recipes that build images run on the host, inside the CI image: `cd platform
+&& just ci-image-build && just ci`.
+
+| Option | Meaning |
+|---|---|
+| `--answers FILE` | answers without prompting (`bootstrap/templates/new-platform.answers.example.conf`) |
+| `--dir DIR` | another checkout folder |
+| `--no-push` | scaffold and commit locally only, no GitHub calls |
 | `-y, --yes` | no confirmation |
 
 ### `teardown.sh` — stop and clean
@@ -336,9 +361,11 @@ how to report a vulnerability is in [`SECURITY.md`](SECURITY.md).
 ├── initialize.sh              # build & start
 ├── reseed.sh                  # VS Code Server refresh
 ├── teardown.sh                # stop & clean
+├── new-platform.sh            # create or check out the platform repository
+├── platform/                  # its checkout (own git repository, gitignored)
 ├── bootstrap/
 │   ├── settings.conf          # script-level settings
-│   ├── lib/                   # shared code: ui, log, common, apps, project, vscode, tools, render.py
+│   ├── lib/                   # shared code: ui, log, common, apps, project, vscode, tools, scaffold, render.py
 │   ├── container/
 │   │   └── provision.sh       # runs inside the frappe container, step by step
 │   └── templates/             # every generated file starts here
@@ -352,7 +379,7 @@ how to report a vulnerability is in [`SECURITY.md`](SECURITY.md).
 ```
 
 `new-app.sh`, `check-env.sh` and the frontend toolchain setup (`setup-env.sh`)
-of the previous scripts will be rebuilt on this structure.
+of the previous scripts will be rebuilt on this structure (`new-app.sh` next).
 
 ## License
 

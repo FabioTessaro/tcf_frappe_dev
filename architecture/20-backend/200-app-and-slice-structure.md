@@ -43,7 +43,7 @@ frontend feature folder.
 ├── frontend/                            see 10-frontend
 ├── docs/                                adr/, conformance.md, openapi/
 ├── pyproject.toml
-└── README.md                            declares the guide version it conforms to
+└── README.md                            declares the guide version (Conforms to / Targets)
 ```
 
 Example (non-normative): HR's leave requests are `hr/leave_requests/` (backend) and

@@ -5,7 +5,7 @@
 # (frappe container). The caller decides where the binary is installed.
 #
 #   tool_fetch NAME DIR   download NAME's latest binary to DIR/NAME
-#                         NAME: gitleaks | lychee | hadolint | just | trivy
+#                         NAME: gitleaks | lychee | hadolint | just | trivy | gh
 #
 # The tools are the ones decided in architecture/50-delivery/504-toolchain.md.
 # Versions are not pinned: the development environment follows "latest".
@@ -48,6 +48,11 @@ tool_fetch() {
     trivy)
       curl -fsSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
         | sh -s -- -b "$tmp" >/dev/null 2>&1 ;;
+    gh)
+      tag=$(gh_latest_tag cli/cli) || { rm -rf "$tmp"; return 1; }
+      local a=amd64; [[ "$arch" == aarch64 ]] && a=arm64
+      curl -fsSL "https://github.com/cli/cli/releases/download/$tag/gh_${tag#v}_linux_$a.tar.gz" \
+        | tar -xz -C "$tmp" ;;
     *) echo "unknown tool: $name" >&2; rm -rf "$tmp"; return 1 ;;
   esac
   local bin

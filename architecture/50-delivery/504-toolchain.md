@@ -131,7 +131,9 @@ Do not introduce these (or other tools for the same purposes) without changing t
 - `DEL-TOOL-002` Tools in *Explicitly not used* MUST NOT be introduced without changing this guide.
 - `DEL-TOOL-003` Tool configuration shared by all repositories (Ruff, mypy, ESLint, Prettier,
   Stylelint, markdownlint, pre-commit hooks) MUST come from the `platform` repository's shared
-  configuration; repositories MAY only add stricter settings.
+  configuration; repositories MAY only add stricter settings. Each repository copies it with
+  `just sync-config` from a pinned `platform` commit (the SHA its CI trigger file uses),
+  `just check-config` fails on any drift from that commit, and Renovate bumps the pin.
 - `DEL-TOOL-004` Every tool MUST be runnable locally through `just` with the same result as in CI.
 - `DEL-TOOL-005` Frappe Flow (`frappe.flow`, Frappe's AI-agent framework) MUST NOT be used for
   search and SHOULD NOT be used anywhere else on the platform; any other use requires an ADR that

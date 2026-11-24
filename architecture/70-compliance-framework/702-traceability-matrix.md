@@ -30,7 +30,7 @@ rows as apps are built.
 | ISO 27001 A.8.8 · CRA Annex I Part II | Technical vulnerabilities, vulnerability handling | SEC-VULN-001…009 | platform | Trivy reports, SBOMs, `SECURITY.md` | planned |
 | ISO 27001 A.8.15–A.8.17 | Logging, monitoring, clock sync | SEC-OBS-001…008, SEC-AUD-003…006, SEC-BASE-009 | core, platform | Audit chain verification records | planned |
 | ISO 27001 A.8.24 · NIS2 21(2)(h) | Cryptography | SEC-BASE-004/005, SEC-AUD-004/005, SEC-VULN-004 | platform | TLS config, encryption at rest, signatures | planned |
-| ISO 27001 A.8.25–A.8.29 · CRA Annex I Part I | Secure development, testing | FND-CONF-001…005, DEL-CI-001…006, TST-STR-001…005 | all repos | CI results per release | planned |
+| ISO 27001 A.8.25–A.8.29 · CRA Annex I Part I | Secure development, testing | FND-CONF-001…006, DEL-CI-001…007, TST-STR-001…005 | all repos | CI results per release | planned |
 | ISO 27001 A.8.32 | Change management | FND-GOV-*, DEL-REPO-005, DEL-CD-001…006 | all repos | PR history, deploy audit events | planned |
 | ISO 27001 A.8.33 | Test information | BE-DATA-005/006, TST-DATA-003 | all apps | Seeds (synthetic) | planned |
 | eIDAS · EN 9100 8.6 | Electronic signatures on release/approval | SEC-SIG-001…007 | core | Signature records | planned |

@@ -143,6 +143,19 @@ system-root)
       echo "$d already owned by $bench_user"
     fi
   done
+  # Operating-system libraries of Playwright's Chromium (end-to-end tests). The
+  # browser itself is installed per project by the core app's `just setup`, so
+  # it matches the Playwright version in its yarn.lock.
+  marker=/var/lib/frappe-dev/playwright-deps.done
+  if [[ -f "$marker" ]]; then
+    echo "Playwright system libraries already installed"
+  else
+    npx_bin="$(command -v npx || ls -1 "$bench_home"/.nvm/versions/node/*/bin/npx 2>/dev/null | tail -n 1)"
+    [[ -x "$npx_bin" ]] || die "npx not found: can't install Playwright's system libraries"
+    step "installing Playwright's system libraries (Chromium)"
+    PATH="$(dirname "$npx_bin"):$PATH" "$npx_bin" -y playwright install-deps chromium || exit 1
+    mkdir -p "$(dirname "$marker")" && touch "$marker"
+  fi
   # Every MariaDB client in the container (bench backups, bench mariadb, …):
   # don't verify the self-signed certificate of the mariadb container.
   mkdir -p /etc/mysql/conf.d

@@ -28,8 +28,8 @@ candidate for Forgejo.
 
 ## Buckets
 
-`attachments-vault`, `drive-vault`, `cad-vault` (existing in the dev bootstrap), plus
-`public-assets`, `quarantine`, `audit-archive` (to add).
+`attachments-vault`, `drive-vault`, `cad-vault`, `public-assets`, `quarantine`, `audit-archive`
+(one per storage class of [208-files](../20-backend/208-files.md); all suggested by the dev bootstrap).
 
 ## Development environment
 

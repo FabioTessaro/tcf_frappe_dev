@@ -14,13 +14,24 @@
 #   --prune              docker: remove dangling images, unused networks and
 #                        the build cache (SYSTEM-WIDE, not only this project)
 #   --bench              delete frappe-bench/ (apps, custom-app clones, sites)
+#   --platform           delete platform/ (the platform repository checkout)
+#                        and its Docker leftovers (CI tool-cache volume, local
+#                        CI / platform images, end-to-end stack volumes)
 #   --workspace          delete the generated .vscode/ files
-# platform/ (the platform repository checkout) is never deleted: it is your
-# working copy, like an app checkout outside the bench.
 #   --config             delete .env and docker-compose.yml
+#   --untracked          delete every other file git doesn't track in this
+#                        repository (caches, answers files, .claude/, book
+#                        output, your new uncommitted files)
 #   --state              delete .state/ (VS Code cache, snapshots, backups)
 #   --logs               delete logs/ (including this run's log)
-#   --all                everything above except --stop: back to a fresh clone
+#   --all                everything above except --stop: back to a fresh
+#                        clone — only the files git tracks stay (your edits
+#                        to them included)
+#
+# Work that exists only on this machine — uncommitted or untracked files,
+# commits on no remote, stashes — in platform/, in the custom-app clones and
+# (with --untracked) in this repository is listed and needs its own typed
+# confirmation before anything is deleted.
 #
 # Options:
 #   --dry-run            show what would be removed, change nothing
@@ -37,7 +48,10 @@ set -o pipefail
 # shellcheck source=bootstrap/lib/common.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/lib/common.sh"
 
-ALL_TARGETS=(containers volumes images prune bench workspace config state logs)
+ALL_TARGETS=(containers volumes images prune bench platform workspace config untracked state logs)
+PLATFORM_DIR="$REPO_ROOT/platform"
+# Paths owned by a target of their own: --untracked never touches them.
+OWNED_PATHS=(.env docker-compose.yml logs/ .state/ frappe-bench/ platform/ .vscode/)
 declare -A T=()
 VOLUME_LIST=""; DRY_RUN=false; ASSUME_YES=false; FORCE=false; STOP_ONLY=false
 VOLUME_KEYS=(mariadb seaweedfs clamav vscode claude)
@@ -50,7 +64,7 @@ set -- "${SCRIPT_ARGS[@]}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --stop) STOP_ONLY=true ;;
-    --containers|--images|--prune|--bench|--workspace|--config|--state|--logs) T[${1#--}]=1 ;;
+    --containers|--images|--prune|--bench|--platform|--workspace|--config|--untracked|--state|--logs) T[${1#--}]=1 ;;
     --volumes) T[volumes]=1; VOLUME_LIST=all ;;
     --volumes=*) T[volumes]=1; VOLUME_LIST="${1#*=}" ;;
     --all) for t in "${ALL_TARGETS[@]}"; do T[$t]=1; done; VOLUME_LIST=all ;;
@@ -82,6 +96,42 @@ if [[ "$HAVE_DOCKER" == true ]]; then
 fi
 du_h() { du -sh "$1" 2>/dev/null | cut -f1; }
 
+# repo_work DIR — work that exists only in this clone: uncommitted or
+# untracked files, commits on no remote (any branch), stashes. Empty if none.
+repo_work() {
+  local d="$1" dirty unpushed stash out=""
+  dirty=$(git -C "$d" status --porcelain 2>/dev/null | wc -l)
+  unpushed=$(git -C "$d" log --oneline --branches --not --remotes 2>/dev/null | wc -l)
+  stash=$(git -C "$d" stash list 2>/dev/null | wc -l)
+  (( dirty )) && out+="$dirty uncommitted/untracked file(s), "
+  (( unpushed )) && out+="$unpushed commit(s) on no remote, "
+  (( stash )) && out+="$stash stash(es), "
+  printf '%s' "${out%, }"
+}
+
+# Files git doesn't track in this repository, outside OWNED_PATHS:
+# UNTRACKED_ALL (everything) and UNTRACKED_WORK (not ignored = your files).
+UNTRACKED_ALL=(); UNTRACKED_WORK=()
+_owned() { local p="$1" o; for o in "${OWNED_PATHS[@]}"; do [[ "$p" == "$o" || "$p" == "$o"* ]] && return 0; done; return 1; }
+while IFS= read -r -d '' f; do _owned "$f" || UNTRACKED_ALL+=("$f"); done \
+  < <(git -C "$REPO_ROOT" ls-files --others --directory -z 2>/dev/null)
+while IFS= read -r -d '' f; do _owned "$f" || UNTRACKED_WORK+=("$f"); done \
+  < <(git -C "$REPO_ROOT" ls-files --others --exclude-standard --directory -z 2>/dev/null)
+
+# Docker leftovers of the platform recipes (see platform/justfile).
+platform_docker_leftovers() {
+  [[ "$HAVE_DOCKER" == true ]] || return 0
+  local url owner repo
+  url=$(git -C "$PLATFORM_DIR" remote get-url origin 2>/dev/null)
+  if [[ -z "$url" && -f "$ENV_FILE" ]]; then url=$(sed -n "s/^PLATFORM_URL='\{0,1\}\([^']*\)'\{0,1\}$/\1/p" "$ENV_FILE"); fi
+  if [[ "$url" =~ github\.com[:/]([^/]+)/([^/]+)$ ]]; then
+    owner="${BASH_REMATCH[1],,}"; repo="${BASH_REMATCH[2]%.git}"; repo="${repo,,}"
+    dk image ls --format '{{.Repository}}:{{.Tag}}' | grep -E "^ghcr\.io/$owner/(ci|$repo):" | sed 's/^/image /'
+  fi
+  dk volume inspect platform-ci-cache >/dev/null 2>&1 && echo "volume platform-ci-cache"
+  dk volume ls -q --filter "label=com.docker.compose.project=platform-e2e" | sed 's/^/volume /'
+}
+
 # --- stop only ----------------------------------------------------------------
 if [[ "$STOP_ONLY" == true ]]; then
   (( ${#T[@]} )) && ui_die "--stop can't be combined with other targets."
@@ -102,8 +152,10 @@ if (( ${#T[@]} == 0 )); then
     "images::Project images::re-downloaded on the next ./initialize.sh" \
     "prune::Docker prune::dangling images, unused networks, build cache (system-wide)" \
     "bench::frappe-bench/::$( [[ -d $BENCH_DIR ]] && echo "$(du_h "$BENCH_DIR") — apps, custom-app clones, sites" || echo "not present")" \
+    "platform::platform/::$( [[ -d $PLATFORM_DIR ]] && echo "$(du_h "$PLATFORM_DIR") — platform repository checkout + its Docker leftovers" || echo "not present")" \
     "workspace::.vscode/ generated files::$( [[ -d $VSCODE_DIR ]] && echo present || echo "not present")" \
     "config::.env and docker-compose.yml::$( [[ -f $ENV_FILE ]] && echo ".env present (secrets!)" || echo "not present")" \
+    "untracked::Other files git doesn't track::${#UNTRACKED_ALL[@]} path(s) — caches, answers files, .claude/, ${#UNTRACKED_WORK[@]} of yours" \
     "state::.state/::$( [[ -d $STATE_DIR ]] && echo "$(du_h "$STATE_DIR") — VS Code cache, snapshots, .env backups" || echo "not present")" \
     "logs::logs/::$( [[ -d $LOG_DIR ]] && echo "$(du_h "$LOG_DIR")" || echo "not present")" || exit 1
   for t in "${UI_SELECTED[@]}"; do T[$t]=1; done
@@ -137,7 +189,7 @@ if [[ ${#SEL_VOLUMES[@]} -gt 0 || -n "${T[images]:-}" ]]; then T[containers]=1; 
 # --- plan ---------------------------------------------------------------------------
 UI_STEP_TOTAL=0
 ui_section "Plan"
-DESTRUCTIVE=()
+DESTRUCTIVE=(); AT_RISK=()
 plan() { ui_kv "$1" "$2" 14; }
 [[ -n "${T[containers]:-}" ]] && plan "containers" "$( [[ -n $CONTAINERS ]] && echo "remove $(count_lines "$CONTAINERS") container(s) + network" || echo "none found")"
 if (( ${#SEL_VOLUMES[@]} )); then
@@ -156,24 +208,43 @@ fi
 if [[ -n "${T[bench]:-}" ]]; then
   if [[ -d "$BENCH_DIR" ]]; then
     plan "bench" "delete frappe-bench/ ($(du_h "$BENCH_DIR"))"; DESTRUCTIVE+=("frappe-bench/ (custom-app clones included)")
-    # Unpushed work in the app clones?
+    # Work that exists only in the custom-app clones?
     for d in "$BENCH_DIR"/apps/*/; do
       [[ -d "$d/.git" ]] || continue
-      n=$(basename "$d"); dirty=$(git -C "$d" status --porcelain 2>/dev/null | wc -l)
-      unpushed=$(git -C "$d" log --oneline '@{u}..' 2>/dev/null | wc -l)
-      if (( dirty > 0 || unpushed > 0 )); then
-        ui_warn "apps/$n has $dirty uncommitted change(s) and $unpushed unpushed commit(s) — they will be LOST."
-      fi
+      n=$(basename "$d"); w=$(repo_work "$d")
+      [[ -n "$w" ]] && AT_RISK+=("frappe-bench/apps/$n: $w")
     done
   else plan "bench" "frappe-bench/ — not present"; fi
+fi
+if [[ -n "${T[platform]:-}" ]]; then
+  if [[ -d "$PLATFORM_DIR" ]]; then
+    plan "platform" "delete platform/ ($(du_h "$PLATFORM_DIR"))"; DESTRUCTIVE+=("platform/ (platform repository checkout)")
+    if [[ -d "$PLATFORM_DIR/.git" ]]; then
+      w=$(repo_work "$PLATFORM_DIR"); [[ -n "$w" ]] && AT_RISK+=("platform/: $w")
+    fi
+  else plan "platform" "platform/ — not present"; fi
+  mapfile -t PLATFORM_DOCKER < <(platform_docker_leftovers)
+  for x in "${PLATFORM_DOCKER[@]}"; do plan "platform" "docker $x"; done
 fi
 [[ -n "${T[workspace]:-}" ]] && plan "workspace" "$( [[ -d $VSCODE_DIR ]] && echo "delete generated .vscode/ files" || echo ".vscode/ — not present")"
 if [[ -n "${T[config]:-}" ]]; then
   plan "config" "delete .env and docker-compose.yml"
   [[ -f "$ENV_FILE" ]] && DESTRUCTIVE+=(".env (your secrets$([[ -z ${T[state]:-} ]] && echo "; a copy stays in .state/backups"))")
 fi
+if [[ -n "${T[untracked]:-}" ]]; then
+  if (( ${#UNTRACKED_ALL[@]} )); then
+    plan "untracked" "delete ${#UNTRACKED_ALL[@]} path(s) git doesn't track: $(printf '%s ' "${UNTRACKED_ALL[@]:0:6}")$( (( ${#UNTRACKED_ALL[@]} > 6 )) && echo "…")"
+    DESTRUCTIVE+=("${#UNTRACKED_ALL[@]} untracked/ignored path(s) of this repository")
+    (( ${#UNTRACKED_WORK[@]} )) && AT_RISK+=("this repository: ${#UNTRACKED_WORK[@]} file(s) not in git: $(printf '%s ' "${UNTRACKED_WORK[@]:0:6}")$( (( ${#UNTRACKED_WORK[@]} > 6 )) && echo "…")")
+  else plan "untracked" "nothing outside git"; fi
+fi
 [[ -n "${T[state]:-}" ]] && plan "state" "$( [[ -d $STATE_DIR ]] && echo "delete .state/ ($(du_h "$STATE_DIR"))" || echo ".state/ — not present")"
 [[ -n "${T[logs]:-}" ]] && plan "logs" "delete logs/ (this run's log included)"
+
+if (( ${#AT_RISK[@]} )); then
+  ui_warn "Work that exists ONLY on this machine would be lost (commit and push it first to keep it):"
+  for d in "${AT_RISK[@]}"; do ui_note "• $d"; done
+fi
 
 if [[ "$DRY_RUN" == true ]]; then ui_info "Dry run — nothing changed."; exit 0; fi
 
@@ -182,6 +253,10 @@ if (( ${#DESTRUCTIVE[@]} )) && [[ "$FORCE" != true ]]; then
   ui_warn "This permanently deletes:"
   for d in "${DESTRUCTIVE[@]}"; do ui_note "• $d"; done
   ui_confirm_typed "Delete this data?" "DELETE" || { ui_info "Cancelled — nothing changed."; exit 0; }
+fi
+# Work that exists only here: its own confirmation, even with -y.
+if (( ${#AT_RISK[@]} )) && [[ "$FORCE" != true ]]; then
+  ui_confirm_typed "Delete it anyway?" "DELETE MY WORK" || { ui_info "Cancelled — nothing changed."; exit 0; }
 fi
 
 # --- execute -------------------------------------------------------------------------
@@ -240,6 +315,13 @@ remove_path() {
 }
 
 [[ -n "${T[bench]:-}" ]] && remove_path "$BENCH_DIR" "frappe-bench/"
+if [[ -n "${T[platform]:-}" ]]; then
+  remove_path "$PLATFORM_DIR" "platform/"
+  for x in "${PLATFORM_DOCKER[@]}"; do
+    kind="${x%% *}"; name="${x#* }"
+    ui_run --quiet-fail "Removing $kind $name" -- dk "$kind" rm "$name" || ui_warn "$kind $name not removed (in use?)."
+  done
+fi
 if [[ -n "${T[workspace]:-}" ]]; then
   for f in dev.code-workspace settings.json extensions.json; do
     [[ -e "$VSCODE_DIR/$f" ]] && rm -f "$VSCODE_DIR/$f" && ui_ok "Deleted .vscode/$f"
@@ -252,6 +334,11 @@ if [[ -n "${T[config]:-}" ]]; then
   for f in "$ENV_FILE" "$COMPOSE_FILE"; do
     if [[ -e "$f" ]]; then rm -f "$f" && ui_ok "Deleted ${f#"$REPO_ROOT"/}"; else ui_ok "${f#"$REPO_ROOT"/} already gone"; fi
   done
+fi
+if [[ -n "${T[untracked]:-}" ]]; then
+  for f in "${UNTRACKED_ALL[@]}"; do remove_path "$REPO_ROOT/${f%/}" "$f"; done
+  # With --workspace too, whatever is left in .vscode/ goes as well.
+  [[ -n "${T[workspace]:-}" && -d "$VSCODE_DIR" ]] && remove_path "$VSCODE_DIR" ".vscode/"
 fi
 # State and logs last: this script uses both while it runs.
 if [[ -n "${T[state]:-}" ]]; then

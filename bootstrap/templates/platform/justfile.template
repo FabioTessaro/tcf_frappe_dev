@@ -11,9 +11,11 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 owner := "@@OWNER@@"
+# Image names must be lowercase (GitHub owner and repository names may not be).
+image_owner := "@@OWNER_LC@@"
 ci_tag := `sha256sum ci-image/Dockerfile | cut -c1-12`
-ci_image := "ghcr.io/" + owner + "/ci:" + ci_tag
-platform_image := "ghcr.io/" + owner + "/@@REPO_NAME@@"
+ci_image := "ghcr.io/" + image_owner + "/ci:" + ci_tag
+platform_image := "ghcr.io/" + image_owner + "/@@REPO_LC@@"
 lock := "platform.lock"
 in_ci_image := env("FRAPPE_CI_IMAGE", "")
 cache_volume := "platform-ci-cache"
@@ -55,7 +57,7 @@ ci-image-publish:
 
 # Point every workflow at the current CI image tag (after editing ci-image/Dockerfile)
 pin-ci-image:
-    sed -i -E 's#ghcr\.io/{{ owner }}/ci:[0-9a-f]+#{{ ci_image }}#g' .github/workflows/*.yml
+    sed -i -E 's#ghcr\.io/{{ image_owner }}/ci:[0-9a-f]+#{{ ci_image }}#g' .github/workflows/*.yml
     @echo "workflows now use {{ ci_image }}"
 
 # --- level 1: this repository's checks ----------------------------------------
@@ -191,7 +193,7 @@ _check-config:
     while read -r src dest; do
       cmp -s "shared-config/$src" "$dest" || { echo "$dest differs from shared-config/$src (run 'just sync-config')" >&2; bad=1; }
     done < <(just _config-files)
-    if grep -rhoE 'ghcr\.io/{{ owner }}/ci:[0-9a-f]+' .github/workflows | grep -vxF '{{ ci_image }}' >&2; then
+    if grep -rhoE 'ghcr\.io/{{ image_owner }}/ci:[0-9a-f]+' .github/workflows | grep -vxF '{{ ci_image }}' >&2; then
       echo "workflows use another CI image tag than {{ ci_image }} (run 'just pin-ci-image')" >&2; bad=1
     fi
     exit "$bad"

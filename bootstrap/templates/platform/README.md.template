@@ -45,7 +45,7 @@ nothing to act on. They print `inactive: <reason>` and pass instead of failing
 
 `new-platform.sh` applies what the GitHub plan allows and lists the rest. Check:
 
-- the CI image package `ghcr.io/@@OWNER@@/ci` is **public** (it holds only public
+- the CI image package `ghcr.io/@@OWNER_LC@@/ci` is **public** (it holds only public
   tools), so every repository's CI can pull it;
 - Actions access: repositories of `@@OWNER@@` may use this repository's workflows;
 - secrets: `RENOVATE_TOKEN` (Renovate), `APPS_READ_TOKEN` (CI reads the private app

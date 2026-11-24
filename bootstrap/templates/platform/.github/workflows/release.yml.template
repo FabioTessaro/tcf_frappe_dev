@@ -16,7 +16,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/@@OWNER@@/ci:@@CI_TAG@@
+      image: ghcr.io/@@OWNER_LC@@/ci:@@CI_TAG@@
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

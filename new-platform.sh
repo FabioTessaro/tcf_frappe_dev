@@ -252,7 +252,7 @@ if [[ "$SCAFFOLD" == true ]]; then
   ui_section "Scaffold"
   mkdir -p "$PLATFORM_DIR"
   vals=(
-    "OWNER=$OWNER" "REPO_NAME=$REPO" "GUIDE_VERSION=$(guide_version)" "TODAY=$(date +%F)"
+    "OWNER=$OWNER" "REPO_NAME=$REPO" "OWNER_LC=${OWNER,,}" "REPO_LC=${REPO,,}" "GUIDE_VERSION=$(guide_version)" "TODAY=$(date +%F)"
     "LICENSE_NAME=$(license_name "$LICENSE_KEY")" "FRAPPE_VERSION=$FRAPPE_TAG" "CI_TAG=pending"
   )
   for k in "${!V[@]}"; do vals+=("$k=${V[$k]}"); done
@@ -261,7 +261,7 @@ if [[ "$SCAFFOLD" == true ]]; then
     cd "$PLATFORM_DIR" || return 1
     # The CI image tag is the hash of its Dockerfile: pin it in the workflows.
     local tag; tag=$(sha256sum ci-image/Dockerfile | cut -c1-12)
-    sed -i "s#ghcr.io/$OWNER/ci:pending#ghcr.io/$OWNER/ci:$tag#g" .github/workflows/*.yml
+    sed -i "s#ghcr.io/${OWNER,,}/ci:pending#ghcr.io/${OWNER,,}/ci:$tag#g" .github/workflows/*.yml
     # This repository uses its own shared configuration (files of kind "all").
     awk '!/^#/ && NF == 3 && $3 == "all" {print $1, $2}' shared-config/files.txt | while read -r s d; do
       cp "shared-config/$s" "$d"

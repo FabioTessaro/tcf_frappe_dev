@@ -1,7 +1,7 @@
 # Production and staging stack (guide 503, reference deployment). One compose
 # project per environment on the VPS; values come from the host's encrypted
 # environment file (DEL-CD-005), never from this repository.
-#   PLATFORM_IMAGE   signed platform image, e.g. ghcr.io/@@OWNER@@/platform:2026.12.0
+#   PLATFORM_IMAGE   signed platform image, e.g. ghcr.io/@@OWNER_LC@@/@@REPO_LC@@:2026.12.0
 #   DB_ROOT_PASSWORD MariaDB root password
 #   HTTP_PORT        port of the frontend (behind the TLS reverse proxy)
 # The reverse proxy (Caddy or nginx, SEC-BASE-004/007, SEC-RATE-005) is a

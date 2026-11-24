@@ -210,7 +210,10 @@ added to the VS Code workspace.
 | neither | scaffolds it from `bootstrap/templates/platform` with the current tool versions and image digests pinned, creates the GitHub repository (visibility and licence asked), pushes, and applies the settings your GitHub plan allows (ruleset on `main`, private vulnerability reporting, `staging` / `production` environments, Actions access for your other repositories) |
 
 Then `PLATFORM_URL` goes into `.env` (`./initialize.sh` clones it on a new
-machine; `./teardown.sh` never deletes it) and the git hooks are installed.
+machine; `./teardown.sh --platform` or `--all` deletes it, after checking for
+unpushed work) and the git hooks are installed. Running it again is safe: it
+completes whatever is missing (repository, push of an empty repository,
+settings) and never pushes later commits — those go through pull requests.
 Recipes that build images run on the host, inside the CI image: `cd platform
 && just ci-image-build && just ci`.
 
@@ -224,9 +227,13 @@ Recipes that build images run on the host, inside the CI image: `cd platform
 ### `teardown.sh` — stop and clean
 
 A checklist, or flags. Running it with `--all` returns the folder to a fresh
-clone. Deleting data (database or files volumes, `frappe-bench/`, `.env`)
-requires typing `DELETE`. It warns about custom-app clones with uncommitted
-or unpushed work. Host setup from install.sh is never touched.
+clone: only the files git tracks stay, your edits to them included. Deleting
+data (database or files volumes, `frappe-bench/`, `platform/`, `.env`,
+untracked files) requires typing `DELETE`. Work that exists only on this
+machine — uncommitted or untracked files, commits on no remote, stashes — in
+`platform/`, in the custom-app clones and (with `--untracked`) in this
+repository is listed and needs typing `DELETE MY WORK`, even with `-y`. Host
+setup from install.sh is never touched.
 
 | Target | Removes |
 |---|---|
@@ -236,8 +243,10 @@ or unpushed work. Host setup from install.sh is never touched.
 | `--images` | the project's images |
 | `--prune` | dangling images, unused networks, build cache (system-wide) |
 | `--bench` | `frappe-bench/` |
+| `--platform` | `platform/` and its Docker leftovers (CI tool-cache volume, local CI and platform images, end-to-end stack volumes) |
 | `--workspace` | the generated `.vscode/` files |
 | `--config` | `.env` and `docker-compose.yml` (a backup stays in `.state/backups` unless `--state`) |
+| `--untracked` | every other file git doesn't track here: caches, answers files, `.claude/`, book output, your uncommitted new files |
 | `--state` | `.state/` |
 | `--logs` | `logs/` |
 | `--all` | all of the above |

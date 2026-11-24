@@ -425,8 +425,13 @@ if [[ -n "${ENV[PLATFORM_URL]:-}" ]]; then
   if [[ -d "$REPO_ROOT/platform/.git" ]]; then
     ui_ok "platform/ is checked out"
   else
-    ui_run --quiet-fail "Cloning the platform repository into platform/" -- git clone -q "${ENV[PLATFORM_URL]}" "$REPO_ROOT/platform" \
-      || ui_error "Couldn't clone ${ENV[PLATFORM_URL]} into platform/ — continuing without it."
+    if ui_run --quiet-fail "Cloning the platform repository into platform/" -- git clone -q "${ENV[PLATFORM_URL]}" "$REPO_ROOT/platform"; then
+      command -v pre-commit >/dev/null 2>&1 \
+        && ui_run --quiet-fail "Installing the git hooks of platform/" -- bash -c "cd '$REPO_ROOT/platform' && pre-commit install" \
+        || ui_warn "Git hooks of platform/ not installed (run 'just setup' in it)."
+    else
+      ui_error "Couldn't clone ${ENV[PLATFORM_URL]} into platform/ — continuing without it."
+    fi
   fi
 fi
 

@@ -43,7 +43,9 @@ repos:
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
-        args: [--severity=warning]
+        # -x follows `source` lines: variables set here and used in a sourced
+        # library are not reported as unused (SC2034).
+        args: [--severity=warning, -x]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.6

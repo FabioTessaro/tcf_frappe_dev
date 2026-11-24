@@ -261,6 +261,7 @@ Options: `--dry-run` (show the plan only), `-y` (skip "continue?"),
 | `JWT_SECRET`, `WEBRTC_ANNOUNCED_IP`, `MEDIASOUP_ANNOUNCED_IP` | Meet SFU (only with Meet) |
 | `APPS_MODE` | `shell` or `custom` |
 | `CUSTOM_APPS_GIT_PREFIX`, `CUSTOM_APPS`, `CUSTOM_APP_URLS`, `CORE_APP` | custom apps; the core app is listed first |
+| `PLATFORM_URL` | the platform repository, written by `new-platform.sh`; `initialize.sh` clones it into `platform/` when missing |
 
 ## Customizing
 

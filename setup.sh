@@ -131,6 +131,7 @@ show_config() {
   else
     ui_kv "Custom apps" "${CFG[APPS_MODE]:+none (empty shell)}"
   fi
+  ui_kv "Platform repository" "${CFG[PLATFORM_URL]:-(none yet: ./new-platform.sh)}"
 }
 
 if [[ "$SHOW_ONLY" == true ]]; then

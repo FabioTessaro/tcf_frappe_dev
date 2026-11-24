@@ -16,7 +16,7 @@
 #
 # Options:
 #   --answers FILE   take answers from FILE (KEY=VALUE): PLATFORM_OWNER,
-#                    PLATFORM_REPO, PLATFORM_VISIBILITY (private|public),
+#                    PLATFORM_REPO (default platform), PLATFORM_VISIBILITY (private|public),
 #                    PLATFORM_LICENSE (proprietary|mit|apache-2.0|agpl-3.0|
 #                    gpl-3.0), PLATFORM_COPYRIGHT, FRAPPE_VERSION (a tag).
 #                    See bootstrap/templates/new-platform.answers.example.conf
@@ -94,7 +94,15 @@ else
   OWNER="$UI_VALUE"
 fi
 valid_gh_name "$OWNER" || ui_die "Invalid GitHub owner '$OWNER'."
-REPO="${ANS[PLATFORM_REPO]:-platform}"
+def_repo=platform
+[[ "${CUR[PLATFORM_URL]:-}" =~ /([^/]+)\.git$ ]] && def_repo="${BASH_REMATCH[1]}"
+if has_answer PLATFORM_REPO; then REPO="${ANS[PLATFORM_REPO]}"
+else
+  need_tty_for PLATFORM_REPO "the repository name"
+  ui_input --default "$def_repo" --validate valid_gh_name --error "letters, digits, '.', '_' and '-' only" \
+    "Name of the platform repository (checked out in ./platform whatever its name)"
+  REPO="$UI_VALUE"
+fi
 valid_gh_name "$REPO" || ui_die "Invalid repository name '$REPO'."
 SLUG="$OWNER/$REPO"; URL="git@github.com:$SLUG.git"
 ui_kv "Repository" "$SLUG"; ui_kv "Checkout" "${PLATFORM_DIR#"$REPO_ROOT"/}"

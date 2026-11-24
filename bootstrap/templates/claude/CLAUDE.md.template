@@ -54,6 +54,10 @@ Rules to apply while working:
   signature is fine, but changes belong upstream.
 - **Custom apps — this is the actual codebase:** @@CUSTOM_APPS@@
   (core app: @@CORE_APP@@). Work happens here.
+- **Platform repository — `/workspace/platform`** (when checked out): release
+  definition (`platform.lock`), CI image, reusable CI workflow and the shared
+  tool configuration. Files that apps copy from it (`ruff.toml`, `mypy.ini`,
+  `.pre-commit-config.yaml`, …) are changed there, never in the app copies.
 
 ## Never read or edit
 

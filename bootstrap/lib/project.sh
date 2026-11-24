@@ -102,6 +102,9 @@ cfg_impact() {
   if [[ "${_o[CORE_APP]:-}" != "${_n[CORE_APP]:-}" ]]; then
     _imp info "Core app ${_o[CORE_APP]:-none} → ${_n[CORE_APP]:-none}" "recorded for the frontend tooling (installed first)"
   fi
+  if [[ "${_o[PLATFORM_URL]:-}" != "${_n[PLATFORM_URL]:-}" && -n "${_n[PLATFORM_URL]:-}" ]]; then
+    _imp info "Platform repository → ${_n[PLATFORM_URL]}" "initialize.sh clones it into platform/ if that folder is missing"
+  fi
   # Sites
   if [[ "${_o[SITE_NAME]:-}" != "${_n[SITE_NAME]:-}" ]]; then
     _imp reconcile "Site ${_o[SITE_NAME]:-?} → ${_n[SITE_NAME]:-?}" \

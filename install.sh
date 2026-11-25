@@ -19,7 +19,8 @@
 #   ftp      vsftpd FTP server for one system user (settings in
 #            bootstrap/templates/ftp.conf)
 #   claude   Claude Code CLI for your user on this host (official native
-#            installer, ~/.local/bin/claude, updates itself). Separate from
+#            installer, ~/.local/bin/claude, updates itself; ~/.local/bin is
+#            added to PATH in ~/.bashrc or ~/.zshrc if needed). Separate from
 #            the copy initialize.sh --with-claude puts in the container.
 #
 # Every component checks the current state first and only fixes what is
@@ -487,12 +488,36 @@ component_claude() {
     [[ -n "$bin" ]] || ui_die "The installer finished but no claude binary was found."
     ui_ok "Claude Code installed ($("$bin" --version 2>/dev/null | head -n 1))"
   fi
+  local dir; dir=$(dirname "$bin")
   case ":$PATH:" in
-    *":$(dirname "$bin"):"*) ;;
-    *) ui_warn "$(dirname "$bin") is not on your PATH." \
-         "Add it, e.g.: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc, then open a new shell." ;;
+    *":$dir:"*) ;;
+    *) path_add_to_rc "$dir" ;;
   esac
   ui_note "Run 'claude' once to log in (the host login is separate from the container's)."
+}
+
+# path_add_to_rc DIR — put DIR on PATH for new shells of this user: appends a
+# guarded line to the rc file of the login shell (zsh → ~/.zshrc, else
+# ~/.bashrc), once. The running shell can't be changed from here.
+path_add_to_rc() {
+  local dir=$1 rc shown
+  case "$(basename "${SHELL:-bash}")" in
+    zsh) rc="$HOME/.zshrc" ;;
+    *)   rc="$HOME/.bashrc" ;;
+  esac
+  shown=${dir/#"$HOME"/\$HOME}
+  # shellcheck disable=SC2016  # $PATH is expanded by the rc file, not here
+  local line='case ":$PATH:" in *":'"$shown"':"*) ;; *) export PATH="'"$shown"':$PATH" ;; esac'
+  if [[ -f "$rc" ]] && grep -qF "$line" "$rc"; then
+    ui_ok "$shown is already added to PATH in ${rc/#"$HOME"/\~}"
+  elif printf '\n# Added by frappe-dev install.sh: user-installed tools (claude)\n%s\n' "$line" >> "$rc"; then
+    ui_ok "Added $shown to PATH in ${rc/#"$HOME"/\~}"
+  else
+    ui_warn "Couldn't write ${rc/#"$HOME"/\~}." \
+      "Add it yourself: echo 'export PATH=\"$shown:\$PATH\"' >> ${rc/#"$HOME"/\~}"
+    return 0
+  fi
+  ui_note "Open a new shell (or run: source ${rc/#"$HOME"/\~}) to use claude in this one."
 }
 
 # =============================================================================

@@ -85,14 +85,15 @@ A checklist of components; each one fixes only what is missing or wrong.
 
 | Component | What it ensures |
 |---|---|
-| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks**, **lychee**, **just** and the GitHub CLI **gh** (latest releases, in `/usr/local/bin`) and this repository's git hooks (see [Git hooks](#git-hooks)) |
+| `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks**, **lychee**, **just** and the GitHub CLI **gh** (latest releases, in `/usr/local/bin`) and the git hooks of this repository, `platform/` and the custom apps, plus the host's hook environments (see [Git hooks](#git-hooks)) |
 | `docker` | Docker Engine and the Compose plugin, Docker enabled at boot, your user in the `docker` group |
 | `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, a check that GitHub / GitLab / Bitbucket / another server accepts the key, and the **gh** login to GitHub (git over SSH, no second key uploaded; needed by `new-platform.sh`) |
 | `ftp` | vsftpd for one system user, configured from `bootstrap/templates/ftp.conf`, UFW rules when UFW is active |
+| `claude` | the Claude Code CLI for your user on the host (official installer, `~/.local/bin/claude`, updates itself), for working on this repository outside the container. Independent of `initialize.sh --with-claude`, which installs it in the container; each has its own login |
 
 | Option | Meaning |
 |---|---|
-| `--components base,docker,git,ftp` / `--all` | skip the menu |
+| `--components base,docker,git,ftp,claude` / `--all` | skip the menu |
 | `--git-name`, `--git-email` | git identity without prompting |
 | `--git-host HOST` | server to verify the SSH key against, or `skip` |
 | `--ssh-passphrase` / `--no-ssh-passphrase` | how a new key is generated. Custom-app clones inside the container need a key **without** passphrase |
@@ -167,11 +168,11 @@ Requires `.env`; without it the script stops and tells you to run
 | VS Code Server | downloads the build on the host and copies it into the container (avoids attach hangs) |
 | Container tools | apt packages; uv, pre-commit and the developer toolchain of the architecture guide (ruff, mypy, shellcheck, gitleaks, lychee, hadolint, just, trivy, markdownlint-cli2, all latest, in `~/.local/bin`); waits for MariaDB and SeaweedFS, then for ClamAV (only warns if it isn't ready); checks the MariaDB root password |
 | Bench | `bench init` with `FRAPPE_VERSION` (external Redis, no Redis in the Procfile) |
-| Apps | fetches the default apps at their versions, clones the custom apps |
+| Apps | fetches the default apps at their versions, clones the custom apps as normal working clones (remote `origin`, every branch, full history — `bench get-app` alone gives a shallow clone with remote `upstream`) |
 | Sites | creates `<site>`, `test.<site>` and `test-minimal.<site>`, installs the apps in order (dependencies, then core app, then feature apps; on `test-minimal.<site>` only the core app), merges `bootstrap/templates/site-config/*.json.template` into each `site_config.json` |
 | Buckets | creates missing SeaweedFS buckets. Buckets no longer listed are **never deleted**, only reported |
 | Assets | `bench build`, **one app at a time**. A failing app is reported and skipped, so Frappe and the other apps still work |
-| Extras | Claude Code CLI (optional, the choice is remembered), `.vscode/` workspace files, VS Code extensions installed into the container |
+| Extras | git hooks of this repository, `platform/` and the custom apps (portable, see [Git hooks](#git-hooks)) and the container's hook environments, Claude Code CLI (optional, the choice is remembered), `.vscode/` workspace files, VS Code extensions installed into the container |
 
 A custom app that fails to clone, install or build is reported in red, and
 the run continues without it.
@@ -309,7 +310,16 @@ shown by the version picker.
 
 The repository's checks run as git hooks through
 [pre-commit](https://pre-commit.com). `./install.sh` installs them on the
-host (base component) and `./initialize.sh` in the frappe container.
+host (base component) and `./initialize.sh` in the frappe container, for this
+repository, `platform/` and the custom apps.
+
+The host and the container share these `.git` directories, while a plain
+`pre-commit install` writes the path of its own Python into the hook, so a
+hook installed on one side fails on the other (`No module named pre_commit`).
+The hooks are therefore written by `bootstrap/lib/githooks.sh` and look for
+`pre-commit` when they run, so commits work on both sides. Each side builds
+its own hook environments (`~/.cache/pre-commit`). If a bare
+`pre-commit install` replaced them, run `just setup` or either script again.
 
 | Hook | Checks |
 |---|---|

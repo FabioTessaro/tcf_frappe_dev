@@ -1,7 +1,9 @@
 
 # Git hooks of this repository. Installed by ./install.sh (base component) on
-# the host and by ./initialize.sh in the frappe container (`pre-commit install`
-# installs both hook types below). Run everything by hand:
+# the host and by ./initialize.sh in the frappe container, as portable hooks
+# (bootstrap/lib/githooks.sh) for both hook types below: host and container
+# share .git, so don't use a bare `pre-commit install` (`just setup` is fine).
+# Run everything by hand:
 #   pre-commit run --all-files
 # Tools: architecture/50-delivery/504-toolchain.md
 exclude: '(^|/)node_modules(/|$)'

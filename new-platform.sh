@@ -38,6 +38,8 @@ source "$LIB_DIR/apps.sh"
 source "$LIB_DIR/project.sh"
 # shellcheck source=bootstrap/lib/scaffold.sh
 source "$LIB_DIR/scaffold.sh"
+# shellcheck source=bootstrap/lib/githooks.sh
+source "$LIB_DIR/githooks.sh"
 
 ANSWERS_FILE=""; PLATFORM_DIR="$REPO_ROOT/platform"; NO_PUSH=false; ASSUME_YES=false
 for a in "$@"; do [[ "$a" == -h || "$a" == --help ]] && { usage_from_header "$0"; exit 0; }; done
@@ -326,9 +328,10 @@ fi
 
 # =============================================================================
 ui_section "Development environment"
-if command -v pre-commit >/dev/null 2>&1 && [[ -f "$PLATFORM_DIR/.pre-commit-config.yaml" ]]; then
-  ui_run "Installing the git hooks of ${PLATFORM_DIR#"$REPO_ROOT"/}" -- bash -c "cd '$PLATFORM_DIR' && pre-commit install" \
-    || ui_warn "pre-commit install failed in ${PLATFORM_DIR#"$REPO_ROOT"/}."
+# Portable hooks: they work on the host and in the frappe container.
+if [[ -f "$PLATFORM_DIR/.pre-commit-config.yaml" ]]; then
+  ui_run "Installing the git hooks of ${PLATFORM_DIR#"$REPO_ROOT"/}" -- git_hooks_install "$PLATFORM_DIR" \
+    || ui_warn "Couldn't write the git hooks of ${PLATFORM_DIR#"$REPO_ROOT"/}."
 fi
 if [[ "$PLATFORM_DIR" != "$REPO_ROOT/platform" ]]; then
   ui_note "Custom --dir: PLATFORM_URL and the VS Code workspace are left as they are."

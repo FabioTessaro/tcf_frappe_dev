@@ -33,6 +33,8 @@
 #   provision.sh buckets                   create missing buckets, warn others
 #   provision.sh build APP
 #   provision.sh claude VENDORED CUSTOM CORE   install Claude Code + configs
+#   provision.sh git-hooks                 portable git hooks + hook environments
+#                                          (this repo, platform/, custom apps)
 #   provision.sh finalize                  clear caches
 #
 # Output lines starting with "::warn::" are shown as warnings by the host.
@@ -205,10 +207,6 @@ EOF
     step "installing markdownlint-cli2"
     yarn global add --silent --prefix "$HOME/.local" markdownlint-cli2 >/dev/null || die "couldn't install markdownlint-cli2"
   fi
-  # This repository's git hooks (also installed on the host by install.sh).
-  if [[ -d "$WS/.git" && ! -f "$WS/.git/hooks/commit-msg" ]]; then
-    (cd "$WS" && pre-commit install >/dev/null) && echo "git hooks installed in /workspace"
-  fi
   ver() { "$@" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1; }
   echo "uv $(ver uv --version), pre-commit $(ver pre-commit --version), ruff $(ver ruff --version)," \
     "mypy $(ver mypy --version), shellcheck $(ver shellcheck --version), gitleaks $(ver gitleaks version)," \
@@ -352,8 +350,30 @@ get-app)
     [[ -d "apps/$name" ]] || die "bench get-app finished but apps/$name doesn't exist (is the app really called '$name'?)"
     record_set app "$name" "${ref:-default}" "$url" "$kind"
   fi
-  if [[ "$kind" == custom && -f "apps/$name/.pre-commit-config.yaml" ]] && command -v pre-commit >/dev/null 2>&1; then
-    (cd "apps/$name" && pre-commit install >/dev/null 2>&1 && echo "pre-commit hooks installed in apps/$name") || true
+  if [[ "$kind" == custom ]]; then
+    # bench get-app clones with --origin upstream (and --depth 1 when
+    # shallow_clone is on): turn a custom app into a normal working clone —
+    # remote "origin" (what set-origin and inspect use; bench falls back to the
+    # first remote), every branch, full history. Renaming keeps the tracking.
+    d="apps/$name"
+    if ! git -C "$d" remote get-url origin >/dev/null 2>&1 && git -C "$d" remote get-url upstream >/dev/null 2>&1; then
+      git -C "$d" remote rename upstream origin && echo "$d: remote 'upstream' renamed to 'origin'"
+    fi
+    if git -C "$d" remote get-url origin >/dev/null 2>&1; then
+      git -C "$d" config --replace-all remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+      if [[ "$(git -C "$d" rev-parse --is-shallow-repository 2>/dev/null)" == true ]]; then
+        step "fetching the full history of $d"
+        git -C "$d" fetch --unshallow --tags origin || warn "$d is still a shallow clone: run 'git fetch --unshallow origin' in it"
+      else
+        git -C "$d" fetch --quiet --tags origin || warn "couldn't fetch the branches of $d from origin"
+      fi
+      git -C "$d" remote set-head origin --auto >/dev/null 2>&1 || true
+    fi
+  fi
+  if [[ "$kind" == custom && -f "apps/$name/.pre-commit-config.yaml" ]]; then
+    # shellcheck source=bootstrap/lib/githooks.sh
+    source "$WS/bootstrap/lib/githooks.sh"
+    git_hooks_ok "$PWD/apps/$name" || { git_hooks_install "$PWD/apps/$name" && echo "git hooks installed in apps/$name"; } || true
   fi
   ;;
 
@@ -554,6 +574,29 @@ claude)
     | python3 "$RENDER" "$TEMPLATES/claude/CLAUDE.md.template" CLAUDE.md || exit 1
   ;;
 
+git-hooks)
+  # The host shares these .git directories: write hooks that find pre-commit
+  # when they run (bootstrap/lib/githooks.sh), then build the container's hook
+  # environments (~/.cache/pre-commit) so the first commit doesn't wait.
+  # shellcheck source=bootstrap/lib/githooks.sh
+  source "$WS/bootstrap/lib/githooks.sh"
+  command -v pre-commit >/dev/null 2>&1 || die "pre-commit is not installed (system-user step)"
+  rc=0
+  while IFS= read -r repo; do
+    rel="${repo#"$WS"}"; rel="${rel#/}"; rel="${rel:-/workspace}"
+    if git_hooks_ok "$repo"; then
+      echo "git hooks of $rel are up to date"
+    elif git_hooks_install "$repo"; then
+      echo "git hooks installed in $rel ($(git_hooks_types "$repo"))"
+    else
+      warn "couldn't write the git hooks of $rel (file owner? see ls -l $repo/.git/hooks)"; rc=1; continue
+    fi
+    step "pre-commit install-hooks in $rel"
+    (cd "$repo" && pre-commit install-hooks) || warn "hook environments of $rel not built — they are built on the first commit"
+  done < <(git_hooks_repos "$WS")
+  exit "$rc"
+  ;;
+
 finalize)
   in_bench
   for d in sites/*/; do
@@ -563,5 +606,5 @@ finalize)
   ;;
 
 *)
-  sed -n '2,40p' "$0"; exit 2 ;;
+  sed -n '2,41p' "$0"; exit 2 ;;
 esac

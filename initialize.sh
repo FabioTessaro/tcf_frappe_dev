@@ -21,7 +21,9 @@
 #   9. buckets         create the SeaweedFS buckets
 #  10. assets          bench build, app by app: a failing app is reported and
 #                      skipped, so Frappe and the other apps still work
-#  11. extras          Claude Code (optional), VS Code workspace + extensions
+#  11. extras          platform/ checkout, git hooks (portable: host and
+#                      container) + hook environments, Claude Code (optional),
+#                      VS Code workspace + extensions
 #
 # When the bench differs from .env (other versions, removed apps, renamed
 # site, changed passwords) initialize.sh explains the difference and asks
@@ -425,18 +427,19 @@ if [[ -n "${ENV[PLATFORM_URL]:-}" ]]; then
   if [[ -d "$REPO_ROOT/platform/.git" ]]; then
     ui_ok "platform/ is checked out"
   else
-    if ui_run --quiet-fail "Cloning the platform repository into platform/" -- git clone -q "${ENV[PLATFORM_URL]}" "$REPO_ROOT/platform"; then
-      command -v pre-commit >/dev/null 2>&1 \
-        && ui_run --quiet-fail "Installing the git hooks of platform/" -- bash -c "cd '$REPO_ROOT/platform' && pre-commit install" \
-        || ui_warn "Git hooks of platform/ not installed (run 'just setup' in it)."
-    else
-      ui_error "Couldn't clone ${ENV[PLATFORM_URL]} into platform/ — continuing without it."
-    fi
+    ui_run --quiet-fail "Cloning the platform repository into platform/" -- git clone -q "${ENV[PLATFORM_URL]}" "$REPO_ROOT/platform" \
+      || ui_error "Couldn't clone ${ENV[PLATFORM_URL]} into platform/ — continuing without it."
   fi
 fi
 
 # =============================================================================
 ui_section "Extras"
+# Git hooks of this repository, platform/ and the custom apps: portable hooks
+# (they work on the host too, which shares the .git directories) and the
+# container's hook environments. install.sh does the host side.
+pstep --optional "Git hooks and their environments (first time: a few minutes)" -- git-hooks \
+  || ui_error "Git hooks not fully set up in the container (see the log)."
+
 if [[ "$WITH_CLAUDE" == 1 ]]; then
   vendored=""; for a in "${DEFAULT_LIST[@]}"; do vendored+="$a "; done
   pstep --optional "Claude Code CLI and bench configuration" -- claude "${vendored% }" "${CUSTOM_LIST[*]}" "${ENV[CORE_APP]:-}" \

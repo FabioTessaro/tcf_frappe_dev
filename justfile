@@ -8,9 +8,10 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 default:
     @just --list
 
-# Install the git hooks and their environments (not to be confused with ./setup.sh)
+# Install the git hooks and their environments (not to be confused with ./setup.sh).
+# The hooks are portable (bootstrap/lib/githooks.sh): host and container share .git.
 setup:
-    pre-commit install
+    bash -c 'source bootstrap/lib/githooks.sh && git_hooks_install .'
     pre-commit install-hooks
 
 # Format Python (Ruff) and fix whitespace / end of files (rerun `just lint` after)

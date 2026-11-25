@@ -161,8 +161,8 @@ cfg_print_impact() {
 cfg_mask() { local v="$1"; if [[ -z "$v" ]]; then printf '(not set)'; else printf '%s (%d chars)' "••••••••" "${#v}"; fi; }
 
 # --- VS Code workspace ----------------------------------------------------------
-# _ext_json INDENT — recommended extensions from vscode/extensions.list as JSON.
-_ext_json() {
+# ext_json INDENT — recommended extensions from vscode/extensions.list as JSON.
+ext_json() {
   local indent="$1" e json="" sep=""
   while IFS= read -r e || [[ -n "$e" ]]; do
     e="${e%%#*}"; e="${e//[[:space:]]/}"; [[ -z "$e" ]] && continue
@@ -185,5 +185,5 @@ workspace_render() {
   done
   mkdir -p "$VSCODE_DIR"
   render "$TEMPLATE_DIR/vscode/dev.code-workspace.template" "$VSCODE_DIR/dev.code-workspace" --backup-dir "$BACKUP_DIR" -- \
-    "FOLDERS_JSON=$folders" "EXTENSIONS_JSON=$(_ext_json '            ')"
+    "FOLDERS_JSON=$folders" "EXTENSIONS_JSON=$(ext_json '            ')"
 }

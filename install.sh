@@ -6,9 +6,11 @@
 # Components (choose in the menu, or with --components):
 #   base     apt prerequisites (curl, git, python3, openssl, pre-commit, …),
 #            the en_US.UTF-8 locale, gitleaks, lychee, just and the GitHub CLI
-#            gh (latest releases, in /usr/local/bin) and this repository's git
-#            hooks (pre-commit: secret scanning, Markdown and Python checks,
-#            commit messages)
+#            gh (latest releases, in /usr/local/bin) and the git hooks of this
+#            repository, platform/ and the custom apps (pre-commit: secret
+#            scanning, Markdown and Python checks, commit messages), written
+#            so they work on the host and in the container; the hook
+#            environments of this repository are built for the host
 #   docker   Docker Engine + Compose plugin, enabled at boot, your user in
 #            the "docker" group
 #   git      git identity (user.name / user.email), an ed25519 SSH key, a
@@ -16,6 +18,9 @@
 #            (gh auth, git over SSH; needed by new-platform.sh and new-app.sh)
 #   ftp      vsftpd FTP server for one system user (settings in
 #            bootstrap/templates/ftp.conf)
+#   claude   Claude Code CLI for your user on this host (official native
+#            installer, ~/.local/bin/claude, updates itself). Separate from
+#            the copy initialize.sh --with-claude puts in the container.
 #
 # Every component checks the current state first and only fixes what is
 # missing or wrong, so running install.sh again is always safe.
@@ -23,7 +28,8 @@
 # Options:
 #   --components LIST   comma-separated components to run, e.g. base,docker,git
 #                       (skips the menu)
-#   --all               all components (same as --components base,docker,git,ftp)
+#   --all               all components (same as --components
+#                       base,docker,git,ftp,claude)
 #   --git-name NAME     git user.name   (otherwise asked if not configured)
 #   --git-email EMAIL   git user.email  (otherwise asked if not configured)
 #   --git-host HOST     verify the SSH key against HOST: github.com, gitlab.com,
@@ -43,8 +49,10 @@ set -o pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/bootstrap/lib/common.sh"
 # shellcheck source=bootstrap/lib/tools.sh
 source "$LIB_DIR/tools.sh"
+# shellcheck source=bootstrap/lib/githooks.sh
+source "$LIB_DIR/githooks.sh"
 
-ALL_COMPONENTS=(base docker git ftp)
+ALL_COMPONENTS=(base docker git ftp claude)
 # Binary tools the git hooks and the justfile of this repository need on the host.
 HOST_TOOLS=(gitleaks lychee just gh)
 COMPONENTS=""
@@ -87,7 +95,7 @@ status_base() {
     [[ "$(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null)" == installed ]] || missing=$((missing + 1))
   done
   for p in "${HOST_TOOLS[@]}"; do command -v "$p" >/dev/null 2>&1 || missing=$((missing + 1)); done
-  [[ -f "$REPO_ROOT/.git/hooks/commit-msg" ]] || missing=$((missing + 1))
+  while IFS= read -r p; do git_hooks_ok "$p" || missing=$((missing + 1)); done < <(git_hooks_repos "$REPO_ROOT")
   if (( missing )); then printf '%d item(s) missing' "$missing"; else printf 'installed'; fi
 }
 status_docker() {
@@ -114,13 +122,25 @@ status_ftp() {
     printf 'vsftpd installed'; else printf 'not installed'; fi
 }
 
+status_claude() {
+  local bin; bin=$(claude_bin)
+  if [[ -z "$bin" ]]; then printf 'not installed'
+  else printf 'installed (%s)' "$("$bin" --version 2>/dev/null | head -n 1)"; fi
+}
+# claude_bin — path of the claude CLI (PATH or the installer's default), or "".
+claude_bin() {
+  if command -v claude >/dev/null 2>&1; then command -v claude
+  elif [[ -x "$HOME/.local/bin/claude" ]]; then printf '%s' "$HOME/.local/bin/claude"; fi
+}
+
 # --- choose components ------------------------------------------------------------
 if [[ -z "$COMPONENTS" ]]; then
   ui_checklist --min 1 --on "base docker git" "Which components should be installed or checked?" \
     "base::Base packages & locale::$(status_base)" \
     "docker::Docker Engine & Compose::$(status_docker)" \
     "git::Git identity & SSH key::$(status_git)" \
-    "ftp::FTP server (vsftpd)::$(status_ftp)" || exit 1
+    "ftp::FTP server (vsftpd)::$(status_ftp)" \
+    "claude::Claude Code CLI (host)::$(status_claude)" || exit 1
   SELECTED=("${UI_SELECTED[@]}")
 else
   IFS=',' read -r -a SELECTED <<< "$COMPONENTS"
@@ -186,15 +206,25 @@ component_base() {
     rm -rf "$tmp"
   done
 
-  # Git hooks of this repository (types from .pre-commit-config.yaml:
-  # pre-commit and commit-msg). Hook environments are built on first use.
-  if [[ -f "$REPO_ROOT/.git/hooks/pre-commit" && -f "$REPO_ROOT/.git/hooks/commit-msg" ]]; then
-    ui_ok "Git hooks are installed in this repository"
-  else
-    _install_hooks() { cd "$REPO_ROOT" && pre-commit install; }
-    ui_run "Installing the git hooks of this repository" -- _install_hooks \
-      || ui_die "pre-commit install failed."
-  fi
+  # Git hooks (types from each .pre-commit-config.yaml): portable hooks that
+  # find pre-commit when they run, because the container shares these .git
+  # directories (bootstrap/lib/githooks.sh). initialize.sh does the same in
+  # the container.
+  local repo rel
+  while IFS= read -r repo; do
+    rel="${repo#"$REPO_ROOT"}"; rel="${rel#/}"; rel="${rel:-this repository}"
+    if git_hooks_ok "$repo"; then
+      ui_ok "Git hooks of $rel are installed ($(git_hooks_types "$repo"))"
+    else
+      ui_run "Installing the git hooks of $rel" -- git_hooks_install "$repo" \
+        || ui_die "Couldn't write the git hooks of $rel."
+    fi
+  done < <(git_hooks_repos "$REPO_ROOT")
+  # Hook environments live in ~/.cache/pre-commit, one per side: build the
+  # host's now instead of on the first commit.
+  _install_hook_envs() { cd "$REPO_ROOT" && pre-commit install-hooks; }
+  ui_run "Preparing the hook environments on this host (first time: a few minutes)" -- _install_hook_envs \
+    || ui_warn "pre-commit install-hooks failed — the environments are built on the first commit instead."
 }
 
 # =============================================================================
@@ -435,6 +465,34 @@ component_ftp() {
     ui_ok "vsftpd is running with the current configuration"
   fi
   ui_ok "FTP ready: user '$user' logs in on port 21 with their system password"
+}
+
+# =============================================================================
+# component_claude — Claude Code for this user on the host, with the official
+# native installer (no sudo; installs to ~/.local/bin and keeps itself up to
+# date). The container has its own copy (initialize.sh --with-claude) with its
+# own login, kept in the claude-config volume.
+component_claude() {
+  ui_section "Claude Code CLI (host)"
+  local bin; bin=$(claude_bin)
+  if [[ -n "$bin" ]]; then
+    ui_ok "Claude Code is installed ($("$bin" --version 2>/dev/null | head -n 1))"
+  else
+    command -v curl >/dev/null 2>&1 || apt_install curl ca-certificates || ui_die "Couldn't install curl."
+    local script="$STATE_TMP_DIR/claude-install.sh"
+    ui_run "Downloading the Claude Code installer" -- curl -fsSL -o "$script" https://claude.ai/install.sh \
+      || ui_die "Couldn't download https://claude.ai/install.sh"
+    ui_run "Installing Claude Code" -- bash "$script" || ui_die "Claude Code installation failed."
+    bin=$(claude_bin)
+    [[ -n "$bin" ]] || ui_die "The installer finished but no claude binary was found."
+    ui_ok "Claude Code installed ($("$bin" --version 2>/dev/null | head -n 1))"
+  fi
+  case ":$PATH:" in
+    *":$(dirname "$bin"):"*) ;;
+    *) ui_warn "$(dirname "$bin") is not on your PATH." \
+         "Add it, e.g.: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bashrc, then open a new shell." ;;
+  esac
+  ui_note "Run 'claude' once to log in (the host login is separate from the container's)."
 }
 
 # =============================================================================

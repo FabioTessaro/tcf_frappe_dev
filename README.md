@@ -50,9 +50,13 @@ your normal user (uid 1000 matches the container's `frappe` user best).
 git clone https://github.com/FabioTessaro/tcf_frappe_dev.git frappe-dev
 cd frappe-dev
 ./install.sh      # 1. prepare the host: Docker, git identity + SSH key, FTP
-./setup.sh        # 2. choose apps, versions, secrets, site and custom apps
+./setup.sh        # 2. choose apps, versions, secrets, site and git prefix
 ./initialize.sh   # 3. build and start everything
+./new-platform.sh # 4. create (or check out) the platform repository
 ```
+
+Custom apps are then created with `./new-app.sh` (core app first; being
+rebuilt, see below), which adds each app to `.env` and the bench.
 
 Then:
 
@@ -119,10 +123,13 @@ through five sections:
    both have developer mode and `allow_tests` on (they're meant for Playwright
    and `bench run-tests`). You choose whether the main site has developer
    mode on.
-5. **Custom apps.** *Empty shell* (no custom apps: setup.sh writes `.env` and
-   exits) or *custom apps*: a git prefix (`git@github.com:my-org`), any
-   number of app names, an optional full git URL per app, and the
-   mandatory **core app** chosen from that list. Each repository is checked
+5. **Custom apps.** The git prefix (`git@github.com:my-org`, suggested from
+   your `gh` login): `new-platform.sh` and `new-app.sh` create their
+   repositories there and `initialize.sh` clones apps from
+   `<prefix>/<app>.git`. Then the apps whose repositories **already exist**,
+   if any: on a fresh start leave the list empty, because `new-app.sh` adds
+   every app it creates. For listed apps: an optional full git URL per app
+   and the **core app** chosen from the list. Each repository is checked
    with `git ls-remote` using your SSH key.
 
 **On re-runs**, setup.sh shows the current configuration and a menu to edit
@@ -136,7 +143,10 @@ successful initialization. The levels are:
   version or a different MariaDB root user
 
 Running containers read `.env` when they start, so setup.sh offers to stop
-them first. It never changes `.env` while they run.
+them right before saving (looking at or quitting the menu leaves them
+running). It never changes `.env` while they run. When `platform/` is checked
+out, setup.sh also warns if `FRAPPE_VERSION` has a different major version
+than the one `platform/platform.lock` pins.
 
 | Option | Meaning |
 |---|---|
@@ -262,15 +272,15 @@ Options: `--dry-run` (show the plan only), `-y` (skip "continue?"),
 |---|---|
 | `SITE_NAME`, `TEST_SITE_NAME`, `TEST_MINIMAL_SITE_NAME` | main site, `test.<site>` (all apps) and `test-minimal.<site>` (core app only) |
 | `MAIN_SITE_DEVELOPER_MODE` | `1`/`0` |
-| `ADMIN_PASSWORD` | Administrator password of both sites |
+| `ADMIN_PASSWORD` | Administrator password of all three sites |
 | `MARIADB_ROOT_USERNAME`, `MARIADB_ROOT_PASSWORD`, `MARIADB_EXPOSE_PORT` | database |
 | `SEAWEEDFS_ACCESS_KEY`, `SEAWEEDFS_SECRET_KEY`, `SEAWEEDFS_BUCKETS` | S3 storage. SeaweedFS requires these keys on its S3 API (anonymous S3 requests are refused) |
 | `CLAMAV_HOST`, `CLAMAV_PORT` | antivirus (clamd), written into every `site_config.json` as `clamav_host` / `clamav_port` |
 | `FRAPPE_VERSION`, `DEFAULT_APPS`, `<APP>_VERSION` | framework and default apps (tag or branch) |
 | `JWT_SECRET`, `WEBRTC_ANNOUNCED_IP`, `MEDIASOUP_ANNOUNCED_IP` | Meet SFU (only with Meet) |
-| `APPS_MODE` | `shell` or `custom` |
-| `CUSTOM_APPS_GIT_PREFIX`, `CUSTOM_APPS`, `CUSTOM_APP_URLS`, `CORE_APP` | custom apps; the core app is listed first |
-| `PLATFORM_URL` | the platform repository, written by `new-platform.sh`; `initialize.sh` clones it into `platform/` when missing |
+| `CUSTOM_APPS_GIT_PREFIX` | where the repositories live (`new-platform.sh`, `new-app.sh` create them there) |
+| `CUSTOM_APPS`, `CUSTOM_APP_URLS`, `CORE_APP` | custom apps, core app first; empty until `new-app.sh` creates the first one. (`APPS_MODE` of older versions is ignored.) |
+| `PLATFORM_URL` | the platform repository, written by `new-platform.sh` (or given in a `setup.sh --answers` file); `initialize.sh` clones it into `platform/` when missing |
 
 ## Customizing
 

@@ -75,7 +75,7 @@ cfg_impact() {
   for a in ${_n[DEFAULT_APPS]:-}; do
     k="$(app_version_key "$a")"
     if [[ " ${_o[DEFAULT_APPS]:-} " != *" $a "* ]]; then
-      _imp info "Add $a ${_n[$k]:-}" "initialize.sh fetches it and installs it on both sites"
+      _imp info "Add $a ${_n[$k]:-}" "initialize.sh fetches it and installs it on the main and test sites"
     elif [[ "${_o[$k]:-}" != "${_n[$k]:-}" ]]; then
       _imp reconcile "$a ${_o[$k]:-?} → ${_n[$k]:-?}" "initialize.sh offers to switch the app's version and migrate the sites"
     fi
@@ -86,11 +86,12 @@ cfg_impact() {
   done
   # Custom apps
   local old_custom="" new_custom=""
-  [[ "${_o[APPS_MODE]:-}" == custom ]] && old_custom="${_o[CUSTOM_APPS]:-}"
-  [[ "${_n[APPS_MODE]:-}" == custom ]] && new_custom="${_n[CUSTOM_APPS]:-}"
+  # APPS_MODE=shell only appears in .env files of older versions: no custom apps.
+  [[ "${_o[APPS_MODE]:-}" == shell ]] || old_custom="${_o[CUSTOM_APPS]:-}"
+  [[ "${_n[APPS_MODE]:-}" == shell ]] || new_custom="${_n[CUSTOM_APPS]:-}"
   for a in $new_custom; do
     if [[ " $old_custom " != *" $a "* ]]; then
-      _imp info "Add custom app $a" "initialize.sh clones it and installs it on both sites"
+      _imp info "Add custom app $a" "initialize.sh clones it and installs it on the main and test sites"
     elif [[ "$(cfg_custom_url "$1" "$a")" != "$(cfg_custom_url "$2" "$a")" ]]; then
       _imp reconcile "Custom app $a: new git URL" "initialize.sh offers to point the existing clone's origin to the new URL"
     fi

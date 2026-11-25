@@ -123,7 +123,7 @@ ui_section "Configuration"
 env_require
 catalog_load
 missing=()
-for k in SITE_NAME TEST_SITE_NAME ADMIN_PASSWORD MARIADB_ROOT_PASSWORD FRAPPE_VERSION APPS_MODE \
+for k in SITE_NAME TEST_SITE_NAME ADMIN_PASSWORD MARIADB_ROOT_PASSWORD FRAPPE_VERSION \
          SEAWEEDFS_ACCESS_KEY SEAWEEDFS_SECRET_KEY MARIADB_EXPOSE_PORT; do
   [[ -n "${ENV[$k]:-}" ]] || missing+=("$k")
 done
@@ -132,11 +132,11 @@ for a in "${DEFAULT_LIST[@]}"; do
   [[ -n "${CAT_REPO[$a]:-}" ]] || ui_die "DEFAULT_APPS contains '$a', which is not in bootstrap/templates/apps.catalog."
   k=$(app_version_key "$a"); [[ -n "${ENV[$k]:-}" ]] || missing+=("$k")
 done
+# Custom apps: CUSTOM_APPS (empty until ./new-app.sh creates the first one).
+# Older .env files may still say APPS_MODE=shell: no custom apps then.
 CUSTOM_LIST=()
-if [[ "${ENV[APPS_MODE]:-}" == custom ]]; then
-  read -r -a CUSTOM_LIST <<< "${ENV[CUSTOM_APPS]:-}"
-  (( ${#CUSTOM_LIST[@]} )) || missing+=(CUSTOM_APPS)
-fi
+[[ "${ENV[APPS_MODE]:-}" == shell ]] || read -r -a CUSTOM_LIST <<< "${ENV[CUSTOM_APPS]:-}"
+(( ${#CUSTOM_LIST[@]} )) && [[ -z "${ENV[CORE_APP]:-}" ]] && missing+=(CORE_APP)
 if cfg_meet_enabled ENV; then
   for k in JWT_SECRET WEBRTC_ANNOUNCED_IP; do [[ -n "${ENV[$k]:-}" ]] || missing+=("$k"); done
 fi
@@ -145,7 +145,7 @@ SITE="${ENV[SITE_NAME]}"; TEST_SITE="${ENV[TEST_SITE_NAME]}"
 # Older .env files don't have it: derived from the site name.
 MIN_SITE="${ENV[TEST_MINIMAL_SITE_NAME]:-test-minimal.$SITE}"
 ui_ok ".env loaded: Frappe ${ENV[FRAPPE_VERSION]}, sites $SITE + $TEST_SITE + $MIN_SITE"
-ui_note "default apps: ${DEFAULT_LIST[*]:-none} · custom apps: ${CUSTOM_LIST[*]:-none (shell)}"
+ui_note "default apps: ${DEFAULT_LIST[*]:-none} · custom apps: ${CUSTOM_LIST[*]:-none yet (./new-app.sh)}"
 
 [[ -f "$HOME/.gitconfig" ]] || ui_die "$HOME/.gitconfig doesn't exist (it is mounted into the container)." "Run ./install.sh (git component)."
 [[ -d "$HOME/.ssh" ]] || ui_die "$HOME/.ssh doesn't exist (it is mounted into the container)." "Run ./install.sh (git component)."

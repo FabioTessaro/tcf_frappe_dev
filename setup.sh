@@ -13,14 +13,18 @@
 #   3. storage        SeaweedFS buckets to create, MariaDB host port
 #   4. site           site name; the test sites are always test.<site> (all
 #                     apps) and test-minimal.<site> (core app only)
-#   5. custom apps    "shell" (empty bench, stop here) or "custom": git
-#                     prefix, app names, optional per-app URLs, core app
+#   5. custom apps    git prefix (where ./new-platform.sh and ./new-app.sh
+#                     create repositories, and apps are cloned from), then
+#                     the apps whose repositories already exist (none on a
+#                     fresh start: ./new-app.sh adds each app it creates),
+#                     optional per-app URLs, core app
 # Re-run: shows the current configuration and a menu to edit single sections.
 # Before saving, setup.sh lists what changed and what ./initialize.sh will
 # have to do about it (and warns about anything destructive).
 #
 # Containers must be stopped while .env changes: if any of this project's
-# containers are running, setup.sh offers to stop them (data is kept).
+# containers are running, setup.sh offers to stop them (data is kept) just
+# before saving.
 #
 # Options:
 #   --answers FILE   take answers from FILE (KEY=VALUE, same keys as .env;
@@ -73,6 +77,9 @@ _normalize() {
   local -n _x="$1"
   [[ -n "${_x[WEBRTC_ANNOUNCED_IP]:-}" ]] && _x[MEET_ANNOUNCED_IP]="${_x[WEBRTC_ANNOUNCED_IP]}"
   unset '_x[WEBRTC_ANNOUNCED_IP]' '_x[MEDIASOUP_ANNOUNCED_IP]'
+  # APPS_MODE (shell | custom) is gone: no custom apps = CUSTOM_APPS empty.
+  if [[ "${_x[APPS_MODE]:-}" == shell ]]; then _x[CUSTOM_APPS]=""; _x[CUSTOM_APP_URLS]=""; _x[CORE_APP]=""; fi
+  unset '_x[APPS_MODE]'
   return 0
 }
 SECRET_KEYS=(ADMIN_PASSWORD MARIADB_ROOT_PASSWORD SEAWEEDFS_ACCESS_KEY SEAWEEDFS_SECRET_KEY JWT_SECRET)
@@ -93,6 +100,13 @@ if [[ -n "$ANSWERS_FILE" ]]; then
   env_parse "$ANSWERS_FILE" ANS; _normalize ANS
   for k in "${SECRET_KEYS[@]}"; do [[ -n "${ANS[$k]:-}" && "${ANS[$k]}" != @generate ]] && log_add_secret "${ANS[$k]}"; done
   log_line "answers file $ANSWERS_FILE: keys ${!ANS[*]}"
+  # Not asked interactively (./new-platform.sh records it), but an answers
+  # file may carry it so that a new host clones the platform repository.
+  if [[ -n "${ANS[PLATFORM_URL]+x}" ]]; then
+    [[ -z "${ANS[PLATFORM_URL]}" ]] || valid_git_url "${ANS[PLATFORM_URL]}" \
+      || ui_die "PLATFORM_URL '${ANS[PLATFORM_URL]}' is not a git URL (e.g. git@github.com:my-org/platform.git)."
+    CFG[PLATFORM_URL]="${ANS[PLATFORM_URL]}"
+  fi
 fi
 has_answer() { [[ -n "${ANS[$1]+x}" ]]; }
 
@@ -125,11 +139,12 @@ show_config() {
     ui_kv "Meet SFU secret" "$(cfg_mask "${CFG[JWT_SECRET]:-}")"
     ui_kv "Meet announced IP" "${CFG[MEET_ANNOUNCED_IP]:-(not set)}"
   fi
-  if [[ "${CFG[APPS_MODE]:-}" == custom ]]; then
-    ui_kv "Custom apps" "${CFG[CUSTOM_APPS]:-none}  (core: ${CFG[CORE_APP]:-?})"
-    for a in ${CFG[CUSTOM_APPS]:-}; do ui_kv "  $a" "$(cfg_custom_url CFG "$a")"; done
+  ui_kv "Git prefix" "${CFG[CUSTOM_APPS_GIT_PREFIX]:-(not set)}"
+  if [[ -n "${CFG[CUSTOM_APPS]:-}" ]]; then
+    ui_kv "Custom apps" "${CFG[CUSTOM_APPS]}  (core: ${CFG[CORE_APP]:-?})"
+    for a in ${CFG[CUSTOM_APPS]}; do ui_kv "  $a" "$(cfg_custom_url CFG "$a")"; done
   else
-    ui_kv "Custom apps" "${CFG[APPS_MODE]:+none (empty shell)}"
+    ui_kv "Custom apps" "none yet (./new-app.sh creates them)"
   fi
   ui_kv "Platform repository" "${CFG[PLATFORM_URL]:-(none yet: ./new-platform.sh)}"
 }
@@ -273,7 +288,7 @@ section_secrets() {
   ui_section "Secrets"
   local meet=false; cfg_meet_enabled CFG && meet=true
   local -a all=(
-    "ADMIN_PASSWORD::Administrator password (both sites)"
+    "ADMIN_PASSWORD::Administrator password (all three sites)"
     "MARIADB_ROOT_USERNAME::MariaDB root user name"
     "MARIADB_ROOT_PASSWORD::MariaDB root password"
     "SEAWEEDFS_ACCESS_KEY::SeaweedFS S3 access key"
@@ -301,7 +316,9 @@ section_secrets() {
     contains "$key" "${todo[@]}" || continue
     case "$key" in
       MARIADB_ROOT_USERNAME)
-        if has_answer "$key"; then CFG[$key]="${ANS[$key]}"
+        if has_answer "$key"; then
+          _valid_dbuser "${ANS[$key]}" || ui_die "MARIADB_ROOT_USERNAME '${ANS[$key]}': use 1-32 letters, digits and _ only."
+          CFG[$key]="${ANS[$key]}"
         else
           need_tty_for "$key" "the MariaDB root user name"
           ui_input --default "${CFG[$key]:-root}" --validate _valid_dbuser --error "letters, digits and _ only" "MariaDB root user name"
@@ -430,47 +447,40 @@ _check_repo() {
 
 section_custom() {
   ui_section "Custom apps"
-  if has_answer APPS_MODE; then
-    [[ "${ANS[APPS_MODE]}" =~ ^(shell|custom)$ ]] || ui_die "APPS_MODE must be shell or custom."
-    CFG[APPS_MODE]="${ANS[APPS_MODE]}"
-  elif [[ -n "$ANSWERS_FILE" && -n "${CFG[APPS_MODE]:-}" ]]; then :
-  else
-    need_tty_for APPS_MODE "shell or custom apps"
-    ui_select --initial "${CFG[APPS_MODE]:-}" "Start from an empty shell or clone custom apps?" \
-      "shell::Empty shell — only Frappe and the default apps" \
-      "custom::Custom apps — clone them from git" || exit 1
-    CFG[APPS_MODE]="$UI_VALUE"
-  fi
-  if [[ "${CFG[APPS_MODE]}" == shell ]]; then
-    CFG[CUSTOM_APPS]=""; CFG[CUSTOM_APP_URLS]=""; CFG[CORE_APP]=""; CFG[CUSTOM_APPS_GIT_PREFIX]=""
-    ui_ok "Empty shell: no custom apps"
-    return 0
-  fi
+  # Answers files written for older versions: APPS_MODE=shell means no apps.
+  if [[ "${ANS[APPS_MODE]:-}" == shell ]] && ! has_answer CUSTOM_APPS; then ANS[CUSTOM_APPS]=""; fi
 
-  # Git prefix
+  # Git prefix: always needed — new-platform.sh and new-app.sh create their
+  # repositories under it, initialize.sh clones the apps from it.
   if has_answer CUSTOM_APPS_GIT_PREFIX; then
     valid_git_prefix "${ANS[CUSTOM_APPS_GIT_PREFIX]}" || ui_die "CUSTOM_APPS_GIT_PREFIX '${ANS[CUSTOM_APPS_GIT_PREFIX]}' is not a git URL prefix (e.g. git@github.com:my-org)."
     CFG[CUSTOM_APPS_GIT_PREFIX]="${ANS[CUSTOM_APPS_GIT_PREFIX]}"
   elif [[ -n "$ANSWERS_FILE" && -n "${CFG[CUSTOM_APPS_GIT_PREFIX]:-}" ]]; then :
   else
     need_tty_for CUSTOM_APPS_GIT_PREFIX "the git prefix"
-    ui_note "Apps are cloned from <prefix>/<app>.git, e.g. git@github.com:my-org (no trailing slash)."
-    ui_input --default "${CFG[CUSTOM_APPS_GIT_PREFIX]:-}" --validate valid_git_prefix \
+    local def="${CFG[CUSTOM_APPS_GIT_PREFIX]:-}" login=""
+    if [[ -z "$def" ]] && command -v gh >/dev/null 2>&1; then
+      login=$(timeout 15 gh api user --jq .login 2>/dev/null) && [[ -n "$login" ]] && def="git@github.com:$login"
+    fi
+    ui_note "Where your repositories live: ./new-platform.sh and ./new-app.sh create them there,"
+    ui_note "and apps are cloned from <prefix>/<app>.git. E.g. git@github.com:my-org (no trailing slash)."
+    ui_input --default "$def" --validate valid_git_prefix \
       --error "expected something like git@github.com:my-org or https://github.com/my-org" "Git prefix"
     CFG[CUSTOM_APPS_GIT_PREFIX]="$UI_VALUE"
   fi
 
-  # App names
+  # App names: only apps whose repositories already exist. New apps are
+  # created by ./new-app.sh, which adds them to CUSTOM_APPS itself.
   local -a apps=() a
   if has_answer CUSTOM_APPS; then
     for a in ${ANS[CUSTOM_APPS]}; do valid_app_name "$a" || ui_die "CUSTOM_APPS: invalid app name '$a'"; apps+=("$a"); done
-    (( ${#apps[@]} )) || ui_die "CUSTOM_APPS is empty but APPS_MODE=custom."
     has_answer CUSTOM_APP_URLS && CFG[CUSTOM_APP_URLS]="${ANS[CUSTOM_APP_URLS]}"
-  elif [[ -n "$ANSWERS_FILE" && -n "${CFG[CUSTOM_APPS]:-}" ]]; then
-    read -r -a apps <<< "${CFG[CUSTOM_APPS]}"
+  elif [[ -n "$ANSWERS_FILE" ]]; then
+    read -r -a apps <<< "${CFG[CUSTOM_APPS]:-}"
   else
     need_tty_for CUSTOM_APPS "the custom app names"
     read -r -a apps <<< "${CFG[CUSTOM_APPS]:-}"
+    (( ${#apps[@]} )) || ui_note "New apps: leave this empty and create them later with ./new-app.sh (it adds them here). List only apps whose repositories already exist."
     while true; do
       if (( ${#apps[@]} )); then
         ui_info "Custom apps: ${apps[*]}"
@@ -489,11 +499,8 @@ section_custom() {
       fi
       ui_input --allow-empty --validate valid_app_name \
         --error "app names: lowercase letters, digits and _, starting with a letter" \
-        "Custom app name$( (( ${#apps[@]} )) && echo " (enter to finish)")"
-      if [[ -z "$UI_VALUE" ]]; then
-        (( ${#apps[@]} )) && break
-        ui_note "Enter at least one app (or re-run and choose the empty shell)."; continue
-      fi
+        "Existing custom app name (enter to finish$( (( ${#apps[@]} )) || echo ": none yet"))"
+      [[ -z "$UI_VALUE" ]] && break
       if contains "$UI_VALUE" "${apps[@]}" || contains "$UI_VALUE" "${CAT_NAMES[@]}"; then
         ui_note "$UI_VALUE is already used"; continue
       fi
@@ -507,6 +514,12 @@ section_custom() {
         _url_override_set "$new" ""
       fi
     done
+  fi
+
+  if (( ${#apps[@]} == 0 )); then
+    CFG[CUSTOM_APPS]=""; CFG[CUSTOM_APP_URLS]=""; CFG[CORE_APP]=""
+    ui_ok "No custom apps yet — ./new-app.sh creates them under ${CFG[CUSTOM_APPS_GIT_PREFIX]}"
+    return 0
   fi
 
   # Reachability of every repository (with the same SSH key the container uses).
@@ -557,7 +570,7 @@ cfg_missing() {
   MISSING=()
   local k a
   for k in FRAPPE_VERSION SITE_NAME MAIN_SITE_DEVELOPER_MODE ADMIN_PASSWORD MARIADB_ROOT_USERNAME \
-           MARIADB_ROOT_PASSWORD MARIADB_EXPOSE_PORT SEAWEEDFS_ACCESS_KEY SEAWEEDFS_SECRET_KEY APPS_MODE; do
+           MARIADB_ROOT_PASSWORD MARIADB_EXPOSE_PORT SEAWEEDFS_ACCESS_KEY SEAWEEDFS_SECRET_KEY CUSTOM_APPS_GIT_PREFIX; do
     [[ -n "${CFG[$k]:-}" ]] || MISSING+=("$k")
   done
   [[ -n "${CFG[SEAWEEDFS_BUCKETS]+x}" ]] || MISSING+=(SEAWEEDFS_BUCKETS)
@@ -567,8 +580,8 @@ cfg_missing() {
     [[ -n "${CFG[JWT_SECRET]:-}" ]] || MISSING+=(JWT_SECRET)
     [[ -n "${CFG[MEET_ANNOUNCED_IP]:-}" ]] || MISSING+=(MEET_ANNOUNCED_IP)
   fi
-  if [[ "${CFG[APPS_MODE]:-}" == custom ]]; then
-    for k in CUSTOM_APPS_GIT_PREFIX CUSTOM_APPS CORE_APP; do [[ -n "${CFG[$k]:-}" ]] || MISSING+=("$k"); done
+  if [[ -n "${CFG[CUSTOM_APPS]:-}" ]]; then
+    [[ -n "${CFG[CORE_APP]:-}" ]] || MISSING+=(CORE_APP)
   fi
 }
 
@@ -593,7 +606,7 @@ complete_missing() {
   cfg_missing
   for m in "${MISSING[@]}"; do case "$m" in SITE_NAME|MAIN_SITE_DEVELOPER_MODE) section_site; break ;; esac; done
   cfg_missing
-  for m in "${MISSING[@]}"; do case "$m" in APPS_MODE|CUSTOM_*|CORE_APP) section_custom; break ;; esac; done
+  for m in "${MISSING[@]}"; do case "$m" in CUSTOM_*|CORE_APP) section_custom; break ;; esac; done
   cfg_missing
   (( ${#MISSING[@]} == 0 )) || ui_die "Still missing: ${MISSING[*]}"
 }
@@ -638,6 +651,7 @@ review_and_save() {
   elif [[ -d "$BENCH_DIR" ]]; then
     ui_warn "frappe-bench/ exists but was never initialized by these scripts — initialize.sh will reconcile it with this configuration."
   fi
+  check_platform_frappe
 
   if [[ "$ASSUME_YES" != true ]]; then
     need_tty_for "--yes" "the final confirmation"
@@ -645,6 +659,20 @@ review_and_save() {
   fi
   ensure_stopped
   write_files
+}
+
+# check_platform_frappe — warn when the Frappe major version differs from the
+# one platform.lock pins. Minor and patch may differ: the development
+# environment follows the latest release (ADR 0001), CI uses the lock.
+check_platform_frappe() {
+  local lock="$REPO_ROOT/platform/platform.lock" locked lmajor emajor
+  [[ -f "$lock" ]] || return 0
+  locked=$(awk '/^\[/ {s = ($0 == "[frappe]")} s && /^version[[:space:]]*=/ {gsub(/.*=[[:space:]]*"|".*/, ""); print; exit}' "$lock")
+  [[ -n "$locked" ]] || return 0
+  lmajor=$(version_major "$locked"); emajor=$(version_major "${CFG[FRAPPE_VERSION]:-}")
+  [[ -n "$lmajor" && -n "$emajor" && "$lmajor" != "$emajor" ]] || return 0
+  ui_warn "Frappe ${CFG[FRAPPE_VERSION]} is major v$emajor, but platform/platform.lock pins $locked (v$lmajor)."
+  ui_note "Apps developed here would be tested by CI on another Frappe major version."
 }
 
 write_files() {
@@ -674,7 +702,6 @@ write_files() {
     "MEET_ENABLED=$meet" \
     "JWT_SECRET=$(env_quote "${CFG[JWT_SECRET]:-}")" \
     "MEET_ANNOUNCED_IP=$(env_quote "${CFG[MEET_ANNOUNCED_IP]:-}")" \
-    "APPS_MODE=$(env_quote "${CFG[APPS_MODE]}")" \
     "CUSTOM_APPS_GIT_PREFIX=$(env_quote "${CFG[CUSTOM_APPS_GIT_PREFIX]:-}")" \
     "CUSTOM_APPS=$(env_quote "${CFG[CUSTOM_APPS]:-}")" \
     "CUSTOM_APP_URLS=$(env_quote "${CFG[CUSTOM_APP_URLS]:-}")" \
@@ -689,8 +716,7 @@ write_files() {
 # =============================================================================
 # Main
 # =============================================================================
-ensure_stopped
-
+# Running containers are only stopped right before saving (review_and_save).
 if [[ "$FIRST_RUN" == true ]]; then
   UI_STEP_TOTAL=5
   [[ -n "$ONLY_SECTION" ]] && ui_die "--section needs an existing .env (this is the first run)."
@@ -715,7 +741,7 @@ else
       "secrets::Secrets" \
       "storage::Storage and services (buckets, MariaDB port)" \
       "site::Site name and developer mode" \
-      "custom::Custom apps (shell / custom, apps, core app)" \
+      "custom::Custom apps (git prefix, existing apps, core app)" \
       "=save::Review and save" \
       "=quit::Quit without saving" || exit 1
     case "$UI_VALUE" in
@@ -730,8 +756,16 @@ complete_missing
 review_and_save
 
 UI_STEP_TOTAL=0
-ui_section "Next step"
-if [[ "${CFG[APPS_MODE]}" == shell ]]; then
-  ui_info "Configured as an empty shell (no custom apps)."
+ui_section "Next steps"
+n=1
+ui_info "$n. Build and start everything:          ./initialize.sh"; n=$((n + 1))
+if [[ -z "${CFG[PLATFORM_URL]:-}" ]]; then
+  ui_info "$n. Create the platform repository:      ./new-platform.sh"; n=$((n + 1))
 fi
-ui_info "Build and start everything with:  ./initialize.sh"
+if [[ -x "$REPO_ROOT/new-app.sh" ]]; then
+  if [[ -z "${CFG[CUSTOM_APPS]:-}" ]]; then
+    ui_info "$n. Create the core app, then the others: ./new-app.sh"
+  else
+    ui_info "$n. Create more apps when needed:         ./new-app.sh"
+  fi
+fi

@@ -472,5 +472,10 @@ ui_box \
   "4. In a container terminal:  cd /workspace/frappe-bench && bench start" \
   "5. Open http://$SITE:8000  (Administrator / ADMIN_PASSWORD from .env)" \
   "   Tests: http://$TEST_SITE:8000 (all apps) · http://$MIN_SITE:8000 (core app only)"
-cfg_meet_enabled ENV && ui_note "Meet: open TCP 3000 and UDP 40000-40099 on any firewall between browsers and this host."
-[[ "${ENV[MARIADB_EXPOSE_PORT]}" == 1 ]] && ui_note "MariaDB: ${host_ip:-<server-ip>}:3306 (user ${ENV[MARIADB_ROOT_USERNAME]:-root}, password in .env)"
+if cfg_meet_enabled ENV; then
+  ui_note "Meet: open TCP 3000 and UDP 40000-40099 on any firewall between browsers and this host."
+fi
+if [[ "${ENV[MARIADB_EXPOSE_PORT]}" == 1 ]]; then
+  ui_note "MariaDB: ${host_ip:-<server-ip>}:3306 (user ${ENV[MARIADB_ROOT_USERNAME]:-root}, password in .env)"
+fi
+exit 0

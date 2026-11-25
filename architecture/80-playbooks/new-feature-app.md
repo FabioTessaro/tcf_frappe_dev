@@ -16,5 +16,6 @@
 7. Add e2e specs for the main journeys (`TST-E2E-002`).
 8. Add traceability rows for the norms the app covers (`CMP-REG-003`, `CMP-TRC-003`) and update the
    coverage roadmap.
-9. Pass level-1 CI; open the `platform` pull request adding the app to `platform.lock`
-   (`DEL-REPO-002`, `FND-CONF-005`).
+9. Pass level-1 CI, merge, tag the first release `vX.Y.Z` on `main`, and open the `platform`
+   pull request adding the app to `platform.lock` by hand (`DEL-REPO-002`, `FND-CONF-005`);
+   Renovate bumps it from then on.

@@ -19,3 +19,4 @@ deviation from a SHOULD rule of the
 | [0002](0002-github-as-interim-host.md) | GitHub is the interim git and CI host | accepted |
 | [0003](0003-scaffolding-and-platform-bootstrap.md) | Scaffolded repositories and the platform bootstrap | accepted |
 | [0004](0004-single-maintainer-repositories.md) | Single-maintainer repositories merge after self-review | accepted |
+| [0005](0005-platform-lock-follows-release-tags.md) | platform.lock follows release tags | accepted |

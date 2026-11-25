@@ -1,6 +1,6 @@
 # Platform Architecture Guide
 
-**Status:** authoritative · **Guide version:** 1.5.0 · **Applies to:** Frappe 16, Python 3.14, Node ≥ 24
+**Status:** authoritative · **Guide version:** 1.5.1 · **Applies to:** Frappe 16, Python 3.14, Node ≥ 24
 
 This guide is the **single source of truth** for the architecture of the multi-app
 Frappe platform: the core app, every feature app, the public website app, the

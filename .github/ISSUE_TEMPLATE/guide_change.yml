@@ -1,0 +1,59 @@
+name: Architecture guide change
+description: Propose a new rule, change or remove a rule, or report an error in the Platform Architecture Guide.
+title: "docs(guide): "
+labels: [architecture-guide]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Changes to the guide follow its [governance rules](https://github.com/FabioTessaro/tcf_frappe_dev/blob/main/architecture/00-foundations/02-governance.md):
+        a proposal becomes an ADR in `docs/adr/` and is applied to the guide in the same change (FND-GOV-010).
+        A MUST rule cannot be waived by an ADR; if it is wrong, propose changing it here (FND-GOV-005).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options:
+        - New rule or chapter
+        - Change to an existing rule
+        - Removal of a rule
+        - Error, contradiction or unclear wording (no rule change)
+        - Question about how a rule applies
+    validations:
+      required: true
+  - type: input
+    id: rules
+    attributes:
+      label: Rules and chapters concerned
+      description: Rule IDs and chapter files.
+      placeholder: "BE-SRCH-038, architecture/20-backend/210-search.md"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What the guide says today and why it doesn't work (a constraint, a conflict between rules, a norm it misses).
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: The new or changed wording, with MUST / SHOULD / MAY where it matters.
+  - type: dropdown
+    id: version
+    attributes:
+      label: Expected version change (FND-GOV-002)
+      options:
+        - "major: conforming code would become non-conforming"
+        - "minor: new chapter or SHOULD/MAY rule, PENDING section resolved"
+        - "patch: wording or examples, no rule change"
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact on existing repositories
+      description: Which apps or the platform repository would need work, and whether compliance mappings change.

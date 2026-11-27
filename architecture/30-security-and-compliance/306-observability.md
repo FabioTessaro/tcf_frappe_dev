@@ -16,5 +16,18 @@
   and shipped to a central, self-hosted store when one exists (reference stack in
   [90-appendices/reference-deployment](../90-appendices/reference-deployment.md)).
 - `SEC-OBS-007` Health checks MUST exist for web, workers, scheduler, socket.io, database, Redis,
-  object store and antivirus, and MUST be used by the deploy smoke test.
+  object store and antivirus (and, where semantic search is enabled, Qdrant and every enabled
+  inference service, restricted zone included), and MUST be used by the deploy smoke test.
 - `SEC-OBS-008` Employee activity logs are subject to [SEC-AUD-010](302-audit.md).
+- `SEC-OBS-009` **Search measurements.** Semantic search ([20-backend/210-search](../20-backend/210-search.md))
+  MUST expose, per modality and per zone (normal, restricted) where relevant: indexing lag (age of
+  the oldest unprocessed audit event), queue depth per lane (live, backfill), failed indexing and
+  extraction jobs, query latency and error rate per inference service, share of queries answered by
+  a fallback, drift found by the nightly reconciliation, and index storage used.
+- `SEC-OBS-010` Alerts MUST exist at least on indexing lag, a backlog that does not shrink over a
+  night, the fallback share, failed jobs and index storage. Thresholds are deployment
+  configuration, because they depend on the hardware.
+- `SEC-OBS-011` The search hardware profile
+  ([90-appendices/reference-deployment](../90-appendices/reference-deployment.md)) SHOULD be
+  reviewed against SEC-OBS-009 measurements at least yearly and whenever an alert of SEC-OBS-010
+  recurs; the review is the evidence for upgrading or not upgrading hardware.

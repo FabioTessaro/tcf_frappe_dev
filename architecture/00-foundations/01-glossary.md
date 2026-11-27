@@ -31,3 +31,8 @@
 | **Minimal site / full site** | Test site with only core plus the app under test and its hard dependencies / with every app |
 | **Harmonized Structure (HS)** | The common clause structure (4–10) of ISO management-system standards, formerly Annex SL |
 | **Website User / System User** | Frappe user types. Website Users never access Desk |
+| **Modality** | A kind of searchable content handled by one embedding model, named by a stable id (`text`, `visual`; `image` reserved). See [20-backend/210-search](../20-backend/210-search.md) |
+| **Modality registry** | Core configuration describing each modality: inference service, model and version, licence, Qdrant collection alias, enabled or not |
+| **Page check** | The search routing step deciding, per attachment page, which modalities the page is indexed by |
+| **Derived object** | An object generated from a stored file (extracted text, OCR, page features, previews) that inherits the file's classification, permissions and retention |
+| **Restricted collection** | A search collection holding only content whose classification has `restricted_search` (e.g. export-controlled), on approved hosts and queried only for authorised users |

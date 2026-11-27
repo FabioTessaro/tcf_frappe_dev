@@ -20,3 +20,5 @@ deviation from a SHOULD rule of the
 | [0003](0003-scaffolding-and-platform-bootstrap.md) | Scaffolded repositories and the platform bootstrap | accepted |
 | [0004](0004-single-maintainer-repositories.md) | Single-maintainer repositories merge after self-review | accepted |
 | [0005](0005-platform-lock-follows-release-tags.md) | platform.lock follows release tags | accepted |
+| [0006](0006-multimodal-semantic-search.md) | Multimodal semantic search with swappable models | accepted |
+| [0007](0007-search-options-and-restricted-collections.md) | Search options, bounded results and restricted collections | accepted |

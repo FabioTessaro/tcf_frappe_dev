@@ -1,0 +1,75 @@
+name: Bug report
+description: A script, template or container setup of the development environment does not work as documented.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For security problems, do **not** open an issue: follow [SECURITY.md](https://github.com/FabioTessaro/tcf_frappe_dev/blob/main/SECURITY.md).
+        Problems in the `platform` repository or a custom app belong in those repositories.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      multiple: true
+      options:
+        - install.sh
+        - setup.sh
+        - initialize.sh
+        - new-platform.sh
+        - reseed.sh
+        - teardown.sh
+        - Container provisioning (bootstrap/container)
+        - Generated files / templates
+        - Git hooks or just recipes
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran (with options), what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Fresh run or re-run over an existing environment? Which answers or `--answers` file?
+      placeholder: |
+        1. ./setup.sh --section apps
+        2. ./initialize.sh
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Host OS and version, Docker version, Frappe version and the commit of this repository (`git rev-parse --short HEAD`).
+      placeholder: |
+        Host: Ubuntu 24.04
+        Docker: 28.x
+        Frappe: version-16
+        Commit: abc1234
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt
+      description: |
+        The relevant part of `logs/<script>-latest.log`. Known secrets are masked as `****`,
+        but read the excerpt before pasting: remove any other secret, host name or personal data.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched the existing issues and the README.
+          required: true
+        - label: The excerpt above holds no secrets or personal data.
+          required: true

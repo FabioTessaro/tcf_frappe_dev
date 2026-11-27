@@ -20,7 +20,7 @@
 | `permissions` | Every doctype defines permissions; party-scoped doctypes declare their Party field |
 | `classification_retention_pii` | Every business doctype declares classification, retention class and PII inventory |
 | `names` | App and module names do not collide with Frappe modules |
-| `search_declarations` | Every business doctype has a search declaration; declared fields equal `in_global_search` fields; searchable doctypes are audited and have a result route (BE-SRCH-012, 020, 021, 023) |
+| `search_declarations` | Every business doctype has a search declaration; declared fields equal `in_global_search` fields; searchable doctypes are audited and have a result route; attachment settings validate against core's schema (no unknown keys, known modality ids) (BE-SRCH-012, 020, 021, 023, 024, 025) |
 
 ## Platform (`platform` repository CI)
 

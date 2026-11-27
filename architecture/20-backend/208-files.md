@@ -69,15 +69,30 @@ S3-compatible object store (reference: SeaweedFS).
   classification and permissions.
 - `BE-FILE-011` Downloads of private files MUST NOT use permanent public URLs; presigned URLs live
   at most 5 minutes.
-- `BE-FILE-012` For file types with extractable text (PDF, office documents, plain text; more as
-  extractors are added), a job MUST extract the text after the file is clean and store it as a
-  derived object next to the original (`<key>.txt`), with the same classification, permissions and
-  retention. Extracted text serves search ([210-search](210-search.md)) and is never shown to users
-  who cannot read the file.
+- `BE-FILE-012` **Derivation pipeline.** For files attached to records whose search declaration
+  makes attachments searchable ([BE-SRCH-024](210-search.md)), jobs MUST, after the file is clean:
+  detect the type by content; extract the text layer; run OCR on pages without a usable text layer;
+  compute the page features used by the page check ([BE-SRCH-071](210-search.md)). The results are
+  stored as derived objects next to the original: `<key>.txt` (text, page-delimited),
+  `<key>.ocr.json` (OCR with confidence), `<key>.pages.json` (page features). Derived objects serve
+  search and are never shown to users who cannot read the file.
+- `BE-FILE-013` Derived objects MUST inherit the original's classification, permissions, storage
+  class and retention, and MUST be deleted or anonymised together with the original (deletion,
+  disposition, GDPR erasure). Page images needed for embedding SHOULD be rendered on demand from
+  the original and not persisted; if cached, the cache follows the same rule and is short-lived.
+- `BE-FILE-014` Extractors are pluggable components behind a core interface (type in, derived
+  objects out); type detection and Office/email extraction use Apache Tika, PDF layout and OCR use
+  the tools chosen in open decision 14
+  ([90-appendices/open-decisions](../90-appendices/open-decisions.md)).
+- `BE-FILE-015` OCR MUST have a model for every language in the language registry
+  ([10-frontend/106-typography](../10-frontend/106-typography.md)); adding a language to the
+  registry adds its OCR model in the same change.
 
 ## Extension points
 
 - `BE-FILE-020` Deployments MAY add storage classes and bucket mappings as configuration.
+- `BE-FILE-022` Apps MAY add extractors for their formats (e.g. CAD) through the BE-FILE-014
+  interface; their output follows BE-FILE-012 and BE-FILE-013.
 - `BE-FILE-021` Apps MAY add preview generators for their formats (e.g. CAD viewers) as jobs.
 
 ## Compliance links

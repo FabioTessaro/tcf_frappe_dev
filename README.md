@@ -351,7 +351,8 @@ installed on the host by `./install.sh` and in the container by
 | `just ci` | `lint` + `scan` |
 
 Decisions about this repository are recorded in [`docs/adr/`](docs/adr/README.md);
-how to report a vulnerability is in [`SECURITY.md`](SECURITY.md).
+how to report a vulnerability is in [`SECURITY.md`](SECURITY.md); how to
+contribute is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Logs and state
 
@@ -403,6 +404,8 @@ how to report a vulnerability is in [`SECURITY.md`](SECURITY.md).
 ├── docs/adr/                  # decisions about this repository (ADRs)
 ├── justfile                   # common tasks (see Common tasks)
 ├── SECURITY.md                # how to report a vulnerability
+├── CONTRIBUTING.md            # how to contribute (issues, pull requests)
+├── .github/                   # issue forms and pull-request template
 ├── .pre-commit-config.yaml    # git hooks (see Git hooks)
 ├── .markdownlint-cli2.yaml    # Markdown style settings
 └── ruff.toml                  # Python lint/format settings

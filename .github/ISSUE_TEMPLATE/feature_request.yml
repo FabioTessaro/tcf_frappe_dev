@@ -1,0 +1,44 @@
+name: Feature request
+description: A new option, component, script or improvement to the development environment.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For changes to the rules of the architecture guide, use *Architecture guide change* instead.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you are trying to do and why the environment doesn't support it today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should change. Which scripts, options, templates or `.env` keys are affected?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: existing
+    attributes:
+      label: Effect on existing environments
+      description: Scripts must stay re-runnable; how does an environment set up before this change pick it up?
+      options:
+        - Picked up by re-running the scripts
+        - Needs a manual step or a rebuild
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm willing to open a pull request for this.

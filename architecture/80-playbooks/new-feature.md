@@ -7,7 +7,8 @@
    classification, retention class and PII inventory in `constants.py` (`DOM-CLS-001`,
    `SEC-REC-001`, `SEC-PRIV-001`); decide audit exclusions, if any, with reasons (`SEC-AUD-002`);
    declare what is searchable and flag the same fields `in_global_search` (`BE-SRCH-020`,
-   `BE-SRCH-021`).
+   `BE-SRCH-021`); for attachment fields that hold drawings or other media, add a routing hint
+   (`BE-SRCH-024`, `BE-SRCH-025`).
 3. Row rules and party scoping in `permissions.py` (`SEC-MOD-002`, `SEC-MOD-004`).
 4. Schemas in `schemas.py` (`BE-LAY-005`), error codes in `errors.py` (`CT-ERR-002`).
 5. Business logic in `service.py`, reads in `queries.py` (`BE-LAY-*`), whitelisted functions in

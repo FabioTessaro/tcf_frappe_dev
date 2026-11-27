@@ -16,7 +16,8 @@
 - `SEC-PRIV-005` Retention of personal data MUST follow the records-management service; the shortest
   period compatible with legal obligations applies.
 - `SEC-PRIV-006` New features processing special categories of data or monitoring employees MUST
-  include a DPIA reference in their app's `docs/`.
+  include a DPIA reference in their app's `docs/`. Semantic search always requires one
+  ([BE-SRCH-097](../20-backend/210-search.md)).
 - `SEC-PRIV-007` Privacy defaults: data minimisation in schemas (return only needed fields),
   external users see only their own personal data and that of their party colleagues where
   required.

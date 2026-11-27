@@ -99,7 +99,11 @@ self-hosted host replaces only trigger files, secrets and registry paths.
 | Antivirus | **ClamAV** (provides the `virus_scanner` capability) |
 | Reverse proxy and TLS | **Caddy** or **nginx** (deployment choice; must satisfy SEC-BASE-004/007, SEC-RATE-005) |
 | Semantic search index (planned, [210-search](../20-backend/210-search.md)) | **Qdrant**, pinned version |
-| Embedding service (planned) | **Hugging Face Text Embeddings Inference** (self-hosted); model pending (candidate BGE-M3) |
+| Search inference services (planned) | Self-hosted, one per modality ([BE-SRCH-060](../20-backend/210-search.md)); serving software pending (candidates: Text Embeddings Inference, Infinity, vLLM; open decision 15) |
+| Text embedding model (planned) | **BGE-M3** (MIT) |
+| Visual embedding model (planned) | Pending (candidate: ColQwen family; open decision 11) |
+| Search reranker (planned) | Pending (candidate: bge-reranker-v2-m3; open decision 12) |
+| File type detection and text extraction (planned) | **Apache Tika**; PDF layout and OCR pending (candidate: Docling; open decision 14) |
 
 ## Explicitly not used
 
@@ -124,6 +128,7 @@ Do not introduce these (or other tools for the same purposes) without changing t
 | MariaDB native `VECTOR` columns, sqlite-vec | Qdrant chosen as the only vector index |
 | Frappe Flow knowledge store (`frappe.flow.knowledge`) | No per-user permission checks; Qdrant chosen for search |
 | External embedding or AI APIs for record content (OpenAI, Cohere, ...) | Record content stays on self-hosted infrastructure |
+| Models without published weights, or whose licence forbids commercial use (e.g. CC BY-NC, research-only) | DEL-TOOL-006 |
 
 ## Rules
 
@@ -138,3 +143,8 @@ Do not introduce these (or other tools for the same purposes) without changing t
 - `DEL-TOOL-005` Frappe Flow (`frappe.flow`, Frappe's AI-agent framework) MUST NOT be used for
   search and SHOULD NOT be used anywhere else on the platform; any other use requires an ADR that
   addresses per-user permissions, classification and where data is sent.
+- `DEL-TOOL-006` **Model licences.** Machine-learning models (embedding, reranking, OCR, layout,
+  classification) MUST be open source with published weights and MUST run self-hosted. They SHOULD
+  be free for commercial use (e.g. Apache 2.0, MIT); a model needing a paid commercial licence is
+  allowed only when no free alternative of adequate quality exists, recorded in an ADR. The check
+  covers every component: base model, adapter or fine-tune, and bundled weights of a tool.

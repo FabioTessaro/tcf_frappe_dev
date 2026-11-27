@@ -9,7 +9,8 @@ antivirus mode and retention.
 
 **Classification Level** (core doctype, data): `code`, `label`, `rank` (higher = more sensitive),
 `audit_reads` (bool), `allowed_storage_classes`, `requires_authorisation` (bool),
-`default_retention_class`.
+`restricted_search` (bool: indexed only in restricted search collections,
+[BE-SRCH-100](../20-backend/210-search.md)), `default_retention_class`.
 
 Recommended initial levels (data, adjustable by the deployment):
 
@@ -19,7 +20,7 @@ Recommended initial levels (data, adjustable by the deployment):
 | `internal` | 10 | Ordinary internal records |
 | `confidential` | 20 | HR records, contracts, prices |
 | `customer_proprietary` | 30 | Customer drawings and specifications |
-| `export_controlled` | 40 | Technology under EU dual-use control |
+| `export_controlled` | 40 | Technology under EU dual-use control (`restricted_search` set) |
 
 ## Rules
 

@@ -1,8 +1,8 @@
 # Level 2 (guide 501): on every change to platform.lock or the image, on main,
 # and nightly. If ci-image/Dockerfile changed in the same push, the CI image may
 # still be publishing: re-run the job.
-name: "Level 2 · platform integration"
-run-name: "Level 2 · ${{ github.event_name == 'schedule' && 'nightly' || github.head_ref || github.ref_name }}"
+name: "CI · Platform · L2 integration"
+run-name: "CI · Platform · L2 · ${{ github.event_name == 'schedule' && 'nightly' || github.head_ref || github.ref_name }}"
 
 on:
   pull_request:

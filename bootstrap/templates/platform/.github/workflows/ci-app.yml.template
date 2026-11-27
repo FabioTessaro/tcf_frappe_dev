@@ -2,7 +2,7 @@
 # An app's .github/workflows/ci.yml calls it, pinned to a commit SHA of this
 # repository; Renovate bumps the SHA. Every step is `just ci` in the CI image,
 # with MariaDB and Redis as job services.
-name: "App CI · level 1 (reusable)"
+name: "CI · App · L1 checks (reusable)"
 
 on:
   workflow_call:

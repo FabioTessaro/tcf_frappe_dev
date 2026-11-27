@@ -11,8 +11,12 @@ repositories; this one holds what they share.
 | `platform.lock` | Frappe and every app, with repository URL, tag and commit SHA: the definition of a platform release |
 | `ci-image/` | The CI container image every repository's CI runs in (pinned tools) |
 | `shared-config/` | Tool configuration copied into every repository by `just sync-config` (DEL-TOOL-003) |
-| `.github/workflows/app-ci.yml` | Reusable level-1 workflow that app repositories call (DEL-CI-002) |
-| `.github/workflows/platform.yml` | This repository's checks, the CI image publication and level-2 CI |
+| `.github/workflows/ci-platform.yml` | CI · Platform · L1 checks & CI image: this repository's checks and the CI image publication |
+| `.github/workflows/ci-platform-l2.yml` | CI · Platform · L2 integration: level-2 CI on lock or image changes, on `main` and nightly |
+| `.github/workflows/ci-app.yml` | CI · App · L1 checks (reusable): the level-1 workflow app repositories call (DEL-CI-002) |
+| `.github/workflows/cd-release.yml` | CD · Platform · Release: signed image, SBOM, notes and git tag (manual) |
+| `.github/workflows/cd-deploy.yml` | CD · Platform · Deploy: deploys a release to staging or production (manual, approved) |
+| `.github/workflows/ops-renovate.yml` | Ops · All repos · Dependency updates (Renovate): weekly, for every repository of the owner |
 | `docker/`, `compose/` | Production image and the production / end-to-end compose files |
 | `tools/` | The Python behind the recipes (lock handling, platform contracts) |
 | `docs/adr/` | Decisions of this repository |

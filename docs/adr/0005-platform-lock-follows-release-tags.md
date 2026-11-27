@@ -12,7 +12,7 @@ Guide 1.5.0 said, in 501 level 2 step 1, that merging to `main` in an app
 repository triggers Renovate. The tooling works differently: the shared
 Renovate preset (`platform/default.json`) reads `platform.lock` with the
 `git-tags` datasource, so it proposes new tags, not new commits on `main`, and
-it runs on a schedule (`platform/.github/workflows/renovate.yml`).
+it runs on a schedule (`platform/.github/workflows/ops-renovate.yml`).
 
 The cross-repository section said the `platform` pull request's lock "points
 at the PR branches". Level 2 starts with `just check-lock-remote`, which

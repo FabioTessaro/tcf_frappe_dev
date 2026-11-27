@@ -1,5 +1,6 @@
 # Platform release (guide 502): signed image, SBOM, notes, git tag.
-name: "Release · platform"
+name: "CD · Platform · Release"
+run-name: "CD · Platform · Release · ${{ inputs.version }}"
 
 on:
   workflow_dispatch:

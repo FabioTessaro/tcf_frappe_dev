@@ -1,7 +1,8 @@
 # Deploy a platform release (guide 503). Step 1, the manual approval, is the
 # GitHub environment's required reviewers; DEPLOY_HOST and DEPLOY_SSH_KEY are
 # environment secrets.
-name: "Deploy · platform release"
+name: "CD · Platform · Deploy"
+run-name: "CD · Platform · Deploy · ${{ inputs.version }} → ${{ inputs.environment }}"
 
 on:
   workflow_dispatch:

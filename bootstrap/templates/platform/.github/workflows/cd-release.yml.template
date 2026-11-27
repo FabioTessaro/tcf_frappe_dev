@@ -1,4 +1,8 @@
-# Platform release (guide 502): signed image, SBOM, notes, git tag.
+# Platform release (guide 502, DEL-REL-005): promotes the release candidate
+# main-<sha> that level 2 built, tested and signed on main's HEAD to the version
+# tag (same digest, so same signature and SBOM attestation), after a fresh
+# vulnerability scan; then release notes and the git tag. Nothing is rebuilt and
+# no signing key is needed here.
 name: "CD · Platform · Release"
 run-name: "CD · Platform · Release · ${{ inputs.version }}"
 
@@ -24,10 +28,6 @@ jobs:
       options: --user root
       volumes:
         - /var/run/docker.sock:/var/run/docker.sock
-    env:
-      APPS_READ_TOKEN: ${{ secrets.APPS_READ_TOKEN }}
-      COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-      COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
     steps:
       - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
         with:

@@ -112,7 +112,7 @@ sbom: (_in "_sbom")
 # Trivy on the platform image: fails on fixable critical/high findings
 scan-image: (_in "_scan-image")
 
-# Push and sign the image built from main (needs COSIGN_PRIVATE_KEY)
+# Push the image built from main as release candidate main-<sha>, signed, with its SBOM attested
 sign: (_in "_sign")
 
 # Level-2 sequence (on platform.lock changes, nightly and on main)
@@ -120,11 +120,14 @@ level2: (_in "_level2")
 
 # --- releases and deploys ------------------------------------------------------
 
-# Make platform release VERSION (YYYY.MM.PATCH): image, SBOM, signature, notes
+# Make platform release VERSION (YYYY.MM.PATCH): promote main's release candidate, notes, tag
 release version: (_in "_release" version)
 
 # Deploy release VERSION to ENV (staging | production)
 deploy env version: (_in "_deploy" env version)
+
+# Roll ENV back to the version before the last deploy, restoring that deploy's backup
+rollback env: (_in "_rollback" env)
 
 # --- maintenance ---------------------------------------------------------------
 
@@ -286,6 +289,9 @@ _sbom:
 _scan-image:
     trivy image --quiet --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed {{ platform_image }}:dev
 
+# The release candidate (DEL-REL-005): the image level 2 just built and tested,
+# pushed as main-<sha> and signed by digest, with the SBOM as a signed
+# attestation. `just release` promotes it without rebuilding.
 [private]
 _sign:
     #!/usr/bin/env bash
@@ -293,10 +299,15 @@ _sign:
     if [[ -z "${COSIGN_PRIVATE_KEY:-}" ]]; then
       echo "inactive: signing — COSIGN_PRIVATE_KEY is not set (no releases yet)"; exit 0
     fi
+    [[ -f dist/sbom.cdx.json ]] || { echo "dist/sbom.cdx.json is missing: run level 2 first" >&2; exit 1; }
     ref={{ platform_image }}:main-${GITHUB_SHA:-$(git rev-parse HEAD)}
     docker tag {{ platform_image }}:dev "$ref"
-    docker push "$ref"
-    cosign sign --yes --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$ref"
+    docker push -q "$ref"
+    digest=$(docker buildx imagetools inspect "$ref" | awk '/^Digest:/ {print $2; exit}')
+    img={{ platform_image }}@$digest
+    cosign sign --yes --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$img"
+    cosign attest --yes --tlog-upload=false --key env://COSIGN_PRIVATE_KEY --type cyclonedx --predicate dist/sbom.cdx.json "$img"
+    echo "release candidate $ref ($digest)"
 
 [private]
 _level2: _check-lock-remote _build-image _test-platform (_test-backend "full") _test-e2e _sbom _scan-image
@@ -309,6 +320,10 @@ _renovate:
     RENOVATE_PLATFORM=github RENOVATE_AUTODISCOVER=true RENOVATE_AUTODISCOVER_FILTER='{{ owner }}/*' \
       npx -y renovate@@@RENOVATE_VERSION@@
 
+# Promote the release candidate of main's HEAD (DEL-REL-005): the exact image
+# level 2 tested, re-scanned for vulnerabilities found since. The version tag
+# points to the same digest, so the signature and the SBOM attestation made on
+# main apply to it unchanged: no rebuild, no new signature.
 [private]
 _release version:
     #!/usr/bin/env bash
@@ -316,20 +331,38 @@ _release version:
     fail() { echo "release {{ version }}: $*" >&2; exit 1; }
     [[ "{{ version }}" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])\.[0-9]+$ ]] || fail "the version must be YYYY.MM.PATCH (DEL-REL)"
     [[ -n "$(python3 tools/lock.py core {{ lock }})" ]] || fail "no core app in platform.lock yet: nothing to release"
-    [[ -n "${COSIGN_PRIVATE_KEY:-}" ]] || fail "COSIGN_PRIVATE_KEY is not set"
+    [[ -f cosign.pub ]] || fail "cosign.pub (the organisation's public signing key) is not in the repository"
     [[ "$(git rev-parse --abbrev-ref HEAD)" == main && -z "$(git status --porcelain)" ]] || fail "release from a clean main"
     git rev-parse -q --verify "refs/tags/{{ version }}" >/dev/null && fail "tag {{ version }} already exists"
-    just _level2
-    ref={{ platform_image }}:{{ version }}
-    docker tag {{ platform_image }}:dev "$ref"
-    docker push "$ref"
-    cosign sign --yes --tlog-upload=false --key env://COSIGN_PRIVATE_KEY "$ref"
-    cosign attest --yes --tlog-upload=false --key env://COSIGN_PRIVATE_KEY --type cyclonedx --predicate dist/sbom.cdx.json "$ref"
+    sha=$(git rev-parse HEAD)
+    candidate={{ platform_image }}:main-$sha
+    digest=$(docker buildx imagetools inspect "$candidate" 2>/dev/null | awk '/^Digest:/ {print $2; exit}' || true)
+    [[ -n "$digest" ]] || fail "no release candidate $candidate: level 2 has not passed on this commit of main (re-run it)"
+    img={{ platform_image }}@$digest
+    cosign verify --insecure-ignore-tlog=true --key cosign.pub "$img" >/dev/null || fail "$candidate is not signed with cosign.pub"
+    mkdir -p dist
+    cosign verify-attestation --insecure-ignore-tlog=true --key cosign.pub --type cyclonedx "$img" \
+      | jq -r .payload | base64 -d | jq .predicate > dist/sbom.cdx.json \
+      || fail "$candidate has no signed SBOM attestation"
+    # Vulnerabilities published since level 2 ran (and since the last nightly run).
+    trivy image --quiet --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "$img" \
+      || fail "$candidate has fixable critical/high vulnerabilities: fix them on main, then release"
+    docker buildx imagetools create -t {{ platform_image }}:{{ version }} "$img"
     git-cliff --tag {{ version }} -o dist/release-notes.md
-    git tag -a {{ version }} -m "platform release {{ version }}"
+    git tag -a {{ version }} -m "platform release {{ version }} ($digest)"
     git push origin {{ version }}
-    echo "released $ref — notes in dist/release-notes.md"
+    echo "released {{ platform_image }}:{{ version }} = $candidate ($digest); SBOM and notes in dist/"
 
+# Deploy state on the host, in /srv/platform/<env>/ (DEL-CD-004):
+#   current-version  the version running, written once its smoke test passes
+#   rollback.env     written by a deploy right after its backup: PREVIOUS_VERSION,
+#                    BACKUP_ID, DEPLOYED_VERSION. `just rollback` consumes it; a
+#                    deploy refuses to start while the last one did not finish.
+# Host scripts: deploy/host/backup.sh prints the backup ID on its last line;
+# deploy/host/restore.sh ID restores that database backup and object-store
+# snapshot (guide 503, 601). Each deploy copies the released version's scripts
+# to the host before its backup, so a rollback restores with the script that
+# matches the backup. Placeholders that fail until implemented (conformance.md).
 [private]
 _deploy env version:
     #!/usr/bin/env bash
@@ -338,6 +371,7 @@ _deploy env version:
     [[ "{{ env }}" == staging || "{{ env }}" == production ]] || fail "env must be staging or production"
     [[ -n "${DEPLOY_HOST:-}" && -n "${DEPLOY_SSH_KEY:-}" ]] || fail "DEPLOY_HOST and DEPLOY_SSH_KEY are not set for this environment"
     [[ -f cosign.pub ]] || fail "cosign.pub (the organisation's public signing key) is not in the repository"
+    git rev-parse -q --verify "refs/tags/{{ version }}" >/dev/null || fail "no git tag {{ version }} (fetch the tags, or release it first)"
     ref={{ platform_image }}:{{ version }}
     core=$(python3 tools/lock.py core {{ lock }}); [[ -n "$core" ]] || fail "no core app in platform.lock"
     # 2. Verify the signature (DEL-CD-003).
@@ -346,20 +380,95 @@ _deploy env version:
     docker pull -q "$ref" >/dev/null
     docker run --rm "$ref" env/bin/python -c "import $core.sdk.audit as a; a.record_deploy" 2>/dev/null \
       || fail "$core.sdk.audit.record_deploy is missing in $ref (the deploy Audit Event is mandatory)"
-    key=$(mktemp); trap 'rm -f "$key"' EXIT; printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"; chmod 600 "$key"
+    key=$(mktemp); compose=$(mktemp); changed=0
+    on_exit() {
+      local rc=$?; rm -f "$key" "$compose"
+      if [[ $rc -ne 0 && $changed == 1 ]]; then
+        echo "deploy {{ env }}: failed after the backup. Roll back: workflow 'CD · Platform · Rollback' or 'just rollback {{ env }}' (DEL-CD-004)" >&2
+      fi
+    }
+    trap on_exit EXIT
+    printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"; chmod 600 "$key"
     ssh_() { ssh -i "$key" -o StrictHostKeyChecking=accept-new "$DEPLOY_HOST" "$@"; }
     dir=/srv/platform/{{ env }}
-    scp -i "$key" -o StrictHostKeyChecking=accept-new compose/production.yml "$DEPLOY_HOST:$dir/compose.yml"
+    ssh_ "test -d $dir" || fail "$dir does not exist on $DEPLOY_HOST"
+    previous=$(ssh_ "cat $dir/current-version 2>/dev/null || true")
+    # A deploy that failed after its backup leaves the host half-changed: roll it
+    # back first, or the next backup would capture that state.
+    pending=$(ssh_ "sed -n 's/^DEPLOYED_VERSION=//p' $dir/rollback.env 2>/dev/null || true")
+    [[ -z "$pending" || "$pending" == "$previous" ]] \
+      || fail "the deploy of $pending did not finish: roll back first (just rollback {{ env }})"
+    # The compose file of the release itself, not of the checked-out branch.
+    git show "{{ version }}:compose/production.yml" > "$compose"
+    # The released version's host scripts: the backup and the rollback's restore
+    # must come from the same version (DEL-CD-007).
+    for script in backup restore; do
+      git show "{{ version }}:deploy/host/$script.sh" | ssh_ "cat > $dir/$script.sh.new && chmod 755 $dir/$script.sh.new && mv $dir/$script.sh.new $dir/$script.sh" \
+        || fail "could not install deploy/host/$script.sh of {{ version }} on $DEPLOY_HOST"
+    done
     dc="cd $dir && PLATFORM_IMAGE=$ref docker compose -f compose.yml --env-file .env"
     # 3. Encrypted backup of the database and object-store snapshot (DEL-CD-003; host script, guide 601).
-    ssh_ "test -x $dir/backup.sh" || fail "$dir/backup.sh is missing on $DEPLOY_HOST (backup before deploy is mandatory)"
-    ssh_ "$dir/backup.sh"
+    backup_id=$(ssh_ "$dir/backup.sh" | tail -n 1) || fail "$dir/backup.sh failed: nothing was changed (backup before deploy is mandatory)"
+    [[ "$backup_id" =~ ^[A-Za-z0-9._:-]+$ ]] || fail "$dir/backup.sh did not print a backup ID on its last line (got '$backup_id')"
+    ssh_ "printf 'PREVIOUS_VERSION=%s\nBACKUP_ID=%s\nDEPLOYED_VERSION=%s\n' '$previous' '$backup_id' '{{ version }}' > $dir/rollback.env"
+    changed=1
+    scp -q -i "$key" -o StrictHostKeyChecking=accept-new "$compose" "$DEPLOY_HOST:$dir/compose.yml"
     # 4. Pull. 5. Migrate in a one-off container. 6. Replace the services.
     ssh_ "$dc pull"
     ssh_ "$dc run --rm backend bench --site all migrate"
     ssh_ "$dc up -d --remove-orphans --wait"
     # 7. Smoke test.
-    ssh_ "$dc exec -T backend curl -fsS http://localhost:8000/api/method/ping" >/dev/null || fail "smoke test failed: roll back (DEL-CD-004)"
+    ssh_ "$dc exec -T backend curl -fsS http://localhost:8000/api/method/ping" >/dev/null || fail "smoke test failed"
+    ssh_ "echo '{{ version }}' > $dir/current-version"
     # 8. Audit Event (DEL-CD-003).
     ssh_ "$dc exec -T backend bench --site all execute $core.sdk.audit.record_deploy --kwargs \"{'version': '{{ version }}', 'actor': '${GITHUB_ACTOR:-$USER}'}\""
-    echo "deployed {{ version }} to {{ env }}"
+    echo "deployed {{ version }} to {{ env }} (backup $backup_id; rollback target: ${previous:-none, first deploy})"
+
+# Rollback (DEL-CD-004): the previous image plus the restore of the backup taken
+# by the last deploy. Data written since that backup is lost.
+[private]
+_rollback env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    fail() { echo "rollback {{ env }}: $*" >&2; exit 1; }
+    [[ "{{ env }}" == staging || "{{ env }}" == production ]] || fail "env must be staging or production"
+    [[ -n "${DEPLOY_HOST:-}" && -n "${DEPLOY_SSH_KEY:-}" ]] || fail "DEPLOY_HOST and DEPLOY_SSH_KEY are not set for this environment"
+    [[ -f cosign.pub ]] || fail "cosign.pub (the organisation's public signing key) is not in the repository"
+    core=$(python3 tools/lock.py core {{ lock }}); [[ -n "$core" ]] || fail "no core app in platform.lock"
+    key=$(mktemp); compose=$(mktemp); trap 'rm -f "$key" "$compose"' EXIT
+    printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"; chmod 600 "$key"
+    ssh_() { ssh -i "$key" -o StrictHostKeyChecking=accept-new "$DEPLOY_HOST" "$@"; }
+    dir=/srv/platform/{{ env }}
+    state=$(ssh_ "cat $dir/rollback.env 2>/dev/null || true")
+    [[ -n "$state" ]] || fail "no $dir/rollback.env on $DEPLOY_HOST: no deploy to roll back"
+    get() { sed -n "s/^$1=//p" <<<"$state"; }
+    previous=$(get PREVIOUS_VERSION); backup_id=$(get BACKUP_ID); failed=$(get DEPLOYED_VERSION)
+    [[ -n "$previous" ]] || fail "$failed was the first deploy: there is no previous version to return to (restore by hand with $dir/restore.sh $backup_id)"
+    [[ "$previous" =~ ^[0-9]{4}\.(0[1-9]|1[0-2])\.[0-9]+$ ]] || fail "unexpected PREVIOUS_VERSION '$previous' in rollback.env"
+    [[ "$backup_id" =~ ^[A-Za-z0-9._:-]+$ ]] || fail "unexpected BACKUP_ID '$backup_id' in rollback.env"
+    ssh_ "test -x $dir/restore.sh" || fail "$dir/restore.sh is missing on $DEPLOY_HOST"
+    git rev-parse -q --verify "refs/tags/$previous" >/dev/null || fail "no git tag $previous (fetch the tags)"
+    ref={{ platform_image }}:$previous
+    echo "rolling {{ env }} back from $failed to $previous, restoring backup $backup_id"
+    # Same guarantees as a deploy: a signed image only (DEL-CD-003).
+    cosign verify --insecure-ignore-tlog=true --key cosign.pub "$ref" >/dev/null
+    git show "$previous:compose/production.yml" > "$compose"
+    # 1. Stop everything that runs the platform image, with the compose file in place
+    #    (the failed version's), so nothing writes during the restore.
+    ssh_ "cd $dir && PLATFORM_IMAGE=unused docker compose -f compose.yml --env-file .env stop backend frontend websocket queue-short queue-long scheduler"
+    # 2. Restore the pre-deploy backup: database and object store together (OPS-BAK-001).
+    ssh_ "$dir/restore.sh '$backup_id'"
+    # 3. Start the previous image with its own compose file. No migrate: the
+    #    restored database is the one this version ran on.
+    scp -q -i "$key" -o StrictHostKeyChecking=accept-new "$compose" "$DEPLOY_HOST:$dir/compose.yml"
+    dc="cd $dir && PLATFORM_IMAGE=$ref docker compose -f compose.yml --env-file .env"
+    ssh_ "$dc pull"
+    ssh_ "$dc up -d --remove-orphans --wait"
+    ssh_ "$dc exec -T backend bench --site all clear-cache"
+    # 4. Smoke test.
+    ssh_ "$dc exec -T backend curl -fsS http://localhost:8000/api/method/ping" >/dev/null \
+      || fail "smoke test of $previous failed after the restore: the environment needs manual recovery"
+    ssh_ "echo '$previous' > $dir/current-version && mv $dir/rollback.env $dir/rollback.done-\$(date -u +%Y%m%dT%H%M%SZ)"
+    # 5. Audit Event: the restored database no longer holds the events written since the backup.
+    ssh_ "$dc exec -T backend bench --site all execute $core.sdk.audit.record_deploy --kwargs \"{'version': '$previous', 'actor': '${GITHUB_ACTOR:-$USER}'}\""
+    echo "rolled {{ env }} back to $previous (backup $backup_id restored; data written since that backup is lost)"

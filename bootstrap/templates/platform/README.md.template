@@ -12,12 +12,14 @@ repositories; this one holds what they share.
 | `ci-image/` | The CI container image every repository's CI runs in (pinned tools) |
 | `shared-config/` | Tool configuration copied into every repository by `just sync-config` (DEL-TOOL-003) |
 | `.github/workflows/ci-platform.yml` | CI · Platform · L1 checks & CI image: this repository's checks and the CI image publication |
-| `.github/workflows/ci-platform-l2.yml` | CI · Platform · L2 integration: level-2 CI on lock or image changes, on `main` and nightly |
+| `.github/workflows/ci-platform-l2.yml` | CI · Platform · L2 integration: level-2 CI on lock or image changes, on `main` and nightly; on `main` it pushes the signed release candidate `main-<sha>` |
 | `.github/workflows/ci-app.yml` | CI · App · L1 checks (reusable): the level-1 workflow app repositories call (DEL-CI-002) |
-| `.github/workflows/cd-release.yml` | CD · Platform · Release: signed image, SBOM, notes and git tag (manual) |
+| `.github/workflows/cd-release.yml` | CD · Platform · Release: promotes the release candidate of `main`'s HEAD to the version tag (no rebuild), after a fresh scan; notes and git tag (manual) |
 | `.github/workflows/cd-deploy.yml` | CD · Platform · Deploy: deploys a release to staging or production (manual, approved) |
+| `.github/workflows/cd-rollback.yml` | CD · Platform · Rollback: returns an environment to the version before its last deploy (manual, approved) |
 | `.github/workflows/ops-renovate.yml` | Ops · All repos · Dependency updates (Renovate): weekly, for every repository of the owner |
 | `docker/`, `compose/` | Production image and the production / end-to-end compose files |
+| `deploy/host/` | `backup.sh` and `restore.sh`, copied to the deploy host by each deploy (placeholders: not implemented yet) |
 | `tools/` | The Python behind the recipes (lock handling, platform contracts) |
 | `docs/adr/` | Decisions of this repository |
 
@@ -56,6 +58,28 @@ nothing to act on. They print `inactive: <reason>` and pass instead of failing
   repositories), `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` (signing),
   `DEPLOY_SSH_KEY` and `DEPLOY_HOST` per environment (deploys). Steps whose secret
   is missing stay inactive.
+
+## Deploy hosts
+
+Each environment lives in `/srv/platform/<env>/` on its host, with the encrypted
+`.env`. Each deploy copies the released version's host scripts from
+`deploy/host/` next to it (guide 503, 601):
+
+- `backup.sh`: encrypted backup of the database plus an object-store snapshot;
+  prints the backup ID on its last line;
+- `restore.sh ID`: restores that backup, database and object store together.
+
+**Both are placeholders that fail**, because there is no backup destination yet:
+until they are implemented, every deploy stops at its backup, before changing
+anything.
+
+Right after its backup, `just deploy` records `rollback.env` (previous version,
+backup ID), and `current-version` once the smoke test passes. If a
+deploy fails after the backup, or a deployed version turns out bad, run
+**CD · Platform · Rollback** (`just rollback <env>`): it stops the platform,
+runs `restore.sh`, and starts the previous version again. Data written since the
+backup is lost. Until the environment is rolled back, the next deploy refuses to
+start. Rehearse it on staging every quarter (DEL-CD-004).
 
 ## Licence
 

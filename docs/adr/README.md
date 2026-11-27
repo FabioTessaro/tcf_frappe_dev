@@ -22,3 +22,4 @@ deviation from a SHOULD rule of the
 | [0005](0005-platform-lock-follows-release-tags.md) | platform.lock follows release tags | accepted |
 | [0006](0006-multimodal-semantic-search.md) | Multimodal semantic search with swappable models | accepted |
 | [0007](0007-search-options-and-restricted-collections.md) | Search options, bounded results and restricted collections | accepted |
+| [0008](0008-release-promotion-and-rollback.md) | Releases promote the tested image; deploys can be rolled back | accepted |

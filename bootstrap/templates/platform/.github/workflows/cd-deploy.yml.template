@@ -37,6 +37,8 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
     steps:
       - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+        with:
+          fetch-depth: 0 # the release tags: each version deploys its own compose file
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - run: just deploy "${{ inputs.environment }}" "${{ inputs.version }}"

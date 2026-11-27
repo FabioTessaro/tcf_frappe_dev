@@ -1,0 +1,42 @@
+# Roll back the last deploy (guide 503, DEL-CD-004): stop the platform, restore
+# the backup that deploy took, start the previous version again. Data written
+# since that backup is lost. Same approval and secrets as the deploy, and the
+# same concurrency group, so a rollback never runs alongside a deploy.
+name: "CD · Platform · Rollback"
+run-name: "CD · Platform · Rollback · ${{ inputs.environment }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment whose last deploy to roll back
+        type: choice
+        options: [staging, production]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency: deploy-${{ inputs.environment }}
+    container:
+      image: ghcr.io/@@OWNER_LC@@/ci:@@CI_TAG@@
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --user root
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+    steps:
+      - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+        with:
+          fetch-depth: 0 # the release tag of the version rolled back to
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: just rollback "${{ inputs.environment }}"

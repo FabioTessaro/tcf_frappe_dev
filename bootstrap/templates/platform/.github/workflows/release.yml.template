@@ -1,5 +1,5 @@
 # Platform release (guide 502): signed image, SBOM, notes, git tag.
-name: release
+name: "Release · platform"
 
 on:
   workflow_dispatch:

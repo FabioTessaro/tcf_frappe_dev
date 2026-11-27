@@ -1,6 +1,6 @@
 # Dependency updates for every repository of @@OWNER@@ (Renovate run as a
 # scheduled job, guide 504). Inactive until the RENOVATE_TOKEN secret exists.
-name: renovate
+name: "Renovate · dependency updates"
 
 on:
   schedule:

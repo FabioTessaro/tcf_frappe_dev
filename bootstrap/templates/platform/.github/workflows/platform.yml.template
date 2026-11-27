@@ -1,7 +1,7 @@
 # Level 1 of this repository and publication of the CI image (guide 501).
 # Trigger only: every step is a `just` recipe (DEL-CI-002); actions are
 # plumbing pinned to a commit SHA (DEL-CI-007).
-name: platform
+name: "Platform CI · checks & CI image"
 
 on:
   pull_request:

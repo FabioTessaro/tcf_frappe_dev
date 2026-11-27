@@ -173,7 +173,9 @@ text = open(src, encoding="utf-8").read()
 for a, b in (("[year]", year), ("[yyyy]", year), ("[fullname]", holder),
              ("[name of copyright owner]", holder)):
     text = text.replace(a, b)
-open(dst, "w", encoding="utf-8").write(text if text.endswith("\n") else text + "\n")
+# `gh --jq` adds a newline after a body that already ends with one: keep exactly
+# one, or the end-of-file-fixer hook fails CI on the first commit.
+open(dst, "w", encoding="utf-8").write(text.rstrip() + "\n")
 PY
   rm -f "$file.tmp"
 }

@@ -1,0 +1,59 @@
+// Vitest over the core app and every installed app's frontend (TST-FE-001).
+// Coverage thresholds: TST-STR-003.
+import path from "node:path";
+
+import { defineConfig, mergeConfig } from "vitest/config";
+
+import { coreApp, coreFrontend, discoverApps } from "./plugins/apps.ts";
+import viteConfig from "./vite.config.ts";
+
+// PORTAL_TEST_APP (scripts/portal.ts test APP): only that app's tests and coverage.
+const only = process.env.PORTAL_TEST_APP;
+const apps = discoverApps().filter((app) => !only || app.name === only);
+const withCore = !only || only === coreApp;
+const coreTests = [
+  "src/**/*.test.ts",
+  "tests/{integration,contract}/**/*.test.ts",
+  "plugins/**/*.test.ts",
+];
+
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      environment: "jsdom",
+      setupFiles: [path.join(coreFrontend, "tests", "setup.ts")],
+      include: [
+        ...(withCore ? coreTests : []),
+        ...apps.map((app) => path.join(app.real, "**", "*.test.ts")),
+      ],
+      exclude: ["**/node_modules/**", "**/tests/e2e/**"],
+      coverage: {
+        provider: "v8",
+        // Apps live outside this folder.
+        allowExternal: true,
+        reportsDirectory: "coverage",
+        include: [
+          ...(withCore ? ["src/**/*.{ts,vue}"] : []),
+          ...apps.map((app) => path.join(app.real, "**", "*.{ts,vue}")),
+        ],
+        exclude: [
+          "**/*.test.ts",
+          "**/*.d.ts",
+          "**/tests/**",
+          "src/app/main.ts",
+          "**/index.ts",
+          "**/*.types.ts",
+        ],
+        thresholds: {
+          lines: 70,
+          "src/shared/utils/**": { lines: 90 },
+          "src/shared/frappe/**": { lines: 90 },
+          "src/shared/stores/**": { lines: 90 },
+          "src/sdk/**": { lines: 90 },
+          "src/app/router/guards.ts": { lines: 90 },
+        },
+      },
+    },
+  }),
+);

@@ -1,0 +1,32 @@
+// Boot data of the portal page (CT-BOOT-001), injected by www/portal.py as
+// JSON in <script id="boot">. Under the Vite dev server it is not JSON: then
+// the portal starts as a guest.
+export interface SessionInfo {
+  user: string;
+  full_name: string;
+  roles: string[];
+  user_type: string;
+}
+
+export interface BootData {
+  csrf_token?: string;
+  build_id?: string;
+  lang?: string;
+  session?: SessionInfo;
+}
+
+export function readBoot(doc: Document = document): BootData {
+  try {
+    const data: unknown = JSON.parse(doc.getElementById("boot")?.textContent ?? "");
+    return typeof data === "object" && data !== null ? (data as BootData) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The boot data of this page, read once. */
+export const boot: BootData = readBoot();
+
+export function isLoggedIn(data: BootData = boot): boolean {
+  return data.session !== undefined;
+}

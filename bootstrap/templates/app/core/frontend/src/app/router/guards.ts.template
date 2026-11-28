@@ -1,0 +1,18 @@
+import type { RouteLocationNormalized, RouteLocationRaw, Router } from "vue-router";
+
+import { isLoggedIn } from "@shared/frappe";
+
+/**
+ * The login wall (FE-SHELL-002, UX only: the page controller and the API
+ * enforce access). Guests go to login and come back to where they were going;
+ * logged-in users don't see the login page. Role and party-type checks come
+ * with the first app routes (docs/conformance.md).
+ */
+export function loginWall(to: RouteLocationNormalized, loggedIn: boolean): true | RouteLocationRaw {
+  if (to.meta.public) return loggedIn && to.name === "login" ? { name: "launcher" } : true;
+  return loggedIn ? true : { name: "login", query: { redirect: to.fullPath } };
+}
+
+export function installGuards(router: Router, loggedIn: () => boolean = () => isLoggedIn()): void {
+  router.beforeEach((to) => loginWall(to, loggedIn()));
+}

@@ -1,0 +1,10 @@
+import { mount } from "@vue/test-utils";
+import { describe, expect, it } from "vitest";
+
+import NotFoundView from "./NotFoundView.vue";
+
+describe("NotFoundView", () => {
+  it("renders", () => {
+    expect(mount(NotFoundView).exists()).toBe(true);
+  });
+});

@@ -1,0 +1,91 @@
+// discover-apps (FE-COMP-002): the virtual registry module of every installed
+// app's frontend, with its manifest, locale files and app-scoped style entry.
+// Manifests are small and imported eagerly; their routes load views lazily
+// (FE-COMP-007), and app styles load with the app.
+/* eslint-disable security/detect-non-literal-fs-filename -- build tooling: paths come from the bench layout, never from user input */
+import { existsSync, readdirSync } from "node:fs";
+import path from "node:path";
+import type { Plugin } from "vite";
+
+import { coreFrontend, discoverApps, type PortalApp } from "./apps.ts";
+
+const ID = "virtual:portal-registry";
+const RESOLVED = `\0${ID}`;
+
+function localeFiles(app: PortalApp): { lang: string; file: string }[] {
+  const dirs = [path.join(app.frontend, "locales")];
+  const features = path.join(app.frontend, "features");
+  if (existsSync(features)) {
+    for (const feature of readdirSync(features).sort()) {
+      dirs.push(path.join(features, feature, "locales"));
+    }
+  }
+  return dirs
+    .filter((dir) => existsSync(dir))
+    .flatMap((dir) =>
+      readdirSync(dir)
+        .filter((f) => f.endsWith(".json"))
+        .sort()
+        .map((f) => ({ lang: path.basename(f, ".json"), file: path.join(dir, f) })),
+    );
+}
+
+/** Source of the registry module for APPS (exported for tests). */
+export function registrySource(apps: PortalApp[]): string {
+  const lines: string[] = [];
+  const entries: string[] = [];
+  const locales: string[] = [];
+  apps.forEach((app, i) => {
+    lines.push(
+      `import manifest${i} from ${JSON.stringify(path.join(app.frontend, "manifest.ts"))};`,
+    );
+    const style = path.join(app.frontend, "styles", "app.scss");
+    const loadStyle = existsSync(style) ? `() => import(${JSON.stringify(style)})` : "undefined";
+    entries.push(
+      `  { name: ${JSON.stringify(app.name)}, manifest: manifest${i}, loadStyle: ${loadStyle} },`,
+    );
+    localeFiles(app).forEach(({ lang, file }, j) => {
+      lines.push(`import locale${i}_${j} from ${JSON.stringify(file)};`);
+      locales.push(
+        `  { app: ${JSON.stringify(app.name)}, lang: ${JSON.stringify(lang)}, messages: locale${i}_${j} },`,
+      );
+    });
+  });
+  return [
+    ...lines,
+    `export const apps = [\n${entries.join("\n")}\n];`,
+    `export const locales = [\n${locales.join("\n")}\n];`,
+    "",
+  ].join("\n");
+}
+
+export function discoverAppsPlugin(): Plugin {
+  return {
+    name: "portal:discover-apps",
+    resolveId(id) {
+      return id === ID ? RESOLVED : null;
+    },
+    load(id) {
+      return id === RESOLVED ? registrySource(discoverApps()) : null;
+    },
+  };
+}
+
+/**
+ * Apps have no package.json or node_modules (FE-COMP-006): bare imports in
+ * their files resolve from the core app's frontend, like the core's own.
+ */
+export function appDependenciesPlugin(): Plugin {
+  const anchor = path.join(coreFrontend, "package.json");
+  const inCore = (file: string) => file.startsWith(coreFrontend + path.sep);
+  return {
+    name: "portal:app-dependencies",
+    enforce: "pre",
+    async resolveId(source, importer, options) {
+      if (!importer || inCore(importer) || importer.startsWith("\0")) return null;
+      if (/^[./\0]/.test(source) || source.startsWith("virtual:") || path.isAbsolute(source))
+        return null;
+      return this.resolve(source, anchor, { ...options, skipSelf: true });
+    },
+  };
+}

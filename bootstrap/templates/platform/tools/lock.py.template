@@ -63,6 +63,14 @@ def problems(lock: dict[str, dict[str, str]]) -> list[str]:
             found.append(f"[{name}]: commit must be a 40-character SHA")
         if name != "frappe" and entry.get("kind") not in KINDS:
             found.append(f"[{name}]: kind must be one of {', '.join(sorted(KINDS))}")
+        keys = list(entry)
+        if {"repository", "version", "commit"} <= set(keys):
+            i = keys.index("repository")
+            if keys[i : i + 3] != ["repository", "version", "commit"]:
+                found.append(
+                    f"[{name}]: repository, version and commit must be consecutive,"
+                    " in this order (Renovate)"
+                )
         if entry.get("repository", "").startswith("git@"):
             found.append(f"[{name}]: use an https:// repository URL (CI and image builds)")
     return found

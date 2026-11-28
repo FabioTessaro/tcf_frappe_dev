@@ -1,0 +1,35 @@
+# 0001 · Pre-production: steps with nothing to act on are inactive
+
+- Status: accepted
+- Date: @@TODAY@@
+- Guide version: @@GUIDE_VERSION@@
+- Rules concerned: DEL-CI-001
+
+## Context
+
+DEL-CI-001 makes every CI step mandatory and allows disabling one only through
+an ADR. A new repository has steps with nothing to act on yet.
+
+## Decision
+
+A step that has nothing to act on prints `inactive: <reason>` and passes:
+
+| Step | Inactive while |
+|---|---|
+| `api-diff` | there is no release tag yet, or the core sdk has no contract exporter yet |
+| `test-e2e` | the app has no end-to-end spec yet |
+
+Every other step always runs. A step that does not apply to the repository at
+all (the frontend steps of an app without a frontend) prints
+`not applicable` instead.
+
+## Consequences
+
+- CI is green from the first commit while still running everything that can run.
+- Each inactive step activates by itself when its precondition appears.
+- `api-diff` fails once the exporter exists, until the recipe uses it: the gap
+  cannot stay unnoticed.
+
+## Review
+
+Remove this ADR, and the inactive branches, once both steps are active.

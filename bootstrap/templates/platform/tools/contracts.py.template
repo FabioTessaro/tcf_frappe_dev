@@ -36,13 +36,18 @@ def hooks(app_dir: Path, app: str) -> dict[str, object]:
     if not path.is_file():
         return values
     for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        # `name = value` and `name: type = value` (type-checked hooks).
         if isinstance(node, ast.Assign) and len(node.targets) == 1:
-            target = node.targets[0]
-            if isinstance(target, ast.Name):
-                try:
-                    values[target.id] = ast.literal_eval(node.value)
-                except ValueError:
-                    continue
+            target, value = node.targets[0], node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            target, value = node.target, node.value
+        else:
+            continue
+        if isinstance(target, ast.Name):
+            try:
+                values[target.id] = ast.literal_eval(value)
+            except ValueError:
+                continue
     return values
 
 

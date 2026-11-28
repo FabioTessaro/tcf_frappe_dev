@@ -1,0 +1,10 @@
+import { mount } from "@vue/test-utils";
+import { describe, expect, it } from "vitest";
+
+import AppShellLayout from "./AppShellLayout.vue";
+
+describe("AppShellLayout", () => {
+  it("renders", () => {
+    expect(mount(AppShellLayout, { global: { stubs: { RouterView: true } } }).exists()).toBe(true);
+  });
+});

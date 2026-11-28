@@ -1,0 +1,56 @@
+// Build-time composition of the portal (FE-COMP-001): the core app's shell and
+// every installed app's frontend, bundled together with lazy app chunks.
+import path from "node:path";
+
+import vue from "@vitejs/plugin-vue";
+import { defineConfig } from "vite";
+
+import { appsDir, coreApp, coreFrontend, discoverApps } from "./plugins/apps.ts";
+import { copyIndexHtmlPlugin } from "./plugins/copy-index-html.ts";
+import { appDependenciesPlugin, discoverAppsPlugin } from "./plugins/discover-apps.ts";
+import { emitSharedAssetsPlugin } from "./plugins/emit-shared-assets.ts";
+
+const benchUrl = process.env.PORTAL_BENCH_URL ?? "http://localhost:8000";
+
+export default defineConfig({
+  // Frappe serves <app>/public/ under /assets/<app>/.
+  base: `/assets/${coreApp}/frontend/`,
+  plugins: [
+    vue(),
+    appDependenciesPlugin(),
+    discoverAppsPlugin(),
+    emitSharedAssetsPlugin(),
+    copyIndexHtmlPlugin(),
+  ],
+  resolve: {
+    // Feature apps reach core only through these (FE-COMP-004); same in tsconfig.json.
+    alias: {
+      "@sdk": path.join(coreFrontend, "src", "sdk"),
+      "@shared": path.join(coreFrontend, "src", "shared"),
+      "@tests": path.join(coreFrontend, "tests"),
+      "@": path.join(coreFrontend, "src"),
+    },
+  },
+  build: {
+    outDir: path.join(coreFrontend, "..", coreApp, "public", "frontend"),
+    emptyOutDir: true,
+  },
+  server: {
+    // Development (FE-COMP-011): hot reload here, everything else from the bench.
+    port: 5173,
+    strictPort: true,
+    fs: {
+      allow: [
+        coreFrontend,
+        appsDir(),
+        ...discoverApps().flatMap((app) => [app.frontend, app.real]),
+      ],
+    },
+    proxy: Object.fromEntries(
+      ["/api", "/assets", "/files", "/private"].map((p) => [
+        p,
+        { target: benchUrl, changeOrigin: false },
+      ]),
+    ),
+  },
+});

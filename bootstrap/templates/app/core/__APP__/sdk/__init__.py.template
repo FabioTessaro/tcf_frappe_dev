@@ -1,0 +1,8 @@
+"""Backend sdk of @@APP@@: the only part of the core app other apps import
+(BE-SDK-001). Small, versioned with `core_sdk_version` in hooks.py, stable
+(BE-SDK-003). It never imports from another app (BE-SDK-004).
+
+Modules are added here as the platform needs them (guide 202): api, errors,
+pagination, capabilities, party, settings, realtime, jobs, files, audit, esign,
+classification, records, roles, boot, logging, testing.
+"""

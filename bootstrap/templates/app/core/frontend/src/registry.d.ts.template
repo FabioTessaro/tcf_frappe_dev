@@ -1,0 +1,8 @@
+// The virtual registry module of the discover-apps plugin (FE-COMP-002).
+declare module "virtual:portal-registry" {
+  import type { AppManifest } from "@sdk";
+  import type { Messages } from "@shared/i18n";
+
+  export const apps: { name: string; manifest: AppManifest; loadStyle?: () => Promise<unknown> }[];
+  export const locales: { app: string; lang: string; messages: Messages }[];
+}

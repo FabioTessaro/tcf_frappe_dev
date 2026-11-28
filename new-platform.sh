@@ -253,6 +253,11 @@ if [[ "$SCAFFOLD" == true ]]; then
 
   # ===========================================================================
   ui_section "Scaffold"
+  # Licence texts come from GitHub (gh): decide before rendering, so the README
+  # names the licence actually written.
+  if [[ "$NO_PUSH" == true && "$LICENSE_KEY" != proprietary ]] && ! command -v gh >/dev/null 2>&1; then
+    ui_warn "--no-push without gh: LICENSE written as proprietary placeholder."; LICENSE_KEY=proprietary
+  fi
   mkdir -p "$PLATFORM_DIR"
   vals=(
     "OWNER=$OWNER" "REPO_NAME=$REPO" "OWNER_LC=${OWNER,,}" "REPO_LC=${REPO,,}" "GUIDE_VERSION=$(guide_version)" "TODAY=$(date +%F)"
@@ -272,9 +277,6 @@ if [[ "$SCAFFOLD" == true ]]; then
     chmod 755 tools/lock.py tools/contracts.py
   }
   ui_run "Rendering bootstrap/templates/platform" -- _scaffold || ui_die "Scaffolding failed."
-  if [[ "$NO_PUSH" == true && "$LICENSE_KEY" != proprietary ]] && ! command -v gh >/dev/null 2>&1; then
-    ui_warn "--no-push without gh: LICENSE written as proprietary placeholder."; LICENSE_KEY=proprietary
-  fi
   ui_run "Writing the licence ($(license_name "$LICENSE_KEY"))" -- \
     license_write "$LICENSE_KEY" "$HOLDER" "$(date +%Y)" "$PLATFORM_DIR/LICENSE" || ui_die "Writing LICENSE failed."
   _commit() {

@@ -1,0 +1,81 @@
+// Discovery of the installed apps' frontends (FE-COMP-002), shared by the Vite
+// plugins, the Vitest and Playwright configurations and scripts/portal.ts.
+//
+// The apps folder is the bench's apps/ (the core app sits in apps/<core>/), or
+// PORTAL_APPS_DIR. An app takes part when it is installed (sites/apps.txt,
+// when the bench has one) and has frontend/manifest.ts; apps without a
+// frontend are skipped.
+/* eslint-disable security/detect-non-literal-fs-filename -- build tooling: paths come from the bench layout, never from user input */
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** The core app's frontend folder (this file is in its plugins/). */
+export const coreFrontend = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Name of the core app: the folder of the repository holding this frontend. */
+export const coreApp = "@@APP@@";
+
+export interface PortalApp {
+  /** Frappe app name, also the manifest id. */
+  name: string;
+  /** The app's frontend folder, inside the apps folder (it may be a link). */
+  frontend: string;
+  /** The same folder, links resolved (what Vite and Vitest see). */
+  real: string;
+}
+
+/** The bench's apps folder. */
+export function appsDir(): string {
+  return path.resolve(process.env.PORTAL_APPS_DIR ?? path.join(coreFrontend, "..", ".."));
+}
+
+function installed(dir: string): string[] {
+  const appsTxt = path.join(dir, "..", "sites", "apps.txt");
+  if (existsSync(appsTxt)) {
+    return readFileSync(appsTxt, "utf8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  return readdirSync(dir);
+}
+
+/** Installed apps with a frontend, sorted by name; the core app is not one of them. */
+export function discoverApps(): PortalApp[] {
+  const dir = appsDir();
+  if (!existsSync(dir)) return [];
+  return installed(dir)
+    .filter(
+      (name) => name !== coreApp && existsSync(path.join(dir, name, "frontend", "manifest.ts")),
+    )
+    .sort()
+    .map((name) => {
+      const frontend = path.join(dir, name, "frontend");
+      return { name, frontend, real: realpathSync(frontend) };
+    });
+}
+
+/** Frontend folder of NAME: the core app's or a discovered app's. */
+export function frontendOf(name: string): string {
+  if (name === coreApp) return coreFrontend;
+  const app = discoverApps().find((a) => a.name === name);
+  if (!app) throw new Error(`${name} is not an installed app with a frontend in ${appsDir()}`);
+  return app.frontend;
+}
+
+/** Union of the icon names every app lists in its icons.json (FE-ICON-002), sorted. */
+export function iconUnion(): string[] {
+  const names = new Set<string>();
+  for (const dir of [coreFrontend, ...discoverApps().map((a) => a.frontend)]) {
+    const file = path.join(dir, "icons.json");
+    if (!existsSync(file)) continue;
+    for (const name of JSON.parse(readFileSync(file, "utf8")) as string[]) names.add(name);
+  }
+  return [...names].sort();
+}
+
+/** Header of every generated file (CT-GEN-001). */
+export function generatedHeader(source: string, generator: string): string {
+  return `// GENERATED — do not edit; source: ${source}; generator: ${generator}\n`;
+}

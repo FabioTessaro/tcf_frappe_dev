@@ -1,0 +1,14 @@
+import { describe, expect, it } from "vitest";
+
+import { defaultLanguage, languageOf, languages } from "./languages";
+
+describe("languages", () => {
+  it("registers the default language", () => {
+    expect(languages.map((l) => l.code)).toContain(defaultLanguage);
+  });
+  it("falls back to the default language", () => {
+    expect(languageOf("xx").code).toBe(defaultLanguage);
+    expect(languageOf(undefined).code).toBe(defaultLanguage);
+    expect(languageOf(defaultLanguage).code).toBe(defaultLanguage);
+  });
+});

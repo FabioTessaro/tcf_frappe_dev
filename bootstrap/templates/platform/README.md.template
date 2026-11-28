@@ -12,7 +12,7 @@ repositories; this one holds what they share.
 | `ci-image/` | The CI container image every repository's CI runs in (pinned tools) |
 | `shared-config/` | Tool configuration copied into every repository by `just sync-config` (DEL-TOOL-003) |
 | `.github/workflows/ci-platform.yml` | CI · Platform · L1 checks & CI image: this repository's checks and the CI image publication |
-| `.github/workflows/ci-platform-l2.yml` | CI · Platform · L2 integration: level-2 CI on lock or image changes, on `main` and nightly; on `main` it pushes the signed release candidate `main-<sha>` |
+| `.github/workflows/ci-platform-l2.yml` | CI · Platform · L2 integration: level-2 CI on pull requests that touch the lock, image, stack or level-2 recipes, on `main` and nightly; a push to `main` also pushes the signed release candidate `main-<sha>` |
 | `.github/workflows/ci-app.yml` | CI · App · L1 checks (reusable): the level-1 workflow app repositories call (DEL-CI-002) |
 | `.github/workflows/cd-release.yml` | CD · Platform · Release: promotes the release candidate of `main`'s HEAD to the version tag (no rebuild), after a fresh scan; notes and git tag (manual) |
 | `.github/workflows/cd-deploy.yml` | CD · Platform · Deploy: deploys a release to staging or production (manual, approved) |
@@ -25,7 +25,8 @@ repositories; this one holds what they share.
 
 ## Working on it
 
-The checkout lives next to the bench, in `frappe-dev/platform/`, and is part of the
+The checkout lives next to the bench, in `./platform` of the development
+environment, and is part of the
 VS Code workspace. Edit anywhere. Recipes that need Docker (`build-image`,
 `test-*`, `sbom`, `scan-image`) run **on the host**, because the development
 container has no Docker access.
@@ -61,8 +62,8 @@ nothing to act on. They print `inactive: <reason>` and pass instead of failing
 
 ## Deploy hosts
 
-Each environment lives in `/srv/platform/<env>/` on its host, with the encrypted
-`.env`. Each deploy copies the released version's host scripts from
+Each environment lives in `/srv/platform/<env>/` on its host, with its environment
+file encrypted with SOPS (`.env.sops`; the host needs `sops` and its age key). Each deploy copies the released version's host scripts from
 `deploy/host/` next to it (guide 503, 601):
 
 - `backup.sh`: encrypted backup of the database plus an object-store snapshot;

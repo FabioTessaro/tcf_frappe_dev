@@ -1,0 +1,21 @@
+# Level-1 CI of @@APP@@ (guide 501). Trigger only (DEL-CI-002): the reusable
+# workflow of the platform repository, pinned to a commit SHA (Renovate bumps
+# it, together with platform_ref in the justfile), runs `just ci` in the CI
+# image with MariaDB and Redis as job services.
+name: "CI · @@APP_TITLE@@ · L1 checks"
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  ci:
+    uses: @@OWNER@@/@@PLATFORM_REPO@@/.github/workflows/ci-app.yml@@@PLATFORM_REF@@ # main
+    secrets:
+      APPS_READ_TOKEN: ${{ secrets.APPS_READ_TOKEN }}

@@ -1,0 +1,11 @@
+// Entry of the portal: create the app, install the providers in order, mount.
+import "../styles/main.scss";
+
+import { createApp } from "vue";
+
+import App from "./App.vue";
+import { installProviders } from "./providers";
+
+const app = createApp(App);
+installProviders(app);
+app.mount("#app");

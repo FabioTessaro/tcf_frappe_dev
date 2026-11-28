@@ -1,0 +1,4 @@
+import type { RequestHandler } from "msw";
+
+// One module per feature area, added with the first API call.
+export const handlers: RequestHandler[] = [];

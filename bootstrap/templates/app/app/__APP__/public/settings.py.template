@@ -1,0 +1,19 @@
+"""Typed settings accessor of @@APP@@ (DOM-SET-002).
+
+The only way code reads the settings of @@APP@@. There is no `@@APP_TITLE@@
+Settings` doctype yet (DOM-SET-001): add one only if business admins need
+runtime settings, then read it here, cached and invalidated on save.
+"""
+
+from pydantic import BaseModel, ConfigDict
+
+
+class Settings(BaseModel):
+    """Settings of @@APP@@, with their defaults."""
+
+    model_config = ConfigDict(frozen=True)
+
+
+def settings() -> Settings:
+    """Return the current settings of @@APP@@."""
+    return Settings()

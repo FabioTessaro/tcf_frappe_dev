@@ -1,0 +1,6 @@
+// The apps of this build (discover-apps plugin, FE-COMP-002). The launcher
+// shows the intersection with the server's app list (CT-REG-002).
+import type { AppManifest } from "@sdk";
+import { apps } from "virtual:portal-registry";
+
+export const manifests: AppManifest[] = apps.map((app) => app.manifest);

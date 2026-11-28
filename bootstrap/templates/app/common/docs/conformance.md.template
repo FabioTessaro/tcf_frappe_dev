@@ -1,0 +1,56 @@
+# Conformance
+
+This repository **targets** Platform Architecture Guide @@GUIDE_VERSION@@
+(`FND-CONF-001`). It switches to "Conforms to" when the list of open rules
+below is empty and CI passes (`FND-CONF-006`); until then it stays out of
+`platform.lock` (`FND-CONF-005`).
+
+## Open rules
+
+| Rule | What is missing | Closes when |
+|---|---|---|
+| BE-API-032 | `just api-diff` is inactive (ADR 0001) | A release tag exists and the core sdk exports the contracts |
+@@IF IS_CORE@@
+| BE-SDK-002, BE-SDK-020, CT-ERR-001…008 | The sdk has only `boot` and `roles`: no API decorators, error catalog, pagination, capabilities, party, settings, realtime, jobs, files, audit, esign, classification, records, logging, testing modules (guide 202) | Each module exists as its first user needs it |
+| DEL-CD-003 | `@@APP@@.sdk.audit.record_deploy`, which every platform deploy calls (step 8), does not exist | The audit module exists |
+| SYS-DEP-002 | Core does not refuse to install an app outside its `core_sdk_version` range | The install check exists |
+| SYS-ACC-002, SYS-ACC-006 | The portal page does not redirect guests from protected paths; no request guard for Website Users | The page controller and the request guard exist |
+| CT-BOOT-001, 003, 004, FE-CACHE-004 | Boot data has only `csrf_token` and `lang`: no `portal_boot` hook, `build_id`, `X-Build-Id` header or reload prompt | The boot sdk module and the client exist |
+| CT-REG-001, 002 | No app-list method; the launcher view is blank | The launcher is built |
+| FE-SHELL-002, 003, 004 | The guard checks the session only (no roles or party types); the login view is blank, so no destination to validate; errors are not reported with `trace_id` | The auth views, the client and the app routes exist |
+| FE-CLI-001…005, FE-CACHE-005 | `shared/frappe` has only `session.ts`: no client, call, resource, realtime, errors, permissions; no `ConnectionBanner` | The first API call |
+| FE-TYP-001…003, FE-FONT-001…004 | No typography system and no self-hosted fonts | The design system is defined |
+| FE-ICON-001, 003, 004, 005, FE-ASSET-001 | No Material Symbols subset font, `Icon` or `Logo` primitive, favicons or brand files; `emit-shared-assets` writes only the icon union | The design system is defined |
+| FE-STY-006, guide 403 | Placeholder tokens; the `tokens`, `typography` and `icons` contract tests and the backend contract tests do not exist | The design system and the sdk exist |
+| CT-GEN-001, guide 31 | No API types, error catalog or role constants exporters | The sdk modules they read exist |
+| TST-STR-004, TST-E2E-001 | The mandatory core journeys (guide 404) have no specs | The views they exercise exist |
+@@ENDIF IS_CORE@@
+@@IF IS_FEATURE@@
+| CT-REG-* | The launcher entry has no roles: nobody sees the app | The first feature defines its roles (`public/roles.py`) |
+| TST-E2E-002 | No end-to-end spec | The first journey exists |
+@@ENDIF IS_FEATURE@@
+| CMP-REG-003, CMP-TRC-003 | No traceability rows for the norms the app covers | The first feature covering a norm |
+
+## Implemented
+
+| Rule | Where |
+|---|---|
+| DEL-REPO-004 | README, `SECURITY.md`, `justfile`, `.pre-commit-config.yaml`, `.github/workflows/ci.yml`, `docs/adr/`, lockfiles, `renovate.json` |
+| DEL-CI-002, DEL-TOOL-003 | `ci.yml` calls the platform's `ci-app.yml` at `platform_ref`; `just sync-config` / `just check-config` |
+| BE-STR-001, 003, 004 | `modules.txt`, `hooks.py` (wiring only), `@@APP@@_shared/` |
+| SYS-DEP-004, BE-SDK-001 | import-linter contracts in `pyproject.toml` (`just lint`) |
+@@IF IS_CORE@@
+| FE-COMP-001…007, 010, 011 | `frontend/plugins/` (`discover-apps`, `emit-shared-assets`, `copy-index-html`), `vite.config.ts`, `src/app/router/register-apps.ts` |
+| FE-STR-001, 004 | `frontend/eslint.config.js` (eslint-plugin-boundaries) |
+| FE-CLI-001 | `frontend/eslint.config.js` (`fetch`, `XMLHttpRequest` and `axios` outside `shared/frappe/client.ts`) |
+| FE-SHELL-001, 005, FE-CACHE-002, 003 | Auth routes only are public; catch-all route; `www/portal.py` (`no_cache`); `src/app/providers/error-handler.ts` |
+| FE-I18N-002, 003, 004 | `src/shared/i18n/merge-locales.ts`, `tests/contract/locales-parity.test.ts` |
+| TST-FE-001, 002, TST-STR-003 | `vitest.config.ts` (every app's frontend, coverage thresholds), `tests/setup.ts` (MSW, unhandled requests fail) |
+@@ENDIF IS_CORE@@
+@@IF IS_FEATURE@@
+| CT-REG-003, SYS-DEP-001, 002 | `hooks.py` (`portal_apps`, `required_apps`, `core_sdk_version`), `frontend/manifest.ts` |
+| FE-COMP-006 | `frontend/` has no tooling: the core app's toolchain checks it (`just lint`, `typecheck`, `test-unit`) |
+@@ENDIF IS_FEATURE@@
+@@IF IS_FOUNDATION@@
+| SYS-DEP-001, 002, BE-INT-001 | `hooks.py` (`required_apps`, `core_sdk_version`), `@@APP@@/public/` |
+@@ENDIF IS_FOUNDATION@@

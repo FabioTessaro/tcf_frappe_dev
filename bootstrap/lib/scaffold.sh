@@ -7,12 +7,18 @@
 # -----------------------------------------------------------------------------
 
 # scaffold_render_tree SRC DST KEY=VALUE... — renders every file under SRC into
-# DST at the same relative path, dropping a trailing ".template".
+# DST at the same relative path, dropping a trailing ".template"; "__APP__" in
+# a path becomes the value of APP (the Python package of an app).
 scaffold_render_tree() {
   local src="$1" dst="$2"; shift 2
-  local f rel n=0
+  local f rel n=0 kv app=""
+  for kv in "$@"; do [[ "$kv" == APP=* ]] && app="${kv#APP=}"; done
   while IFS= read -r -d '' f; do
     rel="${f#"$src"/}"; rel="${rel%.template}"
+    if [[ "$rel" == *__APP__* ]]; then
+      [[ -n "$app" ]] || { echo "$f: __APP__ in the path but no APP value" >&2; return 1; }
+      rel="${rel//__APP__/$app}"
+    fi
     render "$f" "$dst/$rel" -- "$@" || return 1
     n=$((n + 1))
   done < <(find "$src" -type f -print0 | sort -z)
@@ -98,7 +104,8 @@ gh_setting() {
 # gh_apply_repo_settings OWNER/REPO APPROVALS REQUIRED_CHECKS... — ruleset on
 # main (DEL-REPO-005: pull request + green CI; APPROVALS = 0 for a single
 # maintainer, 1 for a team), private vulnerability reporting, staging and
-# production environments with the current user as required reviewer (503).
+# production environments with the current user as required reviewer (503;
+# GH_ENVIRONMENTS=false skips them: only the platform repository deploys).
 gh_apply_repo_settings() {
   local repo="$1" approvals="$2"; shift 2
   local checks=("$@") me_id json c sep=""
@@ -137,6 +144,7 @@ gh_apply_repo_settings() {
   fi
   gh_setting "Private vulnerability reporting" -- gh api -X PUT "repos/$repo/private-vulnerability-reporting" --silent
   local env
+  [[ "${GH_ENVIRONMENTS:-true}" == true ]] || return 0
   for env in staging production; do
     gh_setting "Environment $env (required reviewer: you)" -- _gh_json PUT "repos/$repo/environments/$env" \
       "{\"reviewers\":[{\"type\":\"User\",\"id\":$me_id}],\"deployment_branch_policy\":null}"
@@ -156,6 +164,13 @@ license_name() {
   case "$1" in
     proprietary) printf 'Proprietary (all rights reserved)' ;; mit) printf 'MIT' ;;
     apache-2.0) printf 'Apache-2.0' ;; agpl-3.0) printf 'AGPL-3.0' ;; gpl-3.0) printf 'GPL-3.0' ;;
+  esac
+}
+# license_spdx KEY — SPDX expression for pyproject.toml and hooks.py
+license_spdx() {
+  case "$1" in
+    proprietary) printf 'LicenseRef-Proprietary' ;; mit) printf 'MIT' ;; apache-2.0) printf 'Apache-2.0' ;;
+    agpl-3.0) printf 'AGPL-3.0-only' ;; gpl-3.0) printf 'GPL-3.0-only' ;;
   esac
 }
 # license_write KEY HOLDER YEAR FILE — text from GitHub's licence API (gh).

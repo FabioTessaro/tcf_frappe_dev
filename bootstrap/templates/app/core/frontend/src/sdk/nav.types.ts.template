@@ -1,0 +1,16 @@
+/** A navigation entry of an app, rendered by the shell's sidebar (guide 103). */
+export interface NavItem {
+  /** Translation key of the label (FE-I18N-001). */
+  label: string;
+  /** Material Symbols name from the icon union (FE-ICON-004). */
+  icon?: string;
+  /** Route name inside the app. */
+  to: string;
+  roles?: string[];
+}
+
+/** A titled group of navigation entries. */
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}

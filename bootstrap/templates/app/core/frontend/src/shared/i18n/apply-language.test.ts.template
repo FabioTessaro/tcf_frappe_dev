@@ -1,0 +1,17 @@
+import { describe, expect, it } from "vitest";
+
+import { applyLanguage } from "./apply-language";
+
+describe("applyLanguage", () => {
+  it("marks the element with language, direction and script", () => {
+    const element = document.createElement("div");
+    applyLanguage("en", element);
+    expect(element.lang).toBe("en");
+    expect(element.dir).toBe("ltr");
+    expect(element.dataset.script).toBe("latin");
+  });
+  it("marks the document by default", () => {
+    applyLanguage("en");
+    expect(document.documentElement.lang).toBe("en");
+  });
+});

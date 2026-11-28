@@ -1,0 +1,31 @@
+// End-to-end tests (guide 404): the core app's specs and every installed app's
+// tests/e2e/specs, each on a desktop and a mobile viewport. They run against a
+// real site: E2E_BASE_URL (the disposable stack at level 2, or the
+// development site).
+import path from "node:path";
+
+import { defineConfig, devices } from "@playwright/test";
+
+import { coreApp, coreFrontend, discoverApps } from "./plugins/apps.ts";
+
+const suites = [
+  { name: coreApp, dir: path.join(coreFrontend, "tests", "e2e", "specs") },
+  ...discoverApps().map((app) => ({
+    name: app.name,
+    dir: path.join(app.frontend, "tests", "e2e", "specs"),
+  })),
+];
+const viewports = { desktop: devices["Desktop Chrome"], mobile: devices["Pixel 7"] };
+
+export default defineConfig({
+  forbidOnly: !!process.env.CI,
+  reporter: process.env.CI ? "line" : "list",
+  use: { baseURL: process.env.E2E_BASE_URL ?? "http://localhost:8000", trace: "retain-on-failure" },
+  projects: suites.flatMap((suite) =>
+    Object.entries(viewports).map(([viewport, device]) => ({
+      name: `${suite.name}-${viewport}`,
+      testDir: suite.dir,
+      use: { ...device },
+    })),
+  ),
+});

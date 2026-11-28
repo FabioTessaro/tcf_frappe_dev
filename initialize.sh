@@ -22,8 +22,9 @@
 #  10. assets          bench build, app by app: a failing app is reported and
 #                      skipped, so Frappe and the other apps still work
 #  11. extras          platform/ checkout, git hooks (portable: host and
-#                      container) + hook environments, Claude Code (optional),
-#                      VS Code workspace + extensions
+#                      container) + hook environments, the container's gh
+#                      login (host token), Claude Code (optional), VS Code
+#                      workspace + extensions
 #
 # When the bench differs from .env (other versions, removed apps, renamed
 # site, changed passwords) initialize.sh explains the difference and asks
@@ -439,6 +440,15 @@ ui_section "Extras"
 # container's hook environments. install.sh does the host side.
 pstep --optional "Git hooks and their environments (first time: a few minutes)" -- git-hooks \
   || ui_error "Git hooks not fully set up in the container (see the log)."
+
+# The container's GitHub CLI uses the host's login, so ./new-app.sh also runs
+# inside the container. The token is stored in the container's gh config.
+if command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
+  ui_run --quiet-fail "Logging the container's GitHub CLI in with your host login" -- gh_container_login \
+    || ui_warn "The container's gh is not logged in (see the log): ./new-app.sh works from the host only."
+else
+  ui_note "gh is not logged in on the host: the container's gh stays logged out (./install.sh --components git)."
+fi
 
 if [[ "$WITH_CLAUDE" == 1 ]]; then
   vendored=""; for a in "${DEFAULT_LIST[@]}"; do vendored+="$a "; done

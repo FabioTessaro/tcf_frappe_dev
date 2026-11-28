@@ -1,0 +1,4 @@
+// Everything that talks to Frappe (guide 104). Only session handling exists
+// yet; client.ts, call.ts, resource.ts, realtime.ts, errors.ts and
+// permissions.ts come with the first API call (docs/conformance.md).
+export { boot, isLoggedIn, readBoot, type BootData, type SessionInfo } from "./session";

@@ -1,0 +1,69 @@
+# @@APP@@
+
+Targets Platform Architecture Guide @@GUIDE_VERSION@@.
+
+@@APP_DESCRIPTION@@
+
+`@@APP@@` is a **@@APP_KIND@@ app** of the platform (guide chapter 11).
+@@IF IS_CORE@@
+It owns the portal (the Vue shell every app plugs into), the backend and
+frontend sdks other apps import, and the platform services.
+@@ENDIF IS_CORE@@
+@@IFNOT IS_CORE@@
+It requires `@@CORE_APP@@` (the core app) and imports from it only
+`@@CORE_APP@@.sdk` (backend) and the portal sdk and shared code (frontend).
+@@ENDIF IS_CORE@@
+@@IF IS_FOUNDATION@@
+It holds business primitives shared by feature apps; other apps use it through
+`@@APP@@.public`. It has no portal frontend.
+@@ENDIF IS_FOUNDATION@@
+
+| Path | Holds |
+|---|---|
+| `@@APP@@/hooks.py` | Frappe wiring only (BE-STR-003) |
+| `@@APP@@/modules.txt` | One Frappe module per feature, plus `@@APP_MODULE@@ Shared` (BE-STR-001) |
+| `@@APP@@/@@APP@@_shared/` | Code shared by two or more features (BE-STR-004) |
+@@IF IS_CORE@@
+| `@@APP@@/sdk/` | The backend sdk: the only part of this app other apps import (BE-SDK-001) |
+| `@@APP@@/www/portal.py` | The portal page controller; `portal.html` is written by the frontend build |
+| `frontend/` | The portal: shell, core features, sdk, shared code, styles, and the toolchain that builds, lints and tests every app's frontend (guide 10) |
+@@ENDIF IS_CORE@@
+@@IFNOT IS_CORE@@
+| `@@APP@@/public/` | The public backend surface other apps may import (BE-INT-001) |
+@@ENDIF IS_CORE@@
+@@IF IS_FEATURE@@
+| `frontend/` | The app's portal frontend: `manifest.ts`, one slice per feature under `features/`; built, linted and tested by the core app's toolchain (FE-COMP-006) |
+@@ENDIF IS_FEATURE@@
+| `docs/` | `conformance.md` and the ADRs of this repository |
+
+## Working on it
+
+The checkout lives in `frappe-bench/apps/@@APP@@` of the development
+environment. Recipes run in the development container (ADR 0002):
+
+```bash
+just                       # list the recipes
+just setup                 # platform checkout, dependencies, hook environments
+just ci                    # what CI runs on every pull request
+just test-backend          # Frappe tests on the minimal test site
+```
+@@IF IS_CORE@@
+
+The portal is served at `/portal` of the development site once built
+(`just build`); `just dev` starts the Vite dev server with hot reload.
+@@ENDIF IS_CORE@@
+
+Shared tool configuration (`ruff.toml`, `mypy.ini`, `.pre-commit-config.yaml`,
+…) comes from the platform repository at the commit pinned in the `justfile`:
+change it there, then `just sync-config` (DEL-TOOL-003).
+
+## Conformance
+
+This repository targets the guide; the rules that do not hold yet are listed in
+[`docs/conformance.md`](docs/conformance.md). It switches to "Conforms to" when
+that list is empty and CI passes (FND-CONF-006). Until then it is not added to
+`platform.lock` (FND-CONF-005).
+
+## Licence
+
+@@LICENSE_NAME@@ — see `LICENSE`.

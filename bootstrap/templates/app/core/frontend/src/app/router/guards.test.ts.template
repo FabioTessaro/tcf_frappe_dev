@@ -1,0 +1,53 @@
+import { describe, expect, it } from "vitest";
+import { createMemoryHistory, createRouter } from "vue-router";
+
+import { installGuards, loginWall } from "./guards";
+
+const view = { template: "<div />" };
+
+function router(loggedIn?: boolean) {
+  const r = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/login", name: "login", component: view, meta: { public: true } },
+      { path: "/", name: "launcher", component: view },
+      { path: "/hr", name: "hr", component: view },
+    ],
+  });
+  if (loggedIn === undefined) installGuards(r);
+  else installGuards(r, () => loggedIn);
+  return r;
+}
+
+describe("loginWall (FE-SHELL-002)", () => {
+  it("sends guests to login, remembering the destination", async () => {
+    const r = router(false);
+    await r.push("/hr?tab=1");
+    expect(r.currentRoute.value.name).toBe("login");
+    expect(r.currentRoute.value.query.redirect).toBe("/hr?tab=1");
+  });
+  it("lets guests open public routes", async () => {
+    const r = router(false);
+    await r.push("/login");
+    expect(r.currentRoute.value.name).toBe("login");
+  });
+  it("sends logged-in users away from login", async () => {
+    const r = router(true);
+    await r.push("/login");
+    expect(r.currentRoute.value.name).toBe("launcher");
+  });
+  it("lets logged-in users open protected routes", async () => {
+    const r = router(true);
+    await r.push("/hr");
+    expect(r.currentRoute.value.name).toBe("hr");
+  });
+  it("reads the session from the boot data by default (a guest here)", async () => {
+    const r = router();
+    await r.push("/hr");
+    expect(r.currentRoute.value.name).toBe("login");
+  });
+  it("is a pure function of the route and the session", () => {
+    const to = { meta: {}, fullPath: "/x", name: undefined } as never;
+    expect(loginWall(to, true)).toBe(true);
+  });
+});

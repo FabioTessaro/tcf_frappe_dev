@@ -1,5 +1,5 @@
 # Shared tool configuration (DEL-TOOL-003). `just sync-config` in every
-# repository copies these files from a pinned tag of this repository;
+# repository copies these files from a pinned commit of this repository;
 # `just check-config` fails when a copy differs. Repositories may add stricter
 # settings only in their own files (e.g. eslint.config.js importing
 # eslint.shared.js), never by editing a copy.

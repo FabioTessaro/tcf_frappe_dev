@@ -11,3 +11,4 @@ Platform Architecture Guide (rule `FND-GOV-004`).
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-pre-production-inactive-steps.md) | Pre-production: steps with nothing to act on are inactive | accepted |
+| [0002](0002-app-only-recipes.md) | Standard recipes that only apply to app repositories | accepted |

@@ -1,0 +1,18 @@
+"""Page controller of the portal (FE-COMP-010, FE-COMP-012).
+
+Serves www/portal.html, the entry page the frontend build writes, for every
+portal path (website_route_rules in hooks.py), with the boot data injected.
+The page is never cached (FE-CACHE-002, CT-BOOT-005).
+"""
+
+import json
+from typing import Any
+
+from @@APP@@.sdk.boot import boot
+
+no_cache = 1
+
+
+def get_context(context: Any) -> None:
+    # "</" would end the <script> element that holds the JSON.
+    context.boot_json = json.dumps(boot()).replace("</", "<\\/")

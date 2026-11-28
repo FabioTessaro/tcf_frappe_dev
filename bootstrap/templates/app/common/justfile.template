@@ -1,0 +1,277 @@
+# Recipes of @@APP@@ (guide 501). `just` lists them.
+#
+# Recipes run where they are started (ADR 0002): in CI inside the CI image (the
+# reusable workflow ci-app.yml of the platform repository), on a developer
+# machine inside the development container, where this checkout sits in
+# frappe-bench/apps/. Tool versions come from lockfiles, .pre-commit-config.yaml
+# and the pins below, so both give the same result (DEL-TOOL-004).
+#
+# Outside a development bench, `just setup` builds a throw-away bench in .cache/
+# with Frappe, the core app and the required apps at their platform.lock
+# versions (required apps not in platform.lock yet: their main branch).
+#
+# Pre-production: steps with nothing to act on print "inactive: <reason>" and
+# pass (docs/adr/0001-pre-production-inactive-steps.md).
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+app := "@@APP@@"
+kind := "@@APP_KIND@@"
+core := "@@CORE_APP@@"
+# Hard dependencies besides the core app (hooks.py: required_apps).
+required := "@@REQUIRED_APPS_LIST@@"
+git_owner := "https://github.com/@@OWNER@@"
+platform_repo := "https://github.com/@@OWNER@@/@@PLATFORM_REPO@@"
+# Pinned platform commit: shared configuration, platform.lock and the CI
+# workflow come from it (DEL-TOOL-003). Renovate bumps it with the SHA in
+# .github/workflows/ci.yml.
+platform_ref := "@@PLATFORM_REF@@"
+
+# Python tools, the versions of the CI image of the pinned platform commit.
+# renovate: datasource=pypi depName=mypy
+mypy_version := "@@MYPY_VERSION@@"
+# renovate: datasource=pypi depName=import-linter
+import_linter_version := "@@IMPORT_LINTER_VERSION@@"
+
+root := justfile_directory()
+in_dev_bench := path_exists(root / "../../sites/apps.txt")
+bench := if in_dev_bench == "true" { clean(root / "../..") } else { root / ".cache/bench" }
+apps := bench / "apps"
+platform := root / ".cache/platform"
+core_frontend := apps / core / "frontend"
+has_frontend := path_exists(root / "frontend")
+
+# List the recipes
+default:
+    @just --list
+
+# --- setup -----------------------------------------------------------------------
+
+# Fetch the pinned platform commit; outside a development bench build one in .cache/; install the dependencies
+setup: _platform _bench _deps
+    pre-commit install-hooks
+    just _fe generate
+
+# --- level 1 (guide 501) ------------------------------------------------------------
+
+# Format Python, the frontend and whitespace (rerun `just lint` after)
+fmt: (_fe "format")
+    -pre-commit run ruff-format --all-files
+    -pre-commit run trailing-whitespace --all-files
+    -pre-commit run end-of-file-fixer --all-files
+
+# Git hooks on every file, import-linter, and the frontend linters (ESLint, Stylelint, Prettier)
+lint: (_fe "lint")
+    pre-commit run --all-files
+    PYTHONPATH="{{ root }}:{{ apps }}/{{ core }}" uvx --quiet --from "import-linter=={{ import_linter_version }}" \
+      lint-imports --config pyproject.toml
+
+# mypy (strict, pydantic plugin) and vue-tsc
+typecheck: (_fe "typecheck")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pydantic=$("{{ bench }}/env/bin/python" -c 'import pydantic; print(pydantic.VERSION)')
+    paths="{{ root }}"; for a in {{ core }} {{ required }}; do [[ "$a" == "{{ app }}" ]] || paths+=":{{ apps }}/$a"; done
+    MYPYPATH="$paths" uvx --quiet --from "mypy=={{ mypy_version }}" --with "pydantic==$pydantic" \
+      mypy --config-file mypy.ini {{ app }}
+
+# Run every generator (the .pot file of Desk and server strings, frontend generated files)
+generate: (_fe "generate")
+    cd "{{ bench }}" && bench generate-pot-file --app {{ app }}
+
+# `just generate`, then fail if a committed file changed or a new one appeared (CT-GEN-002)
+check-generated: generate
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The .pot header carries dates, the year and the Babel version: not content changes.
+    git diff --exit-code -I '^"(POT-Creation|PO-Revision)-Date: ' -I '^"Generated-By: ' -I '^# (Copyright \(C\) |FIRST AUTHOR )' \
+      || { echo "generated files differ: run 'just generate' and commit" >&2; exit 1; }
+    new=$(git ls-files --others --exclude-standard)
+    [[ -z "$new" ]] || { echo "generated files not committed:" >&2; echo "$new" >&2; exit 1; }
+
+# Copy the shared tool configuration from the pinned platform commit (DEL-TOOL-003)
+sync-config: _platform
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just _config-files | while read -r src dest; do
+      mkdir -p "$(dirname "$dest")"; cp "{{ platform }}/shared-config/$src" "$dest"; echo "synced $dest"
+    done
+
+# Fail if the shared configuration differs from the pinned platform commit
+check-config: _platform
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bad=0
+    while read -r src dest; do
+      cmp -s "{{ platform }}/shared-config/$src" "$dest" || { echo "$dest differs from shared-config/$src of the platform ({{ platform_ref }}): run 'just sync-config'" >&2; bad=1; }
+    done < <(just _config-files)
+    grep -q "ci-app.yml@{{ platform_ref }}" .github/workflows/ci.yml \
+      || { echo ".github/workflows/ci.yml does not call ci-app.yml at platform_ref {{ platform_ref }}" >&2; bad=1; }
+    exit "$bad"
+
+# Vitest: unit, integration and contract tests of this app's frontend
+test-unit: (_fe "test")
+
+# Frappe tests of this app on the given site profile (TST-BE-001)
+test-backend site="minimal":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{ bench }}"
+    case "{{ site }}" in minimal|full) ;; *) echo "site must be minimal or full" >&2; exit 1 ;; esac
+    if [[ "{{ in_dev_bench }}" == true ]]; then
+      # The test sites of the development environment (./initialize.sh).
+      prefix=test-minimal; [[ "{{ site }}" == full ]] && prefix=test
+      s=$(cd sites && find . -maxdepth 1 -type d -name "$prefix.*" -printf '%f\n' | head -n 1)
+      [[ -n "$s" ]] || { echo "no $prefix.<site> test site in {{ bench }} (./initialize.sh creates it)" >&2; exit 1; }
+    else
+      [[ "{{ site }}" == minimal ]] || { echo "outside a development bench only site=minimal runs; the full site is level 2 (platform repository)" >&2; exit 1; }
+      s=minimal.localhost
+      if [[ ! -d "sites/$s" ]]; then
+        install=(); for a in {{ core }} {{ required }} {{ app }}; do install+=(--install-app "$a"); done
+        bench new-site "$s" --db-root-username root --db-root-password "${CI_DB_ROOT_PASSWORD:?CI_DB_ROOT_PASSWORD is not set}" \
+          --admin-password admin --mariadb-user-host-login-scope='%' "${install[@]}"
+      fi
+    fi
+    # The minimal site holds the core app; the app under test and its hard
+    # dependencies are installed on it when missing.
+    installed=$(bench --site "$s" execute frappe.get_installed_apps)
+    for a in {{ required }} {{ app }}; do
+      grep -q "\"$a\"" <<<"$installed" || bench --site "$s" install-app "$a"
+    done
+    bench --site "$s" set-config allow_tests true
+    bench --site "$s" run-tests --app {{ app }}
+
+# End-to-end specs of this app (Playwright, through the core app's configuration)
+test-e2e:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    specs=frontend/tests/e2e/specs
+    if [[ -z "$(find "$specs" -name '*.spec.ts' 2>/dev/null)" ]]; then echo "inactive: end-to-end tests — no spec in $specs yet"; exit 0; fi
+    cd "{{ core_frontend }}"
+    PORTAL_APPS_DIR="{{ apps }}" yarn playwright test --project "{{ app }}-*"
+
+# Schema and error-catalog diff against the last release tag (BE-API-032)
+api-diff:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! git describe --tags --abbrev=0 --match 'v[0-9]*' >/dev/null 2>&1; then
+      echo "inactive: api-diff — no release tag yet"; exit 0
+    fi
+    if [[ ! -f "{{ apps }}/{{ core }}/{{ core }}/sdk/contracts.py" ]]; then
+      echo "inactive: api-diff — the core sdk has no contract exporter yet ({{ core }}.sdk.contracts)"; exit 0
+    fi
+    echo "api-diff: the core sdk has a contract exporter: implement this recipe with it" >&2; exit 1
+
+# gitleaks over the history, Trivy over the files (vulnerabilities, licences)
+scan:
+    gitleaks git --redact --no-banner .
+    trivy fs --quiet --exit-code 1 --scanners vuln,license --severity HIGH,CRITICAL --ignore-unfixed \
+      --skip-dirs .cache --skip-dirs frontend/node_modules .
+
+# What CI runs on every pull request (level 1)
+ci:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "$(id -u)" == 0 ]] && id frappe >/dev/null 2>&1; then
+      # CI jobs start as root (checkout), and bench refuses to run as root.
+      chown -R frappe:frappe "{{ root }}"
+      exec runuser -u frappe -- env HOME=/home/frappe just ci
+    fi
+    just setup lint check-config typecheck check-generated api-diff test-unit test-backend scan
+@@IF IS_CORE@@
+
+# --- portal (core app) ----------------------------------------------------------------
+
+# Vite dev server with hot reload on port 5173, proxying to the bench (FE-COMP-011)
+dev:
+    cd frontend && PORTAL_APPS_DIR="{{ apps }}" yarn dev
+
+# Build the portal into {{ app }}/public/frontend/ and {{ app }}/www/portal.html
+build:
+    cd frontend && PORTAL_APPS_DIR="{{ apps }}" yarn build
+@@ENDIF IS_CORE@@
+
+# ==================================================================================
+# Implementation
+# ==================================================================================
+
+# Shared configuration files for this repository: kind "all", plus "core" in the core app
+[private]
+_config-files:
+    @awk '!/^#/ && NF == 3 && ($3 == "all"{{ if kind == "core" { " || $3 == \"core\"" } else { "" } }}) {print $1, $2}' "{{ platform }}/shared-config/files.txt"
+
+# The platform repository at platform_ref, in .cache/platform. Source: the
+# development environment's checkout when it has the commit, else GitHub
+# (APPS_READ_TOKEN for a private repository).
+[private]
+_platform:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    d="{{ platform }}"; ref="{{ platform_ref }}"
+    if [[ "$(git -C "$d" rev-parse -q --verify HEAD 2>/dev/null)" == "$ref" ]]; then exit 0; fi
+    mkdir -p "$d"; [[ -d "$d/.git" ]] || git -C "$d" init -q
+    local_checkout="{{ root }}/../../../platform"
+    if [[ -d "$local_checkout/.git" ]] && git -C "$local_checkout" cat-file -e "$ref^{commit}" 2>/dev/null; then
+      git -C "$d" fetch -q "$local_checkout" "+refs/*:refs/local/*"
+    else
+      url="{{ platform_repo }}"
+      if [[ -n "${APPS_READ_TOKEN:-}" ]]; then url="https://x-access-token:${APPS_READ_TOKEN}@${url#https://}"; fi
+      git -C "$d" fetch -q --depth 1 "$url" "$ref" || { echo "could not fetch {{ platform_repo }} at $ref (private repository: set APPS_READ_TOKEN)" >&2; exit 1; }
+    fi
+    git -C "$d" -c advice.detachedHead=false checkout -q --force "$ref"
+    echo "platform at $ref"
+
+[private]
+_bench: _platform
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "{{ in_dev_bench }}" == true ]]; then
+      [[ -d "{{ apps }}/{{ core }}" ]] || { echo "the core app {{ core }} is not in {{ bench }}: add it to the development environment first" >&2; exit 1; }
+      echo "development bench: {{ bench }}"; exit 0
+    fi
+    lock="{{ platform }}/platform.lock"
+    auth() { if [[ -n "${APPS_READ_TOKEN:-}" && "$1" == https://github.com/* ]]; then echo "https://x-access-token:${APPS_READ_TOKEN}@${1#https://}"; else echo "$1"; fi; }
+    # NAME → "repository version" from platform.lock; nothing when it is not locked.
+    locked() { python3 -c 'import sys, tomllib; e = tomllib.load(open(sys.argv[1], "rb")).get(sys.argv[2]); e and print(e["repository"], e["version"])' "$lock" "$1"; }
+    b="{{ bench }}"
+    if [[ ! -f "$b/sites/apps.txt" ]]; then
+      read -r url ref < <(locked frappe)
+      bench init --frappe-path "$(auth "$url")" --frappe-branch "$ref" --skip-assets --no-procfile --no-backups \
+        --skip-redis-config-generation "$b"
+    fi
+    cd "$b"
+    bench set-config -g db_host "${CI_DB_HOST:-127.0.0.1}"
+    bench set-config -g redis_cache "${CI_REDIS_CACHE:-redis://127.0.0.1:6379}"
+    bench set-config -g redis_queue "${CI_REDIS_QUEUE:-redis://127.0.0.1:6379}"
+    for a in {{ core }} {{ required }}; do
+      [[ "$a" != "{{ app }}" && ! -e "apps/$a" ]] || continue
+      # Not in platform.lock yet (not conforming, FND-CONF-005): its main branch (501).
+      line=$(locked "$a"); url="{{ git_owner }}/$a"; ref=main
+      [[ -z "$line" ]] || read -r url ref <<<"$line"
+      bench get-app --skip-assets --branch "$ref" "$(auth "$url")"
+    done
+    # This checkout joins the bench as a link: edits need no reinstall.
+    [[ -e "apps/{{ app }}" ]] || ln -s "{{ root }}" "apps/{{ app }}"
+    if command -v uv >/dev/null; then uv pip install --quiet --python env/bin/python -e "apps/{{ app }}"
+    else env/bin/python -m pip install --quiet -e "apps/{{ app }}"; fi
+    grep -qx "{{ app }}" sites/apps.txt || { sed -i -e '$a\' sites/apps.txt; echo "{{ app }}" >> sites/apps.txt; }
+    echo "bench ready: $b"
+
+# Frontend dependencies of the core app (its toolchain builds, lints and tests every app, FE-COMP-006)
+[private]
+_deps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ "{{ has_frontend }}" == true || "{{ kind }}" == core ]] || exit 0
+    cd "{{ core_frontend }}"
+    yarn check --integrity >/dev/null 2>&1 || yarn install --frozen-lockfile
+
+# Run a frontend task of the core app's toolchain over this app's frontend.
+[private]
+_fe task:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "{{ has_frontend }}" != true ]]; then echo "no frontend: {{ task }} not applicable"; exit 0; fi
+    [[ -d "{{ core_frontend }}/node_modules" ]] || { echo "no dependencies in {{ core_frontend }}: run 'just setup'" >&2; exit 1; }
+    cd "{{ core_frontend }}"
+    PORTAL_APPS_DIR="{{ apps }}" node scripts/portal.ts {{ task }} {{ app }}

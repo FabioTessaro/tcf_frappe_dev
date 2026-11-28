@@ -1,0 +1,20 @@
+import type { RouteRecordRaw } from "vue-router";
+
+import { authRoutes } from "@/platform/auth";
+import { launcherRoutes, notFoundRoutes } from "@/platform/launcher";
+
+import AuthLayout from "../layouts/AuthLayout";
+import LauncherLayout from "../layouts/LauncherLayout";
+
+/** Core routes: public auth routes and the protected launcher (guide 102). */
+export const coreRoutes: RouteRecordRaw[] = [
+  { path: "/", component: AuthLayout, children: authRoutes },
+  { path: "/", component: LauncherLayout, children: launcherRoutes },
+];
+
+/** Last route: everything unknown. */
+export const catchAllRoute: RouteRecordRaw = {
+  path: "/:pathMatch(.*)*",
+  component: LauncherLayout,
+  children: notFoundRoutes,
+};

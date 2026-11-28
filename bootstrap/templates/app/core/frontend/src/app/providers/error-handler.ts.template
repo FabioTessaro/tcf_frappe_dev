@@ -1,0 +1,34 @@
+// Errors (FE-SHELL-004): reported with the console for now (trace_id and the
+// user-facing fallback come with shared/frappe/client.ts); a failed lazy chunk
+// load, a stale tab after a deploy, reloads the page once (FE-CACHE-003).
+import type { App } from "vue";
+import type { Router } from "vue-router";
+
+const RELOADED = "portal:chunk-reload";
+
+export function isChunkLoadError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+      error.message,
+    )
+  );
+}
+
+/** Reload once per tab; true when it reloaded. */
+export function reloadOnce(storage: Storage, reload: () => void): boolean {
+  if (storage.getItem(RELOADED)) return false;
+  storage.setItem(RELOADED, "1");
+  reload();
+  return true;
+}
+
+export function installErrorHandler(app: App, router: Router): void {
+  app.config.errorHandler = (error) => console.error(error);
+  router.onError((error) => {
+    if (isChunkLoadError(error) && reloadOnce(sessionStorage, () => window.location.reload()))
+      return;
+    console.error(error);
+  });
+  router.afterEach(() => sessionStorage.removeItem(RELOADED));
+}

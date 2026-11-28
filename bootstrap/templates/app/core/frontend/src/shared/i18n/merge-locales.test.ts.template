@@ -1,0 +1,23 @@
+import { describe, expect, it } from "vitest";
+
+import { mergeLocales } from "./merge-locales";
+
+describe("mergeLocales", () => {
+  it("merges namespaces", () => {
+    expect(
+      mergeLocales({ hr: { a: "A" } }, { hr: { b: { c: "C" } } }, { common: { d: "D" } }),
+    ).toEqual({
+      hr: { a: "A", b: { c: "C" } },
+      common: { d: "D" },
+    });
+  });
+  it("refuses a key defined twice (FE-I18N-002)", () => {
+    expect(() => mergeLocales({ hr: { a: "A" } }, { hr: { a: "B" } })).toThrow("hr.a");
+    expect(() => mergeLocales({ hr: { a: "A" } }, { hr: { a: { b: "B" } } })).toThrow("hr.a");
+  });
+  it("does not change its sources", () => {
+    const source = { hr: { a: "A" } };
+    mergeLocales(source, { hr: { b: "B" } });
+    expect(source).toEqual({ hr: { a: "A" } });
+  });
+});

@@ -193,10 +193,12 @@ EOF
       uv tool install "$t" || exit 1
     fi
   done
-  # Binary releases (gitleaks, lychee, hadolint, just, trivy) into ~/.local/bin.
+  # Binary releases (gitleaks, lychee, hadolint, just, trivy, gh) into
+  # ~/.local/bin. gh is logged in with the host's token by initialize.sh, so
+  # new-app.sh also runs here.
   # shellcheck source=bootstrap/lib/tools.sh
   source "$WS/bootstrap/lib/tools.sh"
-  for t in gitleaks lychee hadolint just trivy; do
+  for t in gitleaks lychee hadolint just trivy gh; do
     if ! command -v "$t" >/dev/null 2>&1; then
       step "installing $t"
       tool_fetch "$t" "$HOME/.local/bin" || die "couldn't install $t"
@@ -211,7 +213,7 @@ EOF
   echo "uv $(ver uv --version), pre-commit $(ver pre-commit --version), ruff $(ver ruff --version)," \
     "mypy $(ver mypy --version), shellcheck $(ver shellcheck --version), gitleaks $(ver gitleaks version)," \
     "lychee $(ver lychee --version), hadolint $(ver hadolint --version), just $(ver just --version)," \
-    "trivy $(ver trivy --version), markdownlint-cli2 $(ver markdownlint-cli2 --help)"
+    "trivy $(ver trivy --version), gh $(ver gh --version), markdownlint-cli2 $(ver markdownlint-cli2 --help)"
   ;;
 
 # -----------------------------------------------------------------------------
@@ -549,7 +551,9 @@ build)
   ;;
 
 claude)
-  vendored="$1"; custom="$2"; core="$3"
+  # Custom apps ($2) and the core app ($3) are not written into CLAUDE.md: it
+  # tells how to recognise them, so it stays true when ./new-app.sh adds one.
+  vendored="$1"
   mkdir -p "$HOME/.local/bin"
   if command -v claude >/dev/null 2>&1; then
     echo "Claude Code already installed ($(claude --version 2>/dev/null))"
@@ -564,12 +568,11 @@ claude)
   done
   excludes=""; for a in frappe $vendored; do excludes+="apps/$a "; done
   vlist=""; for a in frappe $vendored; do vlist+="\`apps/$a\`, "; done
-  clist=""; for a in $custom; do clist+="\`apps/$a\`, "; done
   printf '%s\0' "VENDORED_DENY_JSON=${deny%$'\n'}" \
     | python3 "$RENDER" "$TEMPLATES/claude/settings.json.template" .claude/settings.json || exit 1
   printf '%s\0' "SITE_NAME=${E[SITE_NAME]}" "TEST_SITE_NAME=${E[TEST_SITE_NAME]}" \
     "TEST_MINIMAL_SITE_NAME=${E[TEST_MINIMAL_SITE_NAME]:-test-minimal.${E[SITE_NAME]}}" \
-    "VENDORED_APPS=${vlist%, }" "CUSTOM_APPS=${clist%, }" "CORE_APP=${core:-none}" \
+    "VENDORED_APPS=${vlist%, }" \
     "VENDORED_EXCLUDES=${excludes% }" \
     | python3 "$RENDER" "$TEMPLATES/claude/CLAUDE.md.template" CLAUDE.md || exit 1
   ;;

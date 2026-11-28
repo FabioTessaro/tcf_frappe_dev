@@ -1,0 +1,28 @@
+// Contract test `manifests` (guide 403), the parts that hold without a server:
+// unique ids equal to the app name, base path inside the portal and not /app,
+// icon names in the union. Navigation targets, record_routes and the backend
+// hook ids come with the first app routes and with the platform contract checks.
+import { describe, expect, it } from "vitest";
+
+import { iconUnion } from "../../plugins/apps";
+import { apps } from "virtual:portal-registry";
+
+describe("manifests", () => {
+  it("have unique ids equal to their app", () => {
+    expect(new Set(apps.map((a) => a.manifest.id)).size).toBe(apps.length);
+    for (const app of apps) expect(app.manifest.id).toBe(app.name);
+  });
+  it("have a base path of their own, never /app (SYS-ACC-007)", () => {
+    const paths = apps.map((a) => a.manifest.basePath);
+    expect(new Set(paths).size).toBe(paths.length);
+    for (const p of paths) {
+      expect(p).toMatch(/^\/[a-z0-9-]+$/);
+      expect(p).not.toBe("/app");
+      expect(["/login", "/reset-password"]).not.toContain(p);
+    }
+  });
+  it("use icons of the union (FE-ICON-002)", () => {
+    const union = iconUnion();
+    for (const app of apps) expect(union).toContain(app.manifest.icon);
+  });
+});

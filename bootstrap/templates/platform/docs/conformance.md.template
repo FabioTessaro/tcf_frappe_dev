@@ -11,6 +11,7 @@ below is empty and CI passes (`FND-CONF-006`).
 | DEL-REPO-002 | No app is in `platform.lock`, so nothing is releasable | The first app conforms and Renovate adds it |
 | DEL-REL-004 | No signing key (`sign` is inactive, ADR 0001) | `COSIGN_PRIVATE_KEY`, `COSIGN_PASSWORD` secrets and `cosign.pub` exist |
 | DEL-CD-002, DEL-CD-003, DEL-CD-004, DEL-CD-007 | No staging or production host; `deploy/host/backup.sh` and `restore.sh` are placeholders that fail (no backup destination yet), so no deploy can pass its backup | `DEPLOY_HOST`, `DEPLOY_SSH_KEY` environment secrets exist; both scripts are implemented against an encrypted, off-host, immutable backup destination (OPS-BAK-001…003); the rollback has been rehearsed on staging |
+| DEL-CD-002 | The smoke test only checks that every site answers; guide 503 step 7 also asks for a login and one journey per app | A smoke user and a smoke check per app exist |
 | DEL-CI-001 | Level-2 test steps are inactive (ADR 0001) | An app is in `platform.lock` |
 
 ## Implemented

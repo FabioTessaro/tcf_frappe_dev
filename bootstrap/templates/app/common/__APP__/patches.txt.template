@@ -1,0 +1,5 @@
+[pre_model_sync]
+# Patches that run before doctypes are migrated: <feature>.patches.<name>
+
+[post_model_sync]
+# Patches that run after doctypes are migrated

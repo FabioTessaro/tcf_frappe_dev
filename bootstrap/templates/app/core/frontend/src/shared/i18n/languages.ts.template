@@ -1,0 +1,21 @@
+// The language registry (guide 106): each language's script and text
+// direction. The single source of truth for the portal's languages.
+export type Script = "latin" | "japanese" | "chinese-simplified" | "chinese-traditional";
+
+export interface Language {
+  code: string;
+  script: Script;
+  dir: "ltr" | "rtl";
+}
+
+export const languages: readonly Language[] = [{ code: "en", script: "latin", dir: "ltr" }];
+
+export const defaultLanguage = "en";
+
+/** The registered language CODE, or the default language. */
+export function languageOf(code: string | undefined): Language {
+  const found =
+    languages.find((l) => l.code === code) ?? languages.find((l) => l.code === defaultLanguage);
+  if (!found) throw new Error(`the default language ${defaultLanguage} is not registered`);
+  return found;
+}

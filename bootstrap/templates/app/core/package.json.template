@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "description": "Bench integration only: `bench get-app` installs the frontend dependencies and `bench build` builds the portal (frontend/).",
+  "scripts": {
+    "postinstall": "cd frontend && yarn install --frozen-lockfile",
+    "build": "cd frontend && yarn build"
+  }
+}

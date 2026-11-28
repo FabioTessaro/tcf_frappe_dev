@@ -1,0 +1,10 @@
+import { mount } from "@vue/test-utils";
+import { describe, expect, it } from "vitest";
+
+import LoginView from "./LoginView.vue";
+
+describe("LoginView", () => {
+  it("renders", () => {
+    expect(mount(LoginView).exists()).toBe(true);
+  });
+});

@@ -1,0 +1,43 @@
+// Merging of locale files (guide 108). Keys are namespaced by app and feature
+// (FE-I18N-002), so two files never define the same key: a collision is an
+// error, not an override.
+export type Messages = { [key: string]: string | Messages };
+
+type Tree = Map<string, string | Tree>;
+
+function isMessages(value: unknown): value is Messages {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function mergeInto(target: Tree, source: Messages, prefix: string): void {
+  for (const [key, value] of Object.entries(source)) {
+    const at = prefix ? `${prefix}.${key}` : key;
+    const existing = target.get(key);
+    if (existing === undefined) {
+      if (isMessages(value)) {
+        const child: Tree = new Map();
+        mergeInto(child, value, at);
+        target.set(key, child);
+      } else {
+        target.set(key, value);
+      }
+    } else if (existing instanceof Map && isMessages(value)) {
+      mergeInto(existing, value, at);
+    } else {
+      throw new Error(`locale key ${at} is defined twice (FE-I18N-002)`);
+    }
+  }
+}
+
+function toMessages(tree: Tree): Messages {
+  return Object.fromEntries(
+    [...tree].map(([key, value]) => [key, value instanceof Map ? toMessages(value) : value]),
+  );
+}
+
+/** Merge SOURCES into one tree; throws on a key defined twice. */
+export function mergeLocales(...sources: Messages[]): Messages {
+  const out: Tree = new Map();
+  for (const source of sources) mergeInto(out, source, "");
+  return toMessages(out);
+}

@@ -1,0 +1,8 @@
+// The single global style entry, imported once by src/app/main.ts (guide 105).
+@use "tailwind";
+@use "themes/light";
+@use "themes/dark";
+@use "base/reset";
+@use "base/elements";
+@use "typography";
+@use "vendor/third-party-overrides";

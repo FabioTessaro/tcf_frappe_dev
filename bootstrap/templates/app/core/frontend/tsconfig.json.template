@@ -1,0 +1,30 @@
+{
+  "//": "The core app's frontend. `just typecheck` (scripts/portal.ts) checks it together with every installed app's frontend, with these same options. Apps have no node_modules: '*' resolves their imports from this folder's; a package typed only through package.json exports (prettier) needs its own entry.",
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@sdk": ["./src/sdk/index.ts"],
+      "@sdk/*": ["./src/sdk/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@tests/*": ["./tests/*"],
+      "@/*": ["./src/*"],
+      "prettier": ["./node_modules/prettier/index.d.ts"],
+      "*": ["./node_modules/*", "./node_modules/@types/*"]
+    }
+  },
+  "include": ["src/**/*", "tests/**/*", "plugins/**/*", "scripts/**/*", "*.ts"],
+  "exclude": ["node_modules", "coverage", ".cache"]
+}

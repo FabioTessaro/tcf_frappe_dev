@@ -1,0 +1,9 @@
+// Vitest setup of the portal (guide 401). Network access goes through MSW;
+// an unhandled request fails the test (TST-FE-002).
+import { afterAll, afterEach, beforeAll } from "vitest";
+
+import { server } from "./mocks/server";
+
+beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());

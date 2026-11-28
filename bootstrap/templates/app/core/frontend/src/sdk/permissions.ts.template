@@ -1,0 +1,10 @@
+/**
+ * Role helpers for showing or hiding UI. Convenience only: the server checks
+ * every request (CT-REG-004, FE-SHELL-002).
+ */
+export function hasAnyRole(
+  userRoles: readonly string[],
+  required: readonly string[] | undefined,
+): boolean {
+  return !required?.length || required.some((role) => userRoles.includes(role));
+}

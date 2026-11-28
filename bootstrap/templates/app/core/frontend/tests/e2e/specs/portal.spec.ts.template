@@ -1,0 +1,9 @@
+// The portal page responds and renders the login view for guests (guide 404).
+// The mandatory core journeys are added with the views they exercise.
+import { expect, test } from "@playwright/test";
+
+test("guests get the portal page", async ({ page }) => {
+  const response = await page.goto("/portal/login");
+  expect(response?.ok()).toBe(true);
+  await expect(page.locator("#app")).toBeAttached();
+});

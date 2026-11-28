@@ -1,0 +1,161 @@
+// Frontend tasks of the portal over the core app and the installed apps
+// (FE-COMP-006: apps have no tooling of their own; the core app's toolchain
+// lints, checks and tests them). Called by the `just` recipes of every app.
+//
+// Usage: node scripts/portal.ts TASK [APP]
+//   lint       ESLint, Stylelint, Prettier --check
+//   format     ESLint --fix, Prettier --write
+//   typecheck  vue-tsc over the whole portal (every app: one program)
+//   test       Vitest with coverage
+//   generate   generated files (src/icon-names.d.ts, the apps' editor
+//              tsconfig.json)
+// APP limits lint, format and test to one app (the core app: its own frontend);
+// without it every app takes part. Every task first refreshes the generated
+// files.
+/* eslint-disable security/detect-non-literal-fs-filename -- build tooling: paths come from the bench layout, never from user input */
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import path from "node:path";
+
+import * as prettier from "prettier";
+
+import { appsDir, coreApp, coreFrontend, discoverApps, type PortalApp } from "../plugins/apps.ts";
+import { writeIconNames } from "../plugins/emit-shared-assets.ts";
+
+const [task, only] = process.argv.slice(2);
+const apps = discoverApps();
+const known = [coreApp, ...apps.map((app) => app.name)];
+if (only && !known.includes(only)) {
+  console.error(
+    `${only}: not an installed app with a frontend in ${appsDir()} (found: ${known.join(", ")})`,
+  );
+  process.exit(2);
+}
+
+const bin = (tool: string) => path.join(coreFrontend, "node_modules", ".bin", tool);
+const config = (file: string) => path.join(coreFrontend, file);
+
+function run(cmd: string, args: string[], cwd: string, env: NodeJS.ProcessEnv = {}): void {
+  const result = spawnSync(cmd, args, { cwd, stdio: "inherit", env: { ...process.env, ...env } });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+// Frontend folders, as paths inside the apps folder: ESLint takes its base path
+// from the working directory when --config is given, and every app must be
+// inside it. The core app is in the apps folder too (in CI: a link to it).
+const selected = only ? [only] : known;
+const targets = selected.map((name) => path.join(name, "frontend"));
+const cwd = appsDir();
+
+// An app's frontend has no tooling (FE-COMP-006), so the editor would not find
+// the sdk aliases and the dependencies there. Each gets a generated, gitignored
+// tsconfig.json extending the core app's: for the editor only, `just
+// typecheck` checks the portal as one program.
+async function writeEditorConfig(app: PortalApp): Promise<void> {
+  const core = path.relative(app.real, coreFrontend);
+  const tsconfig = {
+    "//": `GENERATED — do not edit; source: ${coreApp}/frontend/tsconfig.json; generator: scripts/portal.ts generate. For the editor only.`,
+    extends: path.join(core, "tsconfig.json"),
+    compilerOptions: { types: [] },
+    include: [
+      "**/*.ts",
+      "**/*.vue",
+      path.join(core, "src", "env.d.ts"),
+      path.join(core, "src", "icon-names.d.ts"),
+    ],
+    exclude: ["**/node_modules"],
+  };
+  const options = (await prettier.resolveConfig(config(".prettierrc.json"))) ?? {};
+  const text = await prettier.format(JSON.stringify(tsconfig), { ...options, parser: "json" });
+  const file = path.join(app.real, "tsconfig.json");
+  if (!existsSync(file) || readFileSync(file, "utf8") !== text) writeFileSync(file, text);
+}
+
+async function generate(): Promise<void> {
+  writeIconNames();
+  for (const app of apps) await writeEditorConfig(app);
+}
+
+function typecheck(): void {
+  const core = ["src/**/*", "tests/**/*", "plugins/**/*", "scripts/**/*", "*.ts"].map((g) =>
+    path.join(coreFrontend, g),
+  );
+  const others = apps.flatMap((app) => [
+    path.join(app.frontend, "**/*.ts"),
+    path.join(app.frontend, "**/*.vue"),
+  ]);
+  const file = path.join(coreFrontend, ".cache", "tsconfig.portal.json");
+  mkdirSync(path.dirname(file), { recursive: true });
+  const exclude = ["**/node_modules", "**/coverage", "**/.cache"];
+  writeFileSync(
+    file,
+    `${JSON.stringify({ extends: "../tsconfig.json", include: [...core, ...others], exclude }, null, 2)}\n`,
+  );
+  run(bin("vue-tsc"), ["--noEmit", "-p", file], coreFrontend);
+}
+
+if (["lint", "format", "typecheck", "test", "generate"].includes(task ?? "")) await generate();
+
+switch (task) {
+  case "lint":
+    run(
+      bin("eslint"),
+      ["--config", config("eslint.config.js"), "--max-warnings=0", ...targets],
+      cwd,
+    );
+    run(
+      bin("stylelint"),
+      [
+        "--config",
+        config("stylelint.config.js"),
+        "--allow-empty-input",
+        ...["coverage", ".cache", "test-results", "playwright-report"].flatMap((d) => [
+          "--ignore-pattern",
+          `**/${d}/**`,
+        ]),
+        // Real paths: the overrides of the configuration (token files) match
+        // paths inside the core app's frontend, where the configuration is.
+        ...targets.map((t) => `${realpathSync(path.join(cwd, t))}/**/*.{css,scss,vue}`),
+      ],
+      coreFrontend,
+    );
+    run(
+      bin("prettier"),
+      [
+        "--check",
+        "--config",
+        config(".prettierrc.json"),
+        "--ignore-path",
+        config(".prettierignore"),
+        ...targets,
+      ],
+      cwd,
+    );
+    break;
+  case "format":
+    run(bin("eslint"), ["--config", config("eslint.config.js"), "--fix", ...targets], cwd);
+    run(
+      bin("prettier"),
+      [
+        "--write",
+        "--config",
+        config(".prettierrc.json"),
+        "--ignore-path",
+        config(".prettierignore"),
+        ...targets,
+      ],
+      cwd,
+    );
+    break;
+  case "typecheck":
+    typecheck();
+    break;
+  case "test":
+    run(bin("vitest"), ["run", "--coverage"], coreFrontend, only ? { PORTAL_TEST_APP: only } : {});
+    break;
+  case "generate":
+    break;
+  default:
+    console.error("usage: node scripts/portal.ts lint|format|typecheck|test|generate [APP]");
+    process.exit(2);
+}

@@ -1,0 +1,143 @@
+// ESLint of the portal: the shared configuration (eslint.shared.js, copied by
+// `just sync-config`, DEL-TOOL-003) plus the boundary rules of the layout
+// (FE-STR-001, 004, 006) and the request rules (FE-CLI-001).
+//
+// scripts/portal.ts runs it from the bench's apps folder with --config, so the
+// same configuration covers the core app and every installed app's frontend.
+// Element patterns are relative to that folder: <app>/frontend/...
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import boundaries from "eslint-plugin-boundaries";
+
+import shared from "./eslint.shared.js";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+
+export default [
+  { ignores: ["**/node_modules/**", "**/coverage/**", "**/.cache/**", "**/dist/**", "**/*.d.ts"] },
+  ...shared,
+  {
+    files: ["**/*.{ts,vue}"],
+    plugins: { boundaries },
+    settings: {
+      "import/resolver": {
+        typescript: { project: path.join(here, "tsconfig.json") },
+      },
+      "boundaries/elements": [
+        { type: "shell", pattern: "*/frontend/src/app" },
+        { type: "platform", pattern: "*/frontend/src/platform/*", capture: ["core", "feature"] },
+        { type: "sdk", pattern: "*/frontend/src/sdk" },
+        { type: "shared", pattern: "*/frontend/src/shared" },
+        { type: "styles", pattern: "*/frontend/src/styles" },
+        { type: "assets", pattern: "*/frontend/src/assets" },
+        { type: "app-feature", pattern: "*/frontend/features/*", capture: ["app", "feature"] },
+        { type: "app-shared", pattern: "*/frontend/shared", capture: ["app"] },
+        // The rest of an app's frontend (manifest.ts); listed last, so features and shared match first.
+        { type: "app-root", pattern: "*/frontend", capture: ["app"] },
+      ],
+    },
+    rules: {
+      // Dependency direction app → platform / features → shared (guide 101).
+      "boundaries/dependencies": [
+        "error",
+        {
+          default: "disallow",
+          policies: [
+            { allow: { to: { element: { types: ["shared"] } } } },
+            {
+              from: { element: { types: ["sdk"] } },
+              allow: { to: { element: { types: ["sdk"] } } },
+            },
+            {
+              from: { element: { types: ["shell"] } },
+              allow: {
+                to: { element: { types: ["shell", "platform", "sdk", "styles", "assets"] } },
+              },
+            },
+            {
+              from: { element: { types: ["platform"] } },
+              allow: { to: { element: { types: ["sdk"] } } },
+            },
+            {
+              from: { element: { types: ["platform"] } },
+              allow: {
+                to: {
+                  element: {
+                    types: ["platform"],
+                    captured: { feature: "{{ from.element.captured.feature }}" },
+                  },
+                },
+              },
+            },
+            {
+              from: { element: { types: ["app-root", "app-feature", "app-shared"] } },
+              allow: { to: { element: { types: ["sdk"] } } },
+            },
+            {
+              from: { element: { types: ["app-root", "app-feature", "app-shared"] } },
+              allow: {
+                to: {
+                  element: {
+                    types: ["app-shared"],
+                    captured: { app: "{{ from.element.captured.app }}" },
+                  },
+                },
+              },
+            },
+            {
+              from: { element: { types: ["app-root"] } },
+              allow: {
+                to: {
+                  element: {
+                    types: ["app-feature"],
+                    captured: { app: "{{ from.element.captured.app }}" },
+                  },
+                },
+              },
+            },
+            {
+              from: { element: { types: ["app-feature"] } },
+              allow: {
+                to: {
+                  element: {
+                    types: ["app-feature"],
+                    captured: {
+                      app: "{{ from.element.captured.app }}",
+                      feature: "{{ from.element.captured.feature }}",
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+      // Every HTTP call goes through shared/frappe/client.ts (FE-CLI-001).
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "Use shared/frappe (FE-CLI-001)." },
+        { name: "XMLHttpRequest", message: "Use shared/frappe (FE-CLI-001)." },
+      ],
+      "no-restricted-imports": [
+        "error",
+        { paths: [{ name: "axios", message: "Use shared/frappe (FE-CLI-001)." }] },
+      ],
+    },
+  },
+  {
+    files: ["*/frontend/src/shared/frappe/client.ts"],
+    rules: { "no-restricted-globals": "off" },
+  },
+  {
+    // Tooling and tests: Node globals, no layout.
+    files: [
+      "*/frontend/*.{js,ts}",
+      "*/frontend/plugins/**",
+      "*/frontend/scripts/**",
+      "**/*.test.ts",
+      "*/frontend/tests/**",
+    ],
+    rules: { "boundaries/dependencies": "off" },
+  },
+];

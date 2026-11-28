@@ -1,0 +1,6 @@
+// The only place for raw non-typographic values: palette, radii, shadows,
+// spacing (FE-STY-002). Placeholders until the design system is defined.
+$surface-light: #fff;
+$on-surface-light: #1a1a1a;
+$surface-dark: #121212;
+$on-surface-dark: #ececec;

@@ -1,0 +1,28 @@
+# 0002 · Standard recipes that only apply to app repositories
+
+- Status: accepted
+- Date: @@TODAY@@
+- Guide version: @@GUIDE_VERSION@@
+- Rules concerned: DEL-CI-001
+
+## Context
+
+Guide 501 lists standard recipes for every repository. Some of them act on
+things only an app has: generated artefacts, a portal or integration API, a
+minimal site with one app installed.
+
+## Decision
+
+| Recipe | In this repository |
+|---|---|
+| `generate` | Runs, and reports that there are no generators |
+| `check-generated` | Runs (`git diff --exit-code` after `generate`) and is part of `just ci` |
+| `api-diff` | Prints `not applicable` and passes: the platform has no API; each app diffs its own at level 1 |
+| `test-backend site=minimal` | Refused: the platform tests the full site only (level 2); apps run the minimal site at level 1 |
+
+## Consequences
+
+- Every standard recipe exists, so tooling and people can call any of them in
+  any repository.
+- If the platform ever gains generated files or an API, the recipe gets a real
+  body and this ADR is superseded.

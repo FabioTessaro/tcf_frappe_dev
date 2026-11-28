@@ -1,0 +1,14 @@
+// What @@APP@@ renders in the portal (CT-REG, guide 33). The id equals the
+// `portal_apps` hook id in @@APP@@/hooks.py (CT-REG-003). Routes come from
+// the features (features/<feature>/routes.ts), views lazy-loaded.
+import { defineApp } from "@sdk";
+
+export default defineApp({
+  id: "@@APP@@",
+  title: "@@APP@@.app.title",
+  icon: "apps",
+  basePath: "/@@APP_ROUTE@@",
+  navigation: [],
+  routes: [],
+  recordRoutes: {},
+});

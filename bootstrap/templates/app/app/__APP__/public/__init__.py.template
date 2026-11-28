@@ -1,0 +1,6 @@
+"""Public backend surface of @@APP@@ (BE-INT-001).
+
+Other apps that list @@APP@@ in `required_apps` may import only from this
+package: read-only helpers, the settings accessor, role constants, capability
+providers and pydantic models. It never returns doctype objects (BE-INT-002).
+"""

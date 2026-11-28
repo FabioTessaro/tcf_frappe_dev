@@ -1,5 +1,5 @@
-# Level 2 (guide 501): on every change to platform.lock or the image, on main,
-# and nightly. On main it also pushes the signed release candidate main-<sha>
+# Level 2 (guide 501): on pull requests that change platform.lock, the image,
+# the stack, the tools or the level-2 recipes; on main; nightly. On main it also pushes the signed release candidate main-<sha>
 # that a release promotes (DEL-REL-005). If ci-image/Dockerfile changed in the
 # same push, the CI image may still be publishing: re-run the job.
 name: "CI · Platform · L2 integration"
@@ -7,7 +7,7 @@ run-name: "CI · Platform · L2 · ${{ github.event_name == 'schedule' && 'night
 
 on:
   pull_request:
-    paths: [platform.lock, docker/**, compose/**, tools/**]
+    paths: [platform.lock, docker/**, compose/**, tools/**, justfile, .github/workflows/ci-platform-l2.yml]
   push:
     branches: [main]
   schedule:
@@ -31,12 +31,14 @@ jobs:
         - /var/run/docker.sock:/var/run/docker.sock
     env:
       APPS_READ_TOKEN: ${{ secrets.APPS_READ_TOKEN }}
-      COSIGN_PRIVATE_KEY: ${{ github.ref == 'refs/heads/main' && secrets.COSIGN_PRIVATE_KEY || '' }}
-      COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+      # Signing only for pushes to main (and manual re-runs): a nightly rebuild
+      # must not replace the release candidate main-<sha> of a commit.
+      COSIGN_PRIVATE_KEY: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && secrets.COSIGN_PRIVATE_KEY || '' }}
+      COSIGN_PASSWORD: ${{ github.ref == 'refs/heads/main' && github.event_name != 'schedule' && secrets.COSIGN_PASSWORD || '' }}
     steps:
       - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
       - run: just level2
-      - if: github.ref == 'refs/heads/main'
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'schedule'
         run: just sign

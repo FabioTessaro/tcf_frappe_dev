@@ -1,0 +1,18 @@
+# Security policy
+
+## Scope
+
+This repository holds the @@APP_KIND@@ app `@@APP@@` of the platform. Report
+flaws in its code, its configuration or its dependencies here.
+
+## Reporting a vulnerability
+
+Don't open a public issue. Report it privately through GitHub's private
+vulnerability reporting:
+[Report a vulnerability](https://github.com/@@OWNER@@/@@APP@@/security/advisories/new).
+
+You get an acknowledgement within 5 working days.
+
+## Supported versions
+
+Only the version in the latest platform release and `main` receive fixes.

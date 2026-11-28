@@ -1,0 +1,50 @@
+// emit-shared-assets (guide 107): the icon union of every app's icons.json,
+// as src/icon-names.d.ts (so an unknown icon name fails type checking,
+// FE-ICON-004) and as public/shared-assets/manifest.json for the website.
+// The subset icon font and the brand files are not produced yet
+// (docs/conformance.md: FE-ICON-001, FE-ICON-003).
+/* eslint-disable security/detect-non-literal-fs-filename -- build tooling: paths come from the bench layout, never from user input */
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import type { Plugin } from "vite";
+
+import { coreApp, coreFrontend, generatedHeader, iconUnion } from "./apps.ts";
+
+const iconNamesFile = path.join(coreFrontend, "src", "icon-names.d.ts");
+const sharedAssetsDir = path.join(coreFrontend, "..", coreApp, "public", "shared-assets");
+
+function writeIfChanged(file: string, content: string): void {
+  if (existsSync(file) && readFileSync(file, "utf8") === content) return;
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, content);
+}
+
+/** Source of src/icon-names.d.ts for NAMES (exported for tests). */
+export function iconNamesSource(names: string[]): string {
+  const union = names.length ? names.map((n) => JSON.stringify(n)).join(" | ") : "never";
+  return `${generatedHeader("every app's icons.json", "emit-shared-assets")}export type IconName = ${union};\n`;
+}
+
+/** Write src/icon-names.d.ts from the installed apps (also run by `just generate`). */
+export function writeIconNames(): void {
+  writeIfChanged(iconNamesFile, iconNamesSource(iconUnion()));
+}
+
+export function emitSharedAssetsPlugin(): Plugin {
+  return {
+    name: "portal:emit-shared-assets",
+    buildStart() {
+      writeIconNames();
+    },
+    closeBundle() {
+      const icons = iconUnion();
+      // Stable content: the version changes only when the icon set does (FE-ASSET-001).
+      const version = createHash("sha256").update(icons.join("\n")).digest("hex").slice(0, 12);
+      writeIfChanged(
+        path.join(sharedAssetsDir, "manifest.json"),
+        `${JSON.stringify({ version, icons }, null, 2)}\n`,
+      );
+    },
+  };
+}

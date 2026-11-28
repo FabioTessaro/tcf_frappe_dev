@@ -313,8 +313,35 @@ cx() { dc exec -T -u "$CONTAINER_USER" -w "$CONTAINER_WORKSPACE" frappe "$@"; }
 # cx_root ARGS — same, as root.
 cx_root() { dc exec -T -u root frappe "$@"; }
 
-# provision STEP ARGS — run bootstrap/container/provision.sh inside the container.
-provision() { cx bash "$CONTAINER_WORKSPACE/bootstrap/container/provision.sh" "$@"; }
+# in_dev_container — true when this script runs inside the frappe container
+# (where the repository is mounted at $CONTAINER_WORKSPACE).
+in_dev_container() { [[ -f /.dockerenv && "$REPO_ROOT" == "$CONTAINER_WORKSPACE" ]]; }
+
+# provision STEP ARGS — run bootstrap/container/provision.sh inside the
+# container (directly when this script already runs there).
+provision() {
+  if in_dev_container; then bash "$REPO_ROOT/bootstrap/container/provision.sh" "$@"
+  else cx bash "$CONTAINER_WORKSPACE/bootstrap/container/provision.sh" "$@"; fi
+}
+
+# dev_run DIR CMD... — run CMD in DIR (a path under the repository) as the
+# bench user inside the frappe container, directly when already there.
+dev_run() {
+  local dir="$1"; shift
+  if in_dev_container; then (cd "$dir" && "$@"); return; fi
+  dc exec -T -u "$CONTAINER_USER" -w "$CONTAINER_WORKSPACE${dir#"$REPO_ROOT"}" frappe \
+    bash -c 'export PATH="$HOME/.local/bin:$PATH"; exec "$@"' _ "$@"
+}
+
+# gh_container_login — log the frappe container's GitHub CLI in with the host's
+# token (host only). The token travels on stdin, never on a command line.
+gh_container_login() {
+  in_dev_container && return 0
+  local token
+  token=$(gh auth token 2>/dev/null) && [[ -n "$token" ]] || { echo "gh is not logged in on the host" >&2; return 1; }
+  printf '%s\n' "$token" | dc exec -T -u "$CONTAINER_USER" frappe bash -c \
+    'export PATH="$HOME/.local/bin:$PATH"; gh auth login --hostname github.com --git-protocol ssh --with-token && gh auth status --hostname github.com'
+}
 
 # --- misc -----------------------------------------------------------------------
 contains() { local n="$1" x; shift; for x in "$@"; do [[ "$x" == "$n" ]] && return 0; done; return 1; }

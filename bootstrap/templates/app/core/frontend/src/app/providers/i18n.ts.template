@@ -1,0 +1,43 @@
+// Portal strings (guide 108): core common strings, core features and every
+// app's locale files, merged per language (FE-I18N-002, 003).
+import { createI18n } from "vue-i18n";
+
+import { boot } from "@shared/frappe";
+import { defaultLanguage, languageOf, mergeLocales, type Messages } from "@shared/i18n";
+import { locales as appLocales } from "virtual:portal-registry";
+
+const coreFiles = import.meta.glob<Messages>(
+  ["../../shared/i18n/locales/*.json", "../../platform/*/locales/*.json"],
+  {
+    eager: true,
+    import: "default",
+  },
+);
+
+/** Messages per language from core FILES (path → messages) and app locales. */
+export function collectMessages(
+  files: Record<string, Messages>,
+  apps: readonly { lang: string; messages: Messages }[],
+): Record<string, Messages> {
+  const byLang = new Map<string, Messages[]>();
+  const add = (lang: string, messages: Messages) =>
+    byLang.set(lang, [...(byLang.get(lang) ?? []), messages]);
+  for (const [file, messages] of Object.entries(files)) {
+    add(
+      file
+        .split("/")
+        .pop()
+        ?.replace(/\.json$/, "") ?? defaultLanguage,
+      messages,
+    );
+  }
+  for (const { lang, messages } of apps) add(lang, messages);
+  return Object.fromEntries([...byLang].map(([lang, list]) => [lang, mergeLocales(...list)]));
+}
+
+export const i18n = createI18n({
+  legacy: false,
+  locale: languageOf(boot.lang).code,
+  fallbackLocale: defaultLanguage,
+  messages: collectMessages(coreFiles, appLocales),
+});

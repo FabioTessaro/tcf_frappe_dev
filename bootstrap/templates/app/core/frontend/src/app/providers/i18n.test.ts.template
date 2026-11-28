@@ -1,0 +1,13 @@
+import { describe, expect, it } from "vitest";
+
+import { collectMessages } from "./i18n";
+
+describe("collectMessages", () => {
+  it("merges core files and app locales per language", () => {
+    const messages = collectMessages(
+      { "../../shared/i18n/locales/en.json": { common: { ok: "OK" } } },
+      [{ lang: "en", messages: { hr: { app: { title: "HR" } } } }],
+    );
+    expect(messages).toEqual({ en: { common: { ok: "OK" }, hr: { app: { title: "HR" } } } });
+  });
+});

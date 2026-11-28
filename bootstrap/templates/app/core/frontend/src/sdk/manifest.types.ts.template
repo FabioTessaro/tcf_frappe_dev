@@ -1,0 +1,22 @@
+import type { RouteRecordRaw } from "vue-router";
+
+import type { NavGroup, NavItem } from "./nav.types";
+
+/** What an app renders in the portal (CT-REG, guide 33). */
+export interface AppManifest {
+  /** Equal to the app's `portal_apps` hook id (CT-REG-003). */
+  id: string;
+  /** Translation key of the display title. */
+  title: string;
+  /** Material Symbols name from the icon union. */
+  icon: string;
+  /** Base portal route of the app, e.g. "/hr" (never "/app", SYS-ACC-007). */
+  basePath: string;
+  navigation: (NavItem | NavGroup)[];
+  /** The app's routes, aggregated from its features; views lazy-loaded (FE-COMP-007). */
+  routes: RouteRecordRaw[];
+  roles?: string[];
+  partyTypes?: string[];
+  /** Doctype → portal route pattern, e.g. "Leave Request" → "/hr/leave-requests/:name" (CT-REG-005). */
+  recordRoutes?: Record<string, string>;
+}

@@ -1,0 +1,6 @@
+node_modules/
+coverage/
+.cache/
+test-results/
+playwright-report/
+src/icon-names.d.ts

@@ -9,6 +9,8 @@ version = "@@FRAPPE_VERSION@@"
 commit = "@@FRAPPE_SHA@@"
 
 # [<app>]
+# kind = "feature"  # core | foundation | feature | site; keep it above repository:
+#                   # Renovate needs repository, version, commit on consecutive lines
 # repository = "https://github.com/@@OWNER@@/<app>"
 # version = "v1.0.0"
 # commit = "<40-character SHA the tag points to>"

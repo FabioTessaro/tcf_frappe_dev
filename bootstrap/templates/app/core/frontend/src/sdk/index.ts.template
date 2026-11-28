@@ -1,0 +1,8 @@
+// The frontend sdk: with `shared`, the only part of the core app other apps
+// import (FE-SDK-001). Versioned with core_sdk_version (FE-SDK-002); small
+// (FE-SDK-003).
+export { defineApp } from "./define-app";
+export type { AppManifest } from "./manifest.types";
+export type { NavGroup, NavItem } from "./nav.types";
+export { hasAnyRole } from "./permissions";
+import "./route-meta.types";

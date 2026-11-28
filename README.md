@@ -55,8 +55,8 @@ cd frappe-dev
 ./new-platform.sh # 4. create (or check out) the platform repository
 ```
 
-Custom apps are then created with `./new-app.sh` (core app first; being
-rebuilt, see below), which adds each app to `.env` and the bench.
+Custom apps are then created with `./new-app.sh` (core app first), which adds
+each app to `.env` and the bench.
 
 Then:
 
@@ -235,6 +235,40 @@ Recipes that build images run on the host, inside the CI image: `cd platform
 | `--no-push` | scaffold and commit locally only, no GitHub calls |
 | `-y, --yes` | no confirmation |
 
+### `new-app.sh` — an empty app
+
+Creates an app repository that follows the guide, or checks one out, and adds
+it to the development environment. It runs on the host or inside the frappe
+container (`initialize.sh` logs the container's `gh` in with the host's
+token).
+
+| Kind | What it gets |
+|---|---|
+| `core` (first, exactly one) | the portal: shell, blank auth and launcher views, frontend and backend sdks, and the whole frontend toolchain (Vite, Vitest, Playwright, ESLint, Stylelint, Prettier, Tailwind, vue-tsc) that builds, lints and tests every app's frontend |
+| `foundation` | backend only: `public/` surface, no frontend |
+| `feature` | backend plus `frontend/manifest.ts` (launcher entry with no roles yet), checked by the core app's toolchain |
+
+Every app gets the mandatory files (README "Targets…", `SECURITY.md`,
+`justfile` with the standard recipes, `docs/conformance.md` listing the open
+rules, ADRs), the shared configuration and CI workflow of the platform commit
+on `origin/main`, and lockfiles resolved at creation. Then the GitHub
+repository is created and pushed, the ruleset applied (required check
+`ci / level1`), and the app goes into `CUSTOM_APPS`, the bench, the main and
+full test sites (the core app also the minimal test site), the portal build and
+the VS Code workspace. Running it again completes whatever is missing.
+
+When CI has to read a private repository (the platform, a dependency, or the
+new app itself for the platform's level-2 CI), the repositories involved need
+the `APPS_READ_TOKEN` secret: a fine-grained token with read-only access to
+your repositories, created and added by hand. `new-app.sh` checks which
+repositories lack it and prints the steps.
+
+| Option | Meaning |
+|---|---|
+| `--answers FILE` | answers without prompting (`bootstrap/templates/new-app.answers.example.conf`) |
+| `--no-push` | scaffold and commit into `--dir` only (default `.state/new-app/<app>`): no GitHub, `.env` or bench changes |
+| `-y, --yes` | no confirmation |
+
 ### `teardown.sh` — stop and clean
 
 A checklist, or flags. Running it with `--all` returns the folder to a fresh
@@ -393,6 +427,7 @@ contribute is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 ├── reseed.sh                  # VS Code Server refresh
 ├── teardown.sh                # stop & clean
 ├── new-platform.sh            # create or check out the platform repository
+├── new-app.sh                 # create or check out an app (core, foundation, feature)
 ├── platform/                  # its checkout (own git repository, gitignored)
 ├── bootstrap/
 │   ├── settings.conf          # script-level settings
@@ -411,8 +446,8 @@ contribute is in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 └── ruff.toml                  # Python lint/format settings
 ```
 
-`new-app.sh`, `check-env.sh` and the frontend toolchain setup (`setup-env.sh`)
-of the previous scripts will be rebuilt on this structure (`new-app.sh` next).
+`check-env.sh` of the previous scripts will be rebuilt on this structure. Site
+apps (`new-app.sh` kind `site`) come later.
 
 ## License
 

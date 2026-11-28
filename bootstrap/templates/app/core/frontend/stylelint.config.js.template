@@ -1,0 +1,29 @@
+// Stylelint of the portal: the shared configuration (stylelint.shared.js,
+// copied by `just sync-config`, DEL-TOOL-003), plus Vue single-file
+// components, Tailwind's at-rules, and raw values allowed only in token and
+// typography files (FE-STY-002).
+import shared from "./stylelint.shared.js";
+
+export default {
+  ...shared,
+  rules: {
+    ...shared.rules,
+    "scss/at-rule-no-unknown": [
+      true,
+      { ignoreAtRules: ["tailwind", "apply", "layer", "config", "screen"] },
+    ],
+    "at-rule-no-unknown": null,
+  },
+  overrides: [
+    { files: ["**/*.vue"], customSyntax: "postcss-html" },
+    {
+      files: ["**/src/styles/themes/_tokens.scss", "**/src/styles/typography/**/*.scss"],
+      rules: {
+        "color-no-hex": null,
+        "color-named": null,
+        "function-disallowed-list": null,
+        "declaration-property-value-disallowed-list": null,
+      },
+    },
+  ],
+};

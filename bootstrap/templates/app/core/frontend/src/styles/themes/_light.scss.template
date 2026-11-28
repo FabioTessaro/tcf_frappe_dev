@@ -1,0 +1,7 @@
+@use "tokens";
+
+// Every theme defines every token (FE-STY-006).
+:root {
+  --color-surface: #{tokens.$surface-light};
+  --color-on-surface: #{tokens.$on-surface-light};
+}

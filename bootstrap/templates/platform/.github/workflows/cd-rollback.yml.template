@@ -39,4 +39,6 @@ jobs:
           fetch-depth: 0 # the release tag of the version rolled back to
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - run: just rollback "${{ inputs.environment }}"
+      - run: just rollback "$TARGET"
+        env:
+          TARGET: ${{ inputs.environment }}

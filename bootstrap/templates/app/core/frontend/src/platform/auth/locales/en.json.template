@@ -1,0 +1,8 @@
+{
+  "@@APP@@": {
+    "auth": {
+      "login": { "title": "Sign in" },
+      "reset_password": { "title": "Reset password" }
+    }
+  }
+}

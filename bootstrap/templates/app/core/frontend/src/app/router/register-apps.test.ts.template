@@ -1,0 +1,25 @@
+import { describe, expect, it } from "vitest";
+
+import { defineApp } from "@sdk";
+
+import { appRoutes } from "./register-apps";
+
+const layout = { template: "<div />" };
+
+describe("appRoutes", () => {
+  it("gives every app a subtree under its base path", () => {
+    const view = () => Promise.resolve(layout);
+    const manifest = defineApp({
+      id: "hr",
+      title: "hr.app.title",
+      icon: "apps",
+      basePath: "/hr",
+      navigation: [],
+      routes: [{ path: "", name: "hr-home", component: view }],
+      roles: ["Employee"],
+    });
+    const [route] = appRoutes([manifest], layout);
+    expect(route).toMatchObject({ path: "/hr", component: layout, meta: { roles: ["Employee"] } });
+    expect(route?.children).toHaveLength(1);
+  });
+});

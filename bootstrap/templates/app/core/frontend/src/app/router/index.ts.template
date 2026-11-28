@@ -1,0 +1,21 @@
+import { createRouter, createWebHistory, type Router } from "vue-router";
+
+import type { AppManifest } from "@sdk";
+
+import AppShellLayout from "../layouts/AppShellLayout";
+
+import { installGuards } from "./guards";
+import { appRoutes } from "./register-apps";
+import { catchAllRoute, coreRoutes } from "./routes";
+
+/** The portal path: history base of the router and Frappe route of the portal page (SYS-ACC-007). */
+export const portalPath = "/portal";
+
+export function createPortalRouter(manifests: readonly AppManifest[]): Router {
+  const router = createRouter({
+    history: createWebHistory(portalPath),
+    routes: [...coreRoutes, ...appRoutes(manifests, AppShellLayout), catchAllRoute],
+  });
+  installGuards(router);
+  return router;
+}

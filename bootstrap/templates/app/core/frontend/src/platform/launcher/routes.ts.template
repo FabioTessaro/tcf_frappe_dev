@@ -1,0 +1,20 @@
+import type { RouteRecordRaw } from "vue-router";
+
+export const launcherRoutes: RouteRecordRaw[] = [
+  {
+    path: "",
+    name: "launcher",
+    component: () => import("./views/LauncherView"),
+    meta: { title: "@@APP@@.launcher.title" },
+  },
+];
+
+// Unknown routes: guests are sent to login by the guard, users see this (FE-SHELL-005).
+export const notFoundRoutes: RouteRecordRaw[] = [
+  {
+    path: "",
+    name: "not-found",
+    component: () => import("./views/NotFoundView"),
+    meta: { title: "@@APP@@.launcher.not_found.title" },
+  },
+];

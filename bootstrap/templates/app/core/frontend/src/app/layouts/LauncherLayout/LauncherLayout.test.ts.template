@@ -1,0 +1,10 @@
+import { mount } from "@vue/test-utils";
+import { describe, expect, it } from "vitest";
+
+import LauncherLayout from "./LauncherLayout.vue";
+
+describe("LauncherLayout", () => {
+  it("renders", () => {
+    expect(mount(LauncherLayout, { global: { stubs: { RouterView: true } } }).exists()).toBe(true);
+  });
+});

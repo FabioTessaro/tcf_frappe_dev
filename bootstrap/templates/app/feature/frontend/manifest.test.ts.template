@@ -1,0 +1,12 @@
+import { describe, expect, it } from "vitest";
+
+import manifest from "./manifest";
+
+describe("manifest of @@APP@@", () => {
+  it("uses the app name as id (CT-REG-003)", () => {
+    expect(manifest.id).toBe("@@APP@@");
+  });
+  it("has its own base path", () => {
+    expect(manifest.basePath).toBe("/@@APP_ROUTE@@");
+  });
+});

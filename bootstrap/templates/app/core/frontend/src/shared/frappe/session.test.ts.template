@@ -1,0 +1,37 @@
+import { describe, expect, it } from "vitest";
+
+import { isLoggedIn, readBoot } from "./session";
+
+function page(content: string | null): Document {
+  const doc = document.implementation.createHTMLDocument();
+  if (content !== null) {
+    const script = doc.createElement("script");
+    script.id = "boot";
+    script.type = "application/json";
+    script.textContent = content;
+    doc.body.append(script);
+  }
+  return doc;
+}
+
+describe("readBoot", () => {
+  it("reads the injected boot data", () => {
+    expect(readBoot(page('{"lang": "en", "session": {"user": "u"}}'))).toMatchObject({
+      lang: "en",
+    });
+  });
+  it("is empty without valid boot data", () => {
+    expect(readBoot(page(null))).toEqual({});
+    expect(readBoot(page("{{ boot_json | safe }}"))).toEqual({});
+    expect(readBoot(page("42"))).toEqual({});
+  });
+});
+
+describe("isLoggedIn", () => {
+  it("needs a session", () => {
+    expect(isLoggedIn({})).toBe(false);
+    expect(
+      isLoggedIn({ session: { user: "u", full_name: "U", roles: [], user_type: "System User" } }),
+    ).toBe(true);
+  });
+});

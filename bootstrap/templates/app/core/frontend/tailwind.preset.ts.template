@@ -1,0 +1,19 @@
+// The portal's Tailwind preset (FE-COMP-005): palette, radii and spacing map to
+// the design tokens of src/styles/themes/ (CSS custom properties), so
+// utilities never carry raw values (FE-STY-001). Typography utilities are
+// added with the type roles of src/styles/typography/ (FE-TYP-001).
+import type { Config } from "tailwindcss";
+
+const preset: Partial<Config> = {
+  theme: {
+    colors: {
+      transparent: "transparent",
+      current: "currentColor",
+      surface: "var(--color-surface)",
+      "on-surface": "var(--color-on-surface)",
+    },
+    extend: {},
+  },
+};
+
+export default preset;

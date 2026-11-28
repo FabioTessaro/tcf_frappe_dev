@@ -1,0 +1,48 @@
+[project]
+name = "@@APP@@"
+authors = [{ name = "@@PUBLISHER@@" }]
+description = "@@APP_DESCRIPTION@@"
+requires-python = ">=3.14,<3.15"
+readme = "README.md"
+license = "@@LICENSE_SPDX@@"
+dynamic = ["version"]
+# Frappe and pydantic come from the bench (BE-LAY-006: apps never pin pydantic).
+dependencies = []
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=16.0.0,<17.0.0"
+
+# Import boundaries (SYS-DEP-004, BE-STR-004/005, BE-SDK-001), checked by
+# `just lint` (import-linter). Add one contract per new rule, never remove one.
+[tool.importlinter]
+@@IF IS_CORE@@
+root_packages = ["@@APP@@"]
+
+[[tool.importlinter.contracts]]
+name = "The sdk does not depend on the rest of the core app (BE-SDK-004, FE-SDK-001)"
+type = "forbidden"
+source_modules = ["@@APP@@.sdk"]
+forbidden_modules = ["@@APP@@.www", "@@APP@@.@@APP@@_shared"]
+@@ENDIF IS_CORE@@
+@@IFNOT IS_CORE@@
+root_packages = ["@@APP@@", "@@CORE_APP@@"]
+
+[[tool.importlinter.contracts]]
+name = "Only the core sdk is imported from the core app (BE-SDK-001, SYS-DEP-004)"
+type = "forbidden"
+source_modules = ["@@APP@@"]
+forbidden_modules = ["@@CORE_APP@@"]
+ignore_imports = ["@@APP@@.** -> @@CORE_APP@@.sdk", "@@APP@@.** -> @@CORE_APP@@.sdk.**"]
+# The app may not import the sdk at all yet.
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "The public surface does not reach into features (BE-INT-001)"
+type = "forbidden"
+source_modules = ["@@APP@@.public"]
+forbidden_modules = ["@@APP@@.@@APP@@_shared"]
+@@ENDIF IS_CORE@@

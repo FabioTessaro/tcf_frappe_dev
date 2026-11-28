@@ -1,0 +1,17 @@
+/** Route metadata read by the shell and its guards (guide 102). */
+import "vue-router";
+
+declare module "vue-router" {
+  interface RouteMeta {
+    /** Reachable without a session; only the auth routes carry it (FE-SHELL-001). */
+    public?: boolean;
+    /** Roles needed to open the route (UX only, FE-SHELL-002). */
+    roles?: string[];
+    /** Party Type codes; external users must be member of a party with one of them. */
+    partyTypes?: string[];
+    /** Translation key of the page title. */
+    title?: string;
+  }
+}
+
+export {};

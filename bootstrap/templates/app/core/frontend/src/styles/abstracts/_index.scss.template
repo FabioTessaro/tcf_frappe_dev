@@ -1,0 +1,5 @@
+// The single forwarding point of the abstracts: components import them only
+// through this file (FE-STY-004). It emits no CSS.
+@forward "variables";
+@forward "mixins";
+@forward "functions";

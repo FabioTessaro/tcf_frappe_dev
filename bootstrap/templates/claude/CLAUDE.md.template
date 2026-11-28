@@ -2,7 +2,9 @@
 @@# Template for frappe-bench/CLAUDE.md — rendered by ./initialize.sh when
 @@# Claude Code is installed in the container.
 @@#   @@SITE_NAME@@ @@TEST_SITE_NAME@@ @@TEST_MINIMAL_SITE_NAME@@
-@@#   @@VENDORED_APPS@@ @@CUSTOM_APPS@@ @@CORE_APP@@ @@VENDORED_EXCLUDES@@
+@@#   @@VENDORED_APPS@@ @@VENDORED_EXCLUDES@@
+@@# Custom apps are not listed: they come and go with ./new-app.sh, so the
+@@# file describes how to recognise them instead.
 @@# ---------------------------------------------------------------------------
 # frappe-bench
 
@@ -52,8 +54,22 @@ Rules to apply while working:
   @@VENDORED_APPS@@ — upstream github.com/frappe/*. Edit/Write are blocked on
   these via `.claude/settings.json`; reading them to check an API or hook
   signature is fine, but changes belong upstream.
-- **Custom apps — this is the actual codebase:** @@CUSTOM_APPS@@
-  (core app: @@CORE_APP@@). Work happens here.
+- **Custom apps — this is the actual codebase:** every other folder in
+  `apps/`. Work happens here. Each is its own git repository, created by
+  `../new-app.sh` and following the guide's layout; list them with
+  `ls apps/*/docs/conformance.md`. In each:
+  - `README.md` says its kind (core, foundation or feature app) and whether it
+    conforms to or only targets the guide; `docs/conformance.md` lists the
+    rules that do not hold yet, `docs/adr/` its decisions;
+  - `hooks.py` holds `required_apps`: import only from those apps, and only
+    their `sdk` (core) or `public` surface (SYS-DEP-004);
+  - the `justfile` has the checks: run `just ci` (or `just lint`,
+    `just typecheck`, `just test-unit`, `just test-backend`) in the app folder.
+- **The core app** is the custom app with `frontend/package.json`: the portal
+  shell, the backend and frontend sdks, and the one frontend toolchain that
+  builds, lints and tests every app's frontend. Other apps' `frontend/` folders
+  have no tooling of their own (FE-COMP-006); their `tsconfig.json` is
+  generated for the editor and gitignored.
 - **Platform repository — `/workspace/platform`** (when checked out): release
   definition (`platform.lock`), CI image, reusable CI workflow and the shared
   tool configuration. Files that apps copy from it (`ruff.toml`, `mypy.ini`,

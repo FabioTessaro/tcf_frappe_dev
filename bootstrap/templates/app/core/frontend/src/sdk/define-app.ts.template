@@ -1,0 +1,6 @@
+import type { AppManifest } from "./manifest.types";
+
+/** Declare an app's manifest with full type checking (guide 103). */
+export function defineApp(manifest: AppManifest): AppManifest {
+  return manifest;
+}

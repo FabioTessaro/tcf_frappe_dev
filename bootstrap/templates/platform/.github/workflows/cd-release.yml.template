@@ -34,4 +34,6 @@ jobs:
           fetch-depth: 0
       - name: Log in to ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-      - run: just release "${{ inputs.version }}"
+      - run: just release "$VERSION"
+        env:
+          VERSION: ${{ inputs.version }}

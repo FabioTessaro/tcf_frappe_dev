@@ -1,0 +1,14 @@
+import { describe, expect, it } from "vitest";
+
+import { hasAnyRole } from "./permissions";
+
+describe("hasAnyRole", () => {
+  it("allows when nothing is required", () => {
+    expect(hasAnyRole([], undefined)).toBe(true);
+    expect(hasAnyRole([], [])).toBe(true);
+  });
+  it("needs one of the required roles", () => {
+    expect(hasAnyRole(["Employee"], ["HR Manager", "Employee"])).toBe(true);
+    expect(hasAnyRole(["Employee"], ["HR Manager"])).toBe(false);
+  });
+});

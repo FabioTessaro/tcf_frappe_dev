@@ -1,0 +1,16 @@
+"""Boot data of the portal page (CT-BOOT-001).
+
+Guests get only the guest column of guide 32 (CT-BOOT-002, SYS-ACC-004).
+"""
+
+from typing import Any
+
+import frappe
+
+
+def boot() -> dict[str, Any]:
+    """Return the boot data of the current request."""
+    return {
+        "csrf_token": frappe.sessions.get_csrf_token(),
+        "lang": frappe.local.lang,
+    }

@@ -1,0 +1,7 @@
+@use "tokens";
+
+// Every theme defines every token (FE-STY-006).
+:root[data-theme="dark"] {
+  --color-surface: #{tokens.$surface-dark};
+  --color-on-surface: #{tokens.$on-surface-dark};
+}

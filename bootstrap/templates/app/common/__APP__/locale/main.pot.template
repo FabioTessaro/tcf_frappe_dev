@@ -1,0 +1,17 @@
+# Translations template for @@APP_TITLE@@.
+# Copyright (C) @@YEAR@@ @@PUBLISHER@@
+# This file is distributed under the same license as the @@APP_TITLE@@ project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, @@YEAR@@.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: @@APP_TITLE@@ VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: @@POT_DATE@@\n"
+"PO-Revision-Date: @@POT_DATE@@\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel @@BABEL_VERSION@@\n"

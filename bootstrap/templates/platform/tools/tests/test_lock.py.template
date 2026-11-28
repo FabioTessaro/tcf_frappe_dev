@@ -31,6 +31,14 @@ class LockTests(unittest.TestCase):
         for text in ("[frappe] is missing", "40-character", "kind must be", "https://"):
             self.assertIn(text, found)
 
+    def test_lock_keys_must_be_in_renovate_order(self) -> None:
+        entry = {"repository": "https://x", "kind": "feature", "version": "v1.0.0", "commit": SHA}
+        frappe = {"repository": "https://x", "version": "v16.0.0", "commit": SHA}
+        found = "\n".join(lock.problems({"frappe": frappe, "hr": entry}))
+        self.assertIn("consecutive", found)
+        ordered = {"kind": "feature", **frappe}
+        self.assertEqual(lock.problems({"frappe": frappe, "hr": ordered}), [])
+
     def test_apps_and_core(self) -> None:
         entry = {"repository": "https://x", "version": "v1.0.0", "commit": SHA}
         data = {
@@ -51,7 +59,12 @@ class ContractTests(unittest.TestCase):
             "base": {**entry, "version": "v0.1.0", "kind": "core"},
             "hr": {**entry, "version": "v0.1.0", "kind": "feature"},
         }
-        write(self.root / "base/base/hooks.py", "required_apps = []\n")
+        write(
+            self.root / "base/base/hooks.py",
+            'required_apps: list[str] = []
+core_sdk_version = "0.1.0"
+',
+        )
         write(
             self.root / "hr/hr/hooks.py",
             'required_apps = ["base"]\ncore_sdk_version = ">=0.1,<0.2"\n'

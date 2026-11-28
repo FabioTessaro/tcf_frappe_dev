@@ -1,0 +1,16 @@
+// Tailwind scans the core app and every installed app's frontend (FE-COMP-005).
+import path from "node:path";
+
+import type { Config } from "tailwindcss";
+
+import { coreFrontend, discoverApps } from "./plugins/apps.ts";
+import preset from "./tailwind.preset.ts";
+
+export default {
+  presets: [preset],
+  content: [
+    path.join(coreFrontend, "index.html"),
+    path.join(coreFrontend, "src", "**", "*.{vue,ts}"),
+    ...discoverApps().map((app) => path.join(app.frontend, "**", "*.{vue,ts}")),
+  ],
+} satisfies Config;

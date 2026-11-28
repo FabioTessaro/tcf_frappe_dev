@@ -1,0 +1,24 @@
+// copy-index-html (FE-COMP-010): the built entry page becomes the portal page
+// of the core app, @@APP@@/www/portal.html, served by www/portal.py.
+/* eslint-disable security/detect-non-literal-fs-filename -- build tooling: paths come from the bench layout, never from user input */
+import { copyFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
+import type { Plugin, ResolvedConfig } from "vite";
+
+import { coreApp, coreFrontend } from "./apps.ts";
+
+export function copyIndexHtmlPlugin(): Plugin {
+  let config: ResolvedConfig;
+  return {
+    name: "portal:copy-index-html",
+    apply: "build",
+    configResolved(resolved) {
+      config = resolved;
+    },
+    closeBundle() {
+      const target = path.join(coreFrontend, "..", coreApp, "www", "portal.html");
+      mkdirSync(path.dirname(target), { recursive: true });
+      copyFileSync(path.join(config.build.outDir, "index.html"), target);
+    },
+  };
+}

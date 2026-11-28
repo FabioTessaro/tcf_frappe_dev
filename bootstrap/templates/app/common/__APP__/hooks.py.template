@@ -1,0 +1,44 @@
+"""Frappe hooks of @@APP@@: wiring only, no logic (BE-STR-003)."""
+
+app_name = "@@APP@@"
+app_title = "@@APP_TITLE@@"
+app_publisher = "@@PUBLISHER@@"
+app_description = "@@APP_DESCRIPTION@@"
+app_email = ""
+app_license = "@@LICENSE_SPDX@@"
+@@IF IS_CORE@@
+
+# The core app requires no other app (SYS-DEP-007).
+required_apps: list[str] = []
+
+# The core sdk version this app provides (SYS-DEP-002, FE-SDK-002, BE-SDK-003).
+core_sdk_version = "@@CORE_SDK_VERSION@@"
+
+# Every portal path is served by the portal page (FE-COMP-010).
+website_route_rules = [
+    {"from_route": "/portal/<path:app_path>", "to_route": "portal"},
+]
+@@ENDIF IS_CORE@@
+@@IFNOT IS_CORE@@
+
+# Hard dependencies (SYS-DEP-001): the core app first. Justify any other one in
+# the README (SYS-DEP-010).
+required_apps = @@REQUIRED_APPS_PY@@
+
+# Core sdk versions this app supports (SYS-DEP-002).
+core_sdk_version = "@@CORE_SDK_RANGE@@"
+@@ENDIF IS_CORE@@
+@@IF IS_FEATURE@@
+
+# Launcher entry (CT-REG-*): the id equals the id of frontend/manifest.ts
+# (CT-REG-003). No role sees the app until roles are added.
+portal_apps = [
+    {
+        "id": "@@APP@@",
+        "title": "@@APP@@.app.title",
+        "icon": "apps",
+        "route": "/@@APP_ROUTE@@",
+        "roles": [],
+    },
+]
+@@ENDIF IS_FEATURE@@

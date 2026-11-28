@@ -1,0 +1,34 @@
+# 0002 · Recipes run where they are started
+
+- Status: accepted
+- Date: @@TODAY@@
+- Guide version: @@GUIDE_VERSION@@
+- Rules concerned: DEL-TOOL-004, DEL-CI-003
+
+## Context
+
+DEL-TOOL-004 requires every tool to be runnable locally through `just` with the
+same result as in CI. The platform repository runs each recipe inside the CI
+image with `docker run`. An app's recipes need a bench, MariaDB and Redis, which
+the development container already provides, and that container has no Docker.
+
+## Decision
+
+- In CI, the recipes run inside the CI image (DEL-CI-003): the reusable workflow
+  of the platform repository starts them there, with MariaDB and Redis as job
+  services, and `just setup` builds a throw-away bench in `.cache/`.
+- On a developer machine, they run in the development container, against its
+  bench and its test sites.
+- The same versions in both places: lockfiles (`yarn.lock`, `uv.lock`), the
+  hook versions of `.pre-commit-config.yaml`, mypy and import-linter run with
+  `uvx` at the versions of the CI image (pinned in the `justfile`), and the
+  bench's Frappe and pydantic.
+
+## Consequences
+
+- `just ci` locally and in CI run the same checks with the same tool versions.
+- Binary tools that are not pinned in the repository (gitleaks, Trivy,
+  hadolint, lychee) may differ in version between the development container and
+  the CI image; their findings are checked again in CI.
+- CI jobs start as root and bench refuses to run as root: `just ci` hands the
+  checkout to the image's `frappe` user and continues as that user.

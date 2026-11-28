@@ -1,0 +1,56 @@
+// Contract test `locales-parity` (FE-I18N-002, FE-I18N-004): in every locale
+// folder of the core app and the installed apps, every language file has
+// exactly the keys of the default language, under the folder's namespace.
+/* eslint-disable security/detect-non-literal-fs-filename -- build tooling: paths come from the bench layout, never from user input */
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { coreApp, coreFrontend, discoverApps } from "../../plugins/apps";
+import { defaultLanguage } from "../../src/shared/i18n/languages";
+
+function localeDirs(root: string): string[] {
+  const found: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || ["node_modules", "coverage", ".cache"].includes(entry.name))
+        continue;
+      const sub = path.join(dir, entry.name);
+      if (entry.name === "locales") found.push(sub);
+      else walk(sub);
+    }
+  };
+  if (existsSync(root)) walk(root);
+  return found;
+}
+
+function keys(tree: unknown, prefix = ""): string[] {
+  if (typeof tree !== "object" || tree === null) return [prefix];
+  return Object.entries(tree).flatMap(([k, v]) => keys(v, prefix ? `${prefix}.${k}` : k));
+}
+
+const roots = [
+  { app: coreApp, dir: path.join(coreFrontend, "src") },
+  ...discoverApps().map((a) => ({ app: a.name, dir: a.frontend })),
+];
+const folders = roots.flatMap(({ app, dir }) => localeDirs(dir).map((d) => ({ app, dir: d })));
+
+describe.each(folders)("locales of $dir", ({ app, dir }) => {
+  const files = readdirSync(dir).filter((f) => f.endsWith(".json"));
+  const read = (f: string): unknown => JSON.parse(readFileSync(path.join(dir, f), "utf8"));
+  it("include the default language", () => {
+    expect(files).toContain(`${defaultLanguage}.json`);
+  });
+  it("have the default language's keys in every language", () => {
+    const expected = keys(read(`${defaultLanguage}.json`)).sort();
+    for (const f of files) expect(keys(read(f)).sort()).toEqual(expected);
+  });
+  it("are namespaced (FE-I18N-002)", () => {
+    const top = Object.keys(read(`${defaultLanguage}.json`) as object);
+    const allowed = dir.includes(`${path.sep}shared${path.sep}i18n${path.sep}`)
+      ? ["common"]
+      : [app];
+    expect(top.every((k) => allowed.includes(k))).toBe(true);
+  });
+});

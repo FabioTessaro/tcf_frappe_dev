@@ -3,6 +3,8 @@
 # throw-away credentials and one site holding every app of platform.lock.
 services:
   create-site:
+    # Only through `docker compose run` (once): `up` must not create the site again.
+    profiles: [init]
     image: ${PLATFORM_IMAGE:?set PLATFORM_IMAGE}
     restart: "no"
     entrypoint: ["bash", "-c"]
@@ -21,3 +23,8 @@ services:
     depends_on:
       configurator:
         condition: service_completed_successfully
+
+  frontend:
+    environment:
+      # One site: it answers whatever host name the tests use.
+      FRAPPE_SITE_NAME_HEADER: e2e.localhost

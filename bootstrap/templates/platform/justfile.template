@@ -77,6 +77,15 @@ sync-config: (_in "_sync-config")
 # Fail if a copy differs from shared-config/, or a workflow uses another CI image tag
 check-config: (_in "_check-config")
 
+# Run every generator (this repository has none)
+generate: (_in "_generate")
+
+# `just generate`, then fail if a tracked file changed
+check-generated: (_in "_check-generated")
+
+# Schema and error-catalog diff against the last release (not applicable here: ADR 0002)
+api-diff: (_in "_api-diff")
+
 # Structure of platform.lock
 check-lock: (_in "_check-lock")
 
@@ -154,7 +163,14 @@ _in recipe *args:
       docker run --rm -u 0 -v {{ cache_volume }}:/c {{ ci_image }} chown "$(id -u):$(id -g)" /c
     fi
     tty=(); [[ -t 1 ]] && tty=(-t)
-    exec docker run --rm "${tty[@]}" -v "$PWD:/w" -w /w -u "$(id -u):$(id -g)" \
+    # The host's git identity and SSH agent (git tag and push of `just release`).
+    extra=()
+    if name=$(git config user.name); then extra+=(-e "GIT_AUTHOR_NAME=$name"); fi
+    if email=$(git config user.email); then extra+=(-e "GIT_AUTHOR_EMAIL=$email"); fi
+    if [[ -S "${SSH_AUTH_SOCK:-}" ]]; then
+      extra+=(-v "$SSH_AUTH_SOCK:/run/ssh-agent" -e SSH_AUTH_SOCK=/run/ssh-agent -e "GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=accept-new")
+    fi
+    exec docker run --rm "${tty[@]}" "${extra[@]}" -v "$PWD:/w" -w /w -u "$(id -u):$(id -g)" \
       --group-add "$(stat -c %g /var/run/docker.sock)" -v /var/run/docker.sock:/var/run/docker.sock \
       -v {{ cache_volume }}:/c -e HOME=/c/home -e PRE_COMMIT_HOME=/c/pre-commit -e FRAPPE_CI_IMAGE=1 \
       -e APPS_READ_TOKEN -e COSIGN_PRIVATE_KEY -e COSIGN_PASSWORD -e GITHUB_SHA \
@@ -202,6 +218,18 @@ _check-config:
     exit "$bad"
 
 [private]
+_generate:
+    @echo "generate: this repository has no generators (ADR 0002)"
+
+[private]
+_check-generated: _generate
+    git diff --exit-code
+
+[private]
+_api-diff:
+    @echo "not applicable: api-diff — the platform repository has no API (ADR 0002)"
+
+[private]
 _check-lock:
     python3 tools/lock.py check {{ lock }}
 
@@ -215,7 +243,7 @@ _scan:
     trivy fs --quiet --exit-code 1 --scanners vuln,license --severity HIGH,CRITICAL --ignore-unfixed --skip-dirs .cache .
 
 [private]
-_ci: _lint _check-config _check-lock _typecheck _test-unit _scan
+_ci: _lint _check-config _check-lock _typecheck _check-generated _api-diff _test-unit _scan
 
 [private]
 _check-lock-remote:
@@ -242,12 +270,17 @@ _stack action:
     export COMPOSE_PROJECT_NAME=platform-e2e PLATFORM_IMAGE={{ platform_image }}:dev
     export DB_ROOT_PASSWORD=e2e-root ADMIN_PASSWORD=e2e-admin HTTP_PORT=8080
     dc=(docker compose -f compose/production.yml -f compose/e2e.yml)
+    # Inside a container (CI job, or `just` through the CI image) the stack's ports
+    # are on the Docker host: join the stack's network and use the service names.
+    net=platform-e2e_default; inside=false; [[ -f /.dockerenv ]] && inside=true
     case "{{ action }}" in
       up) "${dc[@]}" up -d --wait --wait-timeout 600 db redis-cache redis-queue
           "${dc[@]}" run --rm configurator
           "${dc[@]}" run --rm create-site
-          "${dc[@]}" up -d --wait --wait-timeout 600 ;;
-      down) "${dc[@]}" down -v --remove-orphans ;;
+          "${dc[@]}" up -d --wait --wait-timeout 600
+          if [[ $inside == true ]]; then docker network connect "$net" "$(hostname)"; fi ;;
+      down) if [[ $inside == true ]]; then docker network disconnect "$net" "$(hostname)" 2>/dev/null || true; fi
+          "${dc[@]}" down -v --remove-orphans ;;
       *) "${dc[@]}" exec -T backend bash -c "{{ action }}" ;;
     esac
 
@@ -277,7 +310,8 @@ _test-e2e:
     cd ".cache/apps/$core/frontend"
     yarn install --frozen-lockfile
     yarn playwright install chromium
-    E2E_BASE_URL=http://localhost:8080 E2E_ADMIN_PASSWORD=e2e-admin yarn playwright test
+    base=http://localhost:8080; [[ -f /.dockerenv ]] && base=http://frontend:8080
+    E2E_BASE_URL="$base" E2E_ADMIN_PASSWORD=e2e-admin yarn playwright test
 
 [private]
 _sbom:
@@ -349,11 +383,16 @@ _release version:
       || fail "$candidate has fixable critical/high vulnerabilities: fix them on main, then release"
     docker buildx imagetools create -t {{ platform_image }}:{{ version }} "$img"
     git-cliff --tag {{ version }} -o dist/release-notes.md
-    git tag -a {{ version }} -m "platform release {{ version }} ($digest)"
+    # The CI image has no git identity: the tagger is whoever started the release.
+    actor=${GITHUB_ACTOR:-release}
+    git -c user.name="${GIT_AUTHOR_NAME:-$actor}" -c user.email="${GIT_AUTHOR_EMAIL:-$actor@users.noreply.github.com}" \
+      tag -a {{ version }} -m "platform release {{ version }} ($digest)"
     git push origin {{ version }}
     echo "released {{ platform_image }}:{{ version }} = $candidate ($digest); SBOM and notes in dist/"
 
 # Deploy state on the host, in /srv/platform/<env>/ (DEL-CD-004):
+#   .env.sops        the environment, SOPS-encrypted (DEL-CD-005); each run
+#                    decrypts it into /dev/shm and removes it on exit
 #   current-version  the version running, written once its smoke test passes
 #   rollback.env     written by a deploy right after its backup: PREVIOUS_VERSION,
 #                    BACKUP_ID, DEPLOYED_VERSION. `just rollback` consumes it; a
@@ -380,9 +419,11 @@ _deploy env version:
     docker pull -q "$ref" >/dev/null
     docker run --rm "$ref" env/bin/python -c "import $core.sdk.audit as a; a.record_deploy" 2>/dev/null \
       || fail "$core.sdk.audit.record_deploy is missing in $ref (the deploy Audit Event is mandatory)"
-    key=$(mktemp); compose=$(mktemp); changed=0
+    key=$(mktemp); compose=$(mktemp); changed=0; envf=""
     on_exit() {
-      local rc=$?; rm -f "$key" "$compose"
+      local rc=$?
+      if [[ -n "$envf" ]]; then ssh_ "rm -f $envf" || true; fi
+      rm -f "$key" "$compose"
       if [[ $rc -ne 0 && $changed == 1 ]]; then
         echo "deploy {{ env }}: failed after the backup. Roll back: workflow 'CD · Platform · Rollback' or 'just rollback {{ env }}' (DEL-CD-004)" >&2
       fi
@@ -390,6 +431,26 @@ _deploy env version:
     trap on_exit EXIT
     printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"; chmod 600 "$key"
     ssh_() { ssh -i "$key" -o StrictHostKeyChecking=accept-new "$DEPLOY_HOST" "$@"; }
+    # 7. Smoke test: every site answers through its own host name (retried while
+    #    gunicorn starts). Login and one journey per app: open (docs/conformance.md).
+    smoke() {
+      ssh_ "$1 exec -T backend bash -s" <<'SMOKE'
+    set -euo pipefail
+    n=0
+    for c in sites/*/site_config.json; do
+      [[ -f "$c" ]] || continue
+      s=${c#sites/}; s=${s%/site_config.json}; ok=0
+      for _ in $(seq 30); do
+        if curl -fs -o /dev/null -H "Host: $s" http://localhost:8000/api/method/ping; then ok=1; break; fi
+        sleep 2
+      done
+      (( ok )) || { echo "smoke: $s does not answer" >&2; exit 1; }
+      n=$((n + 1))
+    done
+    (( n > 0 )) || { echo "smoke: no site" >&2; exit 1; }
+    echo "smoke: $n site(s) answer"
+    SMOKE
+    }
     dir=/srv/platform/{{ env }}
     ssh_ "test -d $dir" || fail "$dir does not exist on $DEPLOY_HOST"
     previous=$(ssh_ "cat $dir/current-version 2>/dev/null || true")
@@ -406,7 +467,12 @@ _deploy env version:
       git show "{{ version }}:deploy/host/$script.sh" | ssh_ "cat > $dir/$script.sh.new && chmod 755 $dir/$script.sh.new && mv $dir/$script.sh.new $dir/$script.sh" \
         || fail "could not install deploy/host/$script.sh of {{ version }} on $DEPLOY_HOST"
     done
-    dc="cd $dir && PLATFORM_IMAGE=$ref docker compose -f compose.yml --env-file .env"
+    # The environment is SOPS-encrypted on the host (DEL-CD-005): decrypted with
+    # the host's age key into memory, for this run only (removed on exit).
+    envf=/dev/shm/platform-{{ env }}.env
+    ssh_ "umask 077 && sops -d --input-type dotenv --output-type dotenv $dir/.env.sops > $envf" \
+      || fail "could not decrypt $dir/.env.sops on $DEPLOY_HOST (sops and the host's age key are needed)"
+    dc="cd $dir && PLATFORM_IMAGE=$ref docker compose -f compose.yml --env-file $envf"
     # 3. Encrypted backup of the database and object-store snapshot (DEL-CD-003; host script, guide 601).
     backup_id=$(ssh_ "$dir/backup.sh" | tail -n 1) || fail "$dir/backup.sh failed: nothing was changed (backup before deploy is mandatory)"
     [[ "$backup_id" =~ ^[A-Za-z0-9._:-]+$ ]] || fail "$dir/backup.sh did not print a backup ID on its last line (got '$backup_id')"
@@ -418,7 +484,7 @@ _deploy env version:
     ssh_ "$dc run --rm backend bench --site all migrate"
     ssh_ "$dc up -d --remove-orphans --wait"
     # 7. Smoke test.
-    ssh_ "$dc exec -T backend curl -fsS http://localhost:8000/api/method/ping" >/dev/null || fail "smoke test failed"
+    smoke "$dc" || fail "smoke test failed"
     ssh_ "echo '{{ version }}' > $dir/current-version"
     # 8. Audit Event (DEL-CD-003).
     ssh_ "$dc exec -T backend bench --site all execute $core.sdk.audit.record_deploy --kwargs \"{'version': '{{ version }}', 'actor': '${GITHUB_ACTOR:-$USER}'}\""
@@ -435,9 +501,30 @@ _rollback env:
     [[ -n "${DEPLOY_HOST:-}" && -n "${DEPLOY_SSH_KEY:-}" ]] || fail "DEPLOY_HOST and DEPLOY_SSH_KEY are not set for this environment"
     [[ -f cosign.pub ]] || fail "cosign.pub (the organisation's public signing key) is not in the repository"
     core=$(python3 tools/lock.py core {{ lock }}); [[ -n "$core" ]] || fail "no core app in platform.lock"
-    key=$(mktemp); compose=$(mktemp); trap 'rm -f "$key" "$compose"' EXIT
+    key=$(mktemp); compose=$(mktemp); envf=""
+    trap 'if [[ -n "$envf" ]]; then ssh_ "rm -f $envf" || true; fi; rm -f "$key" "$compose"' EXIT
     printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"; chmod 600 "$key"
     ssh_() { ssh -i "$key" -o StrictHostKeyChecking=accept-new "$DEPLOY_HOST" "$@"; }
+    # 7. Smoke test: every site answers through its own host name (retried while
+    #    gunicorn starts). Login and one journey per app: open (docs/conformance.md).
+    smoke() {
+      ssh_ "$1 exec -T backend bash -s" <<'SMOKE'
+    set -euo pipefail
+    n=0
+    for c in sites/*/site_config.json; do
+      [[ -f "$c" ]] || continue
+      s=${c#sites/}; s=${s%/site_config.json}; ok=0
+      for _ in $(seq 30); do
+        if curl -fs -o /dev/null -H "Host: $s" http://localhost:8000/api/method/ping; then ok=1; break; fi
+        sleep 2
+      done
+      (( ok )) || { echo "smoke: $s does not answer" >&2; exit 1; }
+      n=$((n + 1))
+    done
+    (( n > 0 )) || { echo "smoke: no site" >&2; exit 1; }
+    echo "smoke: $n site(s) answer"
+    SMOKE
+    }
     dir=/srv/platform/{{ env }}
     state=$(ssh_ "cat $dir/rollback.env 2>/dev/null || true")
     [[ -n "$state" ]] || fail "no $dir/rollback.env on $DEPLOY_HOST: no deploy to roll back"
@@ -453,20 +540,25 @@ _rollback env:
     # Same guarantees as a deploy: a signed image only (DEL-CD-003).
     cosign verify --insecure-ignore-tlog=true --key cosign.pub "$ref" >/dev/null
     git show "$previous:compose/production.yml" > "$compose"
+    # The environment is SOPS-encrypted on the host (DEL-CD-005): decrypted with
+    # the host's age key into memory, for this run only (removed on exit).
+    envf=/dev/shm/platform-{{ env }}.env
+    ssh_ "umask 077 && sops -d --input-type dotenv --output-type dotenv $dir/.env.sops > $envf" \
+      || fail "could not decrypt $dir/.env.sops on $DEPLOY_HOST (sops and the host's age key are needed)"
     # 1. Stop everything that runs the platform image, with the compose file in place
     #    (the failed version's), so nothing writes during the restore.
-    ssh_ "cd $dir && PLATFORM_IMAGE=unused docker compose -f compose.yml --env-file .env stop backend frontend websocket queue-short queue-long scheduler"
+    ssh_ "cd $dir && PLATFORM_IMAGE=unused docker compose -f compose.yml --env-file $envf stop backend frontend websocket queue-short queue-long scheduler"
     # 2. Restore the pre-deploy backup: database and object store together (OPS-BAK-001).
     ssh_ "$dir/restore.sh '$backup_id'"
     # 3. Start the previous image with its own compose file. No migrate: the
     #    restored database is the one this version ran on.
     scp -q -i "$key" -o StrictHostKeyChecking=accept-new "$compose" "$DEPLOY_HOST:$dir/compose.yml"
-    dc="cd $dir && PLATFORM_IMAGE=$ref docker compose -f compose.yml --env-file .env"
+    dc="cd $dir && PLATFORM_IMAGE=$ref docker compose -f compose.yml --env-file $envf"
     ssh_ "$dc pull"
     ssh_ "$dc up -d --remove-orphans --wait"
     ssh_ "$dc exec -T backend bench --site all clear-cache"
     # 4. Smoke test.
-    ssh_ "$dc exec -T backend curl -fsS http://localhost:8000/api/method/ping" >/dev/null \
+    smoke "$dc" \
       || fail "smoke test of $previous failed after the restore: the environment needs manual recovery"
     ssh_ "echo '$previous' > $dir/current-version && mv $dir/rollback.env $dir/rollback.done-\$(date -u +%Y%m%dT%H%M%SZ)"
     # 5. Audit Event: the restored database no longer holds the events written since the backup.

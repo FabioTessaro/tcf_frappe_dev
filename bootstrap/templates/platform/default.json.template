@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Shared Renovate preset of every repository of @@OWNER@@ (extend it with github>@@OWNER@@/@@REPO_NAME@@)",
+  "description": "Shared Renovate preset of every repository of @@OWNER@@ (extend it with local>@@OWNER@@/@@REPO_NAME@@)",
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":semanticCommitTypeAll(chore)"],
   "dependencyDashboard": true,
   "customManagers": [
@@ -32,6 +32,30 @@
       "packageNameTemplate": "https://github.com/@@OWNER@@/@@REPO_NAME@@",
       "depNameTemplate": "@@REPO_NAME@@",
       "currentValueTemplate": "main"
+    },
+    {
+      "customType": "regex",
+      "description": "Versions in justfiles annotated with '# renovate:' (tools run with uvx)",
+      "managerFilePatterns": ["/(^|/)justfile$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+\\S+ := \"(?<currentValue>[^\"]+)\""
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Renovate itself, run by `just renovate`",
+      "managerFilePatterns": ["/(^|/)justfile$/"],
+      "matchStrings": ["npx -y renovate@(?<currentValue>[0-9][^\\s]*)"],
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "renovate"
+    },
+    {
+      "customType": "regex",
+      "description": "just on GitHub runners, outside the CI image",
+      "managerFilePatterns": ["/(^|/)\\.github/workflows/[^/]+\\.ya?ml$/"],
+      "matchStrings": ["just\\.systems/install\\.sh \\| bash -s -- --tag (?<currentValue>[0-9][^\\s]*)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "casey/just"
     }
   ],
   "packageRules": [

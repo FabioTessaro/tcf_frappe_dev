@@ -1,0 +1,10 @@
+import { mount } from "@vue/test-utils";
+import { describe, expect, it } from "vitest";
+
+import LauncherView from "./LauncherView.vue";
+
+describe("LauncherView", () => {
+  it("renders", () => {
+    expect(mount(LauncherView).exists()).toBe(true);
+  });
+});

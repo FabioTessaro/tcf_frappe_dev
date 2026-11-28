@@ -1,0 +1,10 @@
+// Marks an element (the document by default) with the active language, so the
+// typography resolver picks the script's rules (guide 106).
+import { languageOf } from "./languages";
+
+export function applyLanguage(code: string, element: HTMLElement = document.documentElement): void {
+  const language = languageOf(code);
+  element.lang = language.code;
+  element.dir = language.dir;
+  element.dataset.script = language.script;
+}

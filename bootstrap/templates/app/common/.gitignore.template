@@ -7,7 +7,7 @@ __pycache__/
 
 # Node (dependencies and tool caches). The root package.json has no
 # dependencies (bench integration only): no lockfile there.
-node_modules/
+node_modules
 /yarn.lock
 .eslintcache
 .stylelintcache

@@ -1,0 +1,5 @@
+# Accepted vulnerabilities (SEC-VULN-002, docs/adr/0003-upstream-vulnerabilities.md).
+# Written by `just accept-upstream-vulns`: review the diff, commit it through a pull request.
+# Empty until the first image scan finds fixable high/critical findings in Frappe's own files.
+
+vulnerabilities: []

@@ -134,6 +134,9 @@ sbom: (_in "_sbom")
 # Trivy on the platform image: fails on fixable critical/high findings
 scan-image: (_in "_scan-image")
 
+# Accept the scan findings in Frappe's own files until a date (ADR 0003): after build-image; review, then commit
+accept-upstream-vulns days="45": (_in "_accept-upstream-vulns" days)
+
 # Push the image built from main as release candidate main-<sha>, signed, with its SBOM attested
 sign: (_in "_sign")
 
@@ -334,7 +337,18 @@ _sbom:
 
 [private]
 _scan-image:
-    trivy image --quiet --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed {{ platform_image }}:dev
+    trivy image --quiet --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed \
+      --ignorefile .trivyignore.yaml {{ platform_image }}:dev
+
+[private]
+_accept-upstream-vulns days:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker image inspect {{ platform_image }}:dev >/dev/null 2>&1 \
+      || { echo "no {{ platform_image }}:dev image: run 'just build-image' first" >&2; exit 1; }
+    trivy image --quiet --format json --severity HIGH,CRITICAL --ignore-unfixed {{ platform_image }}:dev \
+      | python3 tools/upstream_vulns.py --lock {{ lock }} --days {{ days }} > .trivyignore.yaml
+    echo "wrote .trivyignore.yaml: review it (git diff), then commit it through a pull request"
 
 # The release candidate (DEL-REL-005): the image level 2 just built and tested,
 # pushed as main-<sha> and signed by digest, with the SBOM as a signed

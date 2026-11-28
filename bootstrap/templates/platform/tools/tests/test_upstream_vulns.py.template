@@ -1,0 +1,79 @@
+"""Tests of tools/upstream_vulns.py (`just test-unit`)."""
+
+from __future__ import annotations
+
+import datetime as dt
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import upstream_vulns  # noqa: E402
+
+BENCH = "home/frappe/frappe-bench"
+
+
+def vuln(vid: str, path: str, pkg: str = "pkg") -> dict[str, str]:
+    return {"VulnerabilityID": vid, "PkgPath": path, "PkgName": pkg, "InstalledVersion": "1.0"}
+
+
+REPORT = {
+    "Results": [
+        {
+            "Class": "os-pkgs",
+            "Target": "image (debian 13)",
+            "Vulnerabilities": [vuln("CVE-OS", "")],
+        },
+        {
+            "Class": "lang-pkgs",
+            "Target": "Node.js",
+            "Vulnerabilities": [
+                vuln("CVE-NODE", f"{BENCH}/apps/frappe/node_modules/a/package.json", "a"),
+                vuln("CVE-NODE", f"{BENCH}/apps/frappe/flow/node_modules/a/package.json", "a"),
+                vuln("CVE-OURS", f"{BENCH}/apps/base/frontend/node_modules/b/package.json", "b"),
+            ],
+        },
+        {
+            "Class": "lang-pkgs",
+            "Target": "Python",
+            "Vulnerabilities": [
+                vuln("CVE-PY", f"{BENCH}/env/lib/python3/site-packages/c.dist-info/METADATA", "c")
+            ],
+        },
+        {
+            "Class": "lang-pkgs",
+            "Target": f"{BENCH}/apps/frappe/node_modules/esbuild/bin/esbuild",
+            "Vulnerabilities": [{"VulnerabilityID": "CVE-GO", "PkgName": "stdlib"}],
+        },
+    ]
+}
+
+
+class UpstreamVulnsTests(unittest.TestCase):
+    def test_only_frappe_files_are_accepted(self) -> None:
+        found = upstream_vulns.upstream_findings(REPORT)
+        self.assertEqual(sorted(found), ["CVE-GO", "CVE-NODE", "CVE-PY"])
+        self.assertEqual(len(found["CVE-NODE"]["paths"]), 2)
+        self.assertEqual(
+            found["CVE-GO"]["paths"], [f"{BENCH}/apps/frappe/node_modules/esbuild/bin/esbuild"]
+        )
+
+    def test_render_has_expiry_and_adr(self) -> None:
+        text = upstream_vulns.render(
+            upstream_vulns.upstream_findings(REPORT), dt.date(2027, 1, 31), "v16.0.0"
+        )
+        self.assertIn("  - id: CVE-PY\n    expired_at: 2027-01-31\n", text)
+        self.assertIn("ADR 0003", text)
+        self.assertNotIn("CVE-OS", text)
+        self.assertNotIn("CVE-OURS", text)
+
+    def test_render_empty(self) -> None:
+        self.assertTrue(
+            upstream_vulns.render({}, dt.date(2027, 1, 31), "v16.0.0").endswith(
+                "vulnerabilities: []\n"
+            )
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

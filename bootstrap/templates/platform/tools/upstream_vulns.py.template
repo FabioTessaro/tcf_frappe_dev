@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""Write .trivyignore.yaml: accepted vulnerabilities in Frappe's own files (ADR 0003).
+
+Usage: trivy image --format json ... IMAGE | upstream_vulns.py --lock LOCK [--days N]
+
+Reads a Trivy JSON report of the platform image on stdin and prints the ignore
+file on stdout. It accepts only findings in files that come with Frappe: its
+app directory and the bench's Python environment. Operating-system packages
+(the image upgrades them) and the platform's own apps are never accepted:
+their findings keep failing the scan. Each entry expires after N days, so the
+scan fails again unless someone reviews the list again (SEC-VULN-002).
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import sys
+import tomllib
+from pathlib import Path
+from typing import Any
+
+BENCH = "home/frappe/frappe-bench/"
+UPSTREAM = (BENCH + "apps/frappe/", BENCH + "env/")
+
+
+def upstream_findings(report: dict[str, Any]) -> dict[str, dict[str, list[str]]]:
+    """Vulnerability ID → {"paths": [...], "packages": [...]}, for upstream files only."""
+    found: dict[str, dict[str, set[str]]] = {}
+    for result in report.get("Results") or []:
+        if result.get("Class") == "os-pkgs":
+            continue
+        for vuln in result.get("Vulnerabilities") or []:
+            path = vuln.get("PkgPath") or result.get("Target", "")
+            if not path.lstrip("/").startswith(UPSTREAM):
+                continue
+            entry = found.setdefault(vuln["VulnerabilityID"], {"paths": set(), "packages": set()})
+            entry["paths"].add(path)
+            entry["packages"].add(
+                f"{vuln.get('PkgName', '?')} {vuln.get('InstalledVersion', '')}".strip()
+            )
+    return {
+        vid: {"paths": sorted(e["paths"]), "packages": sorted(e["packages"])}
+        for vid, e in sorted(found.items())
+    }
+
+
+def render(found: dict[str, dict[str, list[str]]], expires: dt.date, frappe_version: str) -> str:
+    """The ignore file (YAML; JSON strings are valid YAML scalars)."""
+    lines = [
+        "# Accepted vulnerabilities (SEC-VULN-002, docs/adr/0003-upstream-vulnerabilities.md).",
+        "# Written by `just accept-upstream-vulns`: review the diff, commit it in a pull request.",
+        f"# Fixable high/critical findings in files that come with Frappe {frappe_version}.",
+        f"# Every entry expires on {expires.isoformat()}: then the image scan fails again.",
+        "",
+    ]
+    if not found:
+        return "\n".join([*lines, "vulnerabilities: []", ""])
+    lines.append("vulnerabilities:")
+    for vid, entry in found.items():
+        statement = (
+            f"Upstream in Frappe {frappe_version}: {', '.join(entry['packages'])} (ADR 0003)"
+        )
+        lines += [
+            f"  - id: {vid}",
+            f"    expired_at: {expires.isoformat()}",
+            f"    statement: {json.dumps(statement)}",
+            "    paths:",
+            *(f"      - {json.dumps(p)}" for p in entry["paths"]),
+        ]
+    return "\n".join([*lines, ""])
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--lock", type=Path, required=True, help="platform.lock")
+    parser.add_argument("--days", type=int, default=45, help="days until the entries expire")
+    args = parser.parse_args(argv)
+    frappe_version = str(tomllib.loads(args.lock.read_text())["frappe"]["version"])
+    found = upstream_findings(json.load(sys.stdin))
+    expires = dt.date.today() + dt.timedelta(days=args.days)
+    sys.stdout.write(render(found, expires, frappe_version))
+    print(f"{len(found)} vulnerability ID(s) accepted until {expires.isoformat()}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

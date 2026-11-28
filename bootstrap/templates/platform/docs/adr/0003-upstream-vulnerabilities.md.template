@@ -1,0 +1,49 @@
+# 0003 · Vulnerabilities in the platform image that come from Frappe
+
+- Status: accepted
+- Date: @@TODAY@@
+- Guide version: @@GUIDE_VERSION@@
+- Rules concerned: SEC-VULN-002, SEC-VULN-005
+
+## Context
+
+`just scan-image` fails on every critical or high vulnerability with an
+available fix (SEC-VULN-002). On a new platform it fails before any app is
+added, for two reasons outside this repository:
+
+- **Operating-system packages.** The Frappe base image is pinned by digest
+  (SEC-VULN-005) and Debian publishes security fixes after it was built.
+- **Files that come with Frappe.** Frappe's `node_modules` (including build
+  tools such as esbuild) and the Python packages it pins in the bench
+  environment. They change only with a Frappe release.
+
+## Decision
+
+- The production stage of `docker/Dockerfile` runs `apt-get upgrade`, so every
+  build gets the Debian security fixes available at build time.
+- Findings in Frappe's own files are accepted in `.trivyignore.yaml`, scoped
+  to their paths, with an expiry date. `just accept-upstream-vulns` (after
+  `just build-image`) writes the file from a scan of the image: it accepts only
+  files under `apps/frappe/` and `env/`, never operating-system packages or the
+  platform's own apps. The result is reviewed and merged through a pull
+  request like any change.
+- Entries expire after 45 days by default. When they expire, the scan fails
+  again: bump Frappe in `platform.lock` if a release fixes them, otherwise
+  review the list and accept it again.
+
+Rejected: skipping Frappe's directories in the scan (no expiry, hides new
+findings) and patching Frappe's lockfiles in the image (untested dependency
+versions in production).
+
+## Consequences
+
+- The image scan stays a blocking check, and fails on any finding in our apps
+  or in operating-system packages.
+- `apt-get upgrade` makes builds of the same commit differ over time; the SBOM
+  of each release records what it contains (SEC-VULN-001).
+- The bench's Python environment also holds the apps' own dependencies: check
+  in the review that an accepted Python package is not one of ours.
+
+## Review
+
+When the entries expire, and with each Frappe major version.

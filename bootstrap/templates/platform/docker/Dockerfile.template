@@ -36,6 +36,13 @@ RUN --mount=type=secret,id=git_token,uid=1000 \
 
 FROM @@BASE_IMAGE@@ AS production
 LABEL org.opencontainers.image.source="https://github.com/@@OWNER@@/@@REPO_NAME@@"
+# Debian security fixes published after the base image was built: without them
+# the image scan fails on fixed operating-system packages (SEC-VULN-002, ADR 0003).
+# root (numeric: DL3066)
+USER 0
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
 # frappe (UID 1000 in the Frappe images)
 USER 1000
 COPY --from=builder --chown=1000:0 /home/frappe/frappe-bench /home/frappe/frappe-bench

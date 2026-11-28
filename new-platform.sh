@@ -274,7 +274,7 @@ if [[ "$SCAFFOLD" == true ]]; then
     awk '!/^#/ && NF == 3 && $3 == "all" {print $1, $2}' shared-config/files.txt | while read -r s d; do
       cp "shared-config/$s" "$d"
     done
-    chmod 755 tools/lock.py tools/contracts.py
+    chmod 755 tools/lock.py tools/contracts.py tools/upstream_vulns.py
   }
   ui_run "Rendering bootstrap/templates/platform" -- _scaffold || ui_die "Scaffolding failed."
   ui_run "Writing the licence ($(license_name "$LICENSE_KEY"))" -- \

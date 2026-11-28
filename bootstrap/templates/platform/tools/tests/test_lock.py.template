@@ -61,9 +61,7 @@ class ContractTests(unittest.TestCase):
         }
         write(
             self.root / "base/base/hooks.py",
-            'required_apps: list[str] = []
-core_sdk_version = "0.1.0"
-',
+            'required_apps: list[str] = []\ncore_sdk_version = "0.1.0"\n',
         )
         write(
             self.root / "hr/hr/hooks.py",

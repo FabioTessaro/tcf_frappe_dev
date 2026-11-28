@@ -88,6 +88,9 @@ resolve_into() {
 gh_logged_in() { gh api user --jq .login >/dev/null 2>&1; }
 gh_repo_exists() { gh api "repos/$1" --silent >/dev/null 2>&1; }
 gh_owner_is_org() { [[ "$(gh api "users/$1" --jq .type 2>/dev/null)" == Organization ]]; }
+# API path of an owner's container package: users/<u> or orgs/<o>, then /packages/container/<name>.
+gh_package_path() { printf '%s/packages/container/%s' "$(gh_owner_is_org "$1" && echo "orgs/$1" || echo "users/$1")" "$2"; }
+gh_package_exists() { gh api "$(gh_package_path "$1" "$2")" --silent >/dev/null 2>&1; }
 # owner from a git prefix like git@github.com:my-org or https://github.com/my-org
 owner_from_prefix() { [[ "$1" =~ github\.com[:/]([^/]+)$ ]] && printf '%s' "${BASH_REMATCH[1]}"; }
 valid_gh_name() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9._-]{0,98})$ ]]; }

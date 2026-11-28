@@ -295,6 +295,40 @@ if [[ "$CLONE" == true ]]; then
   ui_run "Cloning $SLUG" -- git clone -q "$URL" "$PLATFORM_DIR" || ui_die "git clone failed." "Check that $URL accepts your SSH key."
 fi
 
+# Packages outlive their repository. After a repository is deleted and created
+# again, ghcr.io/<owner>/ci (and ghcr.io/<owner>/<repo>) still belong to the old
+# one and its CI may not write to them (permission_denied: write_package).
+# GitHub has no API to grant a repository access to a package: the user links
+# it (or deletes it) on the package's settings page, before the first push.
+leftover_packages_check() {
+  if ! gh_has_scope read:packages && [[ "$UI_TTY_IN" == true && "$ASSUME_YES" == false ]]; then
+    ui_select "gh can't read packages (scope read:packages): needed to look for packages of an earlier $REPO." \
+      "add::Add the scope now::one-time code for github.com/login/device" \
+      "skip::Skip the check" || exit 1
+    [[ "$UI_VALUE" == add ]] && { gh auth refresh -h github.com -s read:packages || ui_warn "gh auth refresh failed."; }
+  fi
+  if ! gh_has_scope read:packages; then
+    ui_warn "Not checked for packages left over from an earlier $REPO (gh lacks the read:packages scope)." \
+      "If CI fails with permission_denied: write_package, link the package to $SLUG: https://github.com/$(gh_package_path "$OWNER" ci)/settings"
+    return 0
+  fi
+  local p found=()
+  for p in ci "${REPO,,}"; do gh_package_exists "$OWNER" "$p" && found+=("$p"); done
+  if (( ${#found[@]} == 0 )); then ui_ok "No packages left over from an earlier repository"; return 0; fi
+  local lines=("Packages from an earlier repository: CI can't publish to them until $SLUG may write them.")
+  for p in "${found[@]}"; do lines+=("• ghcr.io/${OWNER,,}/$p — https://github.com/$(gh_package_path "$OWNER" "$p")/settings"); done
+  lines+=("On each page: Manage Actions access › Add repository › $REPO › role Write. Or delete the package (Danger zone) if you don't need its old images.")
+  ui_box "${lines[@]}"
+  if [[ "$UI_TTY_IN" == true && "$ASSUME_YES" == false ]]; then
+    ui_select "The push starts CI." \
+      "done::Done — push main" \
+      "later::Push anyway::CI fails until they are linked; then re-run its failed jobs" || exit 1
+    if [[ "$UI_VALUE" == later ]]; then ui_warn "Link ${found[*]} to $SLUG (Write), then re-run the failed CI jobs."; fi
+  else
+    ui_warn "Link ${found[*]} to $SLUG (Write), then re-run the failed CI jobs."
+  fi
+}
+
 # =============================================================================
 # GitHub: create what is missing, push only into an empty repository (later
 # commits go through pull requests), then (re)apply every setting.
@@ -312,6 +346,7 @@ if [[ "$NO_PUSH" == false ]]; then
     git -C "$PLATFORM_DIR" remote add origin "$URL" && ui_ok "origin → $URL"
   fi
   if [[ "$REMOTE" == empty ]]; then
+    leftover_packages_check
     ui_run "Pushing main" -- git -C "$PLATFORM_DIR" push -q -u origin main \
       || ui_die "git push failed." "Check that $URL accepts your SSH key, then run ./new-platform.sh again."
     CREATED=true
@@ -347,7 +382,7 @@ else
 fi
 
 if [[ "$CREATED" == true ]]; then
-  pkg_url="https://github.com/$( gh_owner_is_org "$OWNER" && echo "orgs/$OWNER" || echo "users/$OWNER")/packages/container/ci/settings"
+  pkg_url="https://github.com/$(gh_package_path "$OWNER" ci)/settings"
   ui_box "One-time steps on GitHub (the API can't do them):" \
     "1. After the first CI run, make the CI image package public: $pkg_url" \
     "2. Secrets that activate the inactive steps (Settings › Secrets and variables › Actions): APPS_READ_TOKEN, RENOVATE_TOKEN, COSIGN_PRIVATE_KEY + COSIGN_PASSWORD; DEPLOY_HOST + DEPLOY_SSH_KEY in the staging and production environments."

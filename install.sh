@@ -291,7 +291,9 @@ component_git() {
 
 # gh_login — log the GitHub CLI in (git over SSH, the key above; no second key
 # is uploaded). Default scopes (repo, read:org, gist) cover creating
-# repositories and setting rulesets, environments and vulnerability reporting.
+# repositories and setting rulesets, environments and vulnerability reporting;
+# read:packages lets new-platform.sh find packages left over from an earlier
+# repository of the same name (they block CI, see new-platform.sh).
 gh_login() {
   ui_section "GitHub CLI"
   if ! command -v gh >/dev/null 2>&1; then
@@ -303,17 +305,29 @@ gh_login() {
     ui_ok "gh is $st"
     [[ "$(gh config get git_protocol -h github.com 2>/dev/null)" == ssh ]] \
       || { gh config set git_protocol ssh -h github.com && ui_ok "gh uses SSH for git"; }
+    if gh_has_scope read:packages; then ui_ok "gh can read packages (read:packages)"
+    elif [[ "$UI_TTY_IN" != true ]]; then
+      ui_warn "gh lacks the read:packages scope (new-platform.sh uses it)." "Run: gh auth refresh -h github.com -s read:packages"
+    else
+      ui_select "gh lacks the read:packages scope (new-platform.sh uses it). Add it now?" \
+        "add::Add it (opens a one-time code for github.com/login/device)" \
+        "skip::Skip for now" || exit 1
+      if [[ "$UI_VALUE" == add ]]; then
+        ui_exec "Adding read:packages to the gh login" -- gh auth refresh -h github.com -s read:packages \
+          || ui_warn "gh auth refresh failed." "Run: gh auth refresh -h github.com -s read:packages"
+      fi
+    fi
     return 0
   fi
   if [[ "$UI_TTY_IN" != true ]]; then
-    ui_warn "gh is not logged in to GitHub." "Run: gh auth login --hostname github.com --git-protocol ssh --skip-ssh-key --web"
+    ui_warn "gh is not logged in to GitHub." "Run: gh auth login --hostname github.com --git-protocol ssh --skip-ssh-key --scopes read:packages --web"
     return 0
   fi
   ui_select "gh is not logged in to GitHub. Log in now?" \
     "login::Log in (opens a one-time code for github.com/login/device)" \
     "skip::Skip for now::new-platform.sh and new-app.sh need it" || exit 1
   if [[ "$UI_VALUE" == skip ]]; then ui_warn "gh not logged in."; return 0; fi
-  ui_exec "Logging gh in to GitHub" -- gh auth login --hostname github.com --git-protocol ssh --skip-ssh-key --web \
+  ui_exec "Logging gh in to GitHub" -- gh auth login --hostname github.com --git-protocol ssh --skip-ssh-key --scopes read:packages --web \
     || ui_die "gh auth login failed."
   ui_ok "gh is $(gh_status)"
 }

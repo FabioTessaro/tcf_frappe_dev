@@ -55,6 +55,19 @@ ci-image-publish:
       docker push {{ ci_image }}
     fi
 
+# Wait until the CI image is in the registry (CI: level 2 starts once level 1 has published it)
+wait-ci-image timeout="900":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    end=$((SECONDS + {{ timeout }}))
+    until docker manifest inspect {{ ci_image }} >/dev/null 2>&1; do
+      if (( SECONDS >= end )); then
+        echo "{{ ci_image }} not published after {{ timeout }} s: check the ci-image job of the L1 workflow" >&2; exit 1
+      fi
+      echo "waiting for {{ ci_image }} (the L1 workflow publishes it)"; sleep 20
+    done
+    echo "{{ ci_image }} is published"
+
 # Point every workflow at the current CI image tag (after editing ci-image/Dockerfile)
 pin-ci-image:
     sed -i -E 's#ghcr\.io/{{ image_owner }}/ci:[0-9a-f]+#{{ ci_image }}#g' .github/workflows/*.yml

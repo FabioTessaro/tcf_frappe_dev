@@ -1,7 +1,8 @@
 # Level 2 (guide 501): on pull requests that change platform.lock, the image,
 # the stack, the tools or the level-2 recipes; on main; nightly. On main it also pushes the signed release candidate main-<sha>
-# that a release promotes (DEL-REL-005). If ci-image/Dockerfile changed in the
-# same push, the CI image may still be publishing: re-run the job.
+# that a release promotes (DEL-REL-005). It runs inside the CI image, which the
+# L1 workflow publishes from the same push: the first job waits until it is in
+# the registry (a new repository, or a changed ci-image/Dockerfile).
 name: "CI · Platform · L2 integration"
 run-name: "CI · Platform · L2 · ${{ github.event_name == 'schedule' && 'nightly' || github.head_ref || github.ref_name }}"
 
@@ -19,7 +20,18 @@ permissions:
   packages: write
 
 jobs:
+  ci-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@@@CHECKOUT_SHA@@ # @@CHECKOUT_TAG@@
+      - name: Install just
+        run: curl -fsSL https://just.systems/install.sh | bash -s -- --tag @@JUST_VERSION@@ --to "$HOME/.local/bin" && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - run: just wait-ci-image
+
   level2:
+    needs: ci-image
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/@@OWNER_LC@@/ci:@@CI_TAG@@

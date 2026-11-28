@@ -361,3 +361,9 @@ detect_lan_ip() {
 usage_from_header() {
   awk 'NR == 1 && /^#!/ { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$1"
 }
+
+# The token's OAuth scopes include $1 (write:packages implies read:packages).
+gh_has_scope() {
+  local scopes; scopes=$(gh api -i user 2>/dev/null | tr -d '\r' | sed -n 's/^[Xx]-[Oo][Aa]uth-[Ss]copes: //p')
+  [[ ", $scopes," == *", $1,"* ]] || { [[ "$1" == read:packages ]] && [[ ", $scopes," == *", write:packages,"* ]]; }
+}

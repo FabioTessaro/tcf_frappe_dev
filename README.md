@@ -87,7 +87,7 @@ A checklist of components; each one fixes only what is missing or wrong.
 |---|---|
 | `base` | apt prerequisites (curl, git, python3, openssl, pre-commit, …), the `en_US.UTF-8` locale as system default, **gitleaks**, **lychee**, **just** and the GitHub CLI **gh** (latest releases, in `/usr/local/bin`) and the git hooks of this repository, `platform/` and the custom apps, plus the host's hook environments (see [Git hooks](#git-hooks)) |
 | `docker` | Docker Engine and the Compose plugin, Docker enabled at boot, your user in the `docker` group |
-| `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, a check that GitHub / GitLab / Bitbucket / another server accepts the key, and the **gh** login to GitHub (git over SSH, no second key uploaded; needed by `new-platform.sh`) |
+| `git` | `user.name` / `user.email`, an ed25519 SSH key (with or without passphrase), correct `~/.ssh` permissions, a check that GitHub / GitLab / Bitbucket / another server accepts the key, and the **gh** login to GitHub (git over SSH, no second key uploaded, scope `read:packages` added; needed by `new-platform.sh`) |
 | `ftp` | vsftpd for one system user, configured from `bootstrap/templates/ftp.conf`, UFW rules when UFW is active |
 | `claude` | the Claude Code CLI for your user on the host (official installer, `~/.local/bin/claude`, updates itself), for working on this repository outside the container. Independent of `initialize.sh --with-claude`, which installs it in the container; each has its own login |
 
@@ -225,6 +225,12 @@ machine; `./teardown.sh --platform` or `--all` deletes it, after checking for
 unpushed work) and the git hooks are installed. Running it again is safe: it
 completes whatever is missing (repository, push of an empty repository,
 settings) and never pushes later commits — those go through pull requests.
+Before the first push it looks for packages left over from an earlier repository
+of the same name (`ghcr.io/<owner>/ci`, `ghcr.io/<owner>/<repo>`): deleting a
+repository on GitHub keeps its packages, and CI can't publish to them until they
+are linked to the new repository (**Manage Actions access › Add repository ›
+Write** on the package's settings page) or deleted. GitHub has no API for that,
+so the script shows the links and waits.
 Recipes that build images run on the host, inside the CI image: `cd platform
 && just ci-image-build && just ci`.
 

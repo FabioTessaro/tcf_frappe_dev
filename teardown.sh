@@ -225,6 +225,8 @@ if [[ -n "${T[platform]:-}" ]]; then
   else plan "platform" "platform/ — not present"; fi
   mapfile -t PLATFORM_DOCKER < <(platform_docker_leftovers)
   for x in "${PLATFORM_DOCKER[@]}"; do plan "platform" "docker $x"; done
+  ui_note "Only the local checkout: the GitHub repository and its packages (ghcr.io CI and platform images) stay." \
+    "Deleting the repository on GitHub keeps its packages too: delete them as well, or link them to the new repository (./new-platform.sh shows how)."
 fi
 [[ -n "${T[workspace]:-}" ]] && plan "workspace" "$( [[ -d $VSCODE_DIR ]] && echo "delete generated .vscode/ files" || echo ".vscode/ — not present")"
 if [[ -n "${T[config]:-}" ]]; then
